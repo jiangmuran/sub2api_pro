@@ -2786,7 +2786,8 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 	if s.settingService.cfg != nil && s.settingService.cfg.Gateway.MaxLineSize > 0 {
 		maxLineSize = s.settingService.cfg.Gateway.MaxLineSize
 	}
-	scanner.Buffer(make([]byte, 64*1024), maxLineSize)
+	scanBuf := getSSEScannerBuf64K()
+	scanner.Buffer(scanBuf[:0], maxLineSize)
 	usage := &ClaudeUsage{}
 	var firstTokenMs *int
 
@@ -2807,7 +2808,8 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 	}
 	var lastReadAt int64
 	atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
-	go func() {
+	go func(scanBuf *sseScannerBuf64K) {
+		defer putSSEScannerBuf64K(scanBuf)
 		defer close(events)
 		for scanner.Scan() {
 			atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
@@ -2818,7 +2820,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 		if err := scanner.Err(); err != nil {
 			_ = sendEvent(scanEvent{err: err})
 		}
-	}()
+	}(scanBuf)
 	defer close(done)
 
 	// 上游数据间隔超时保护（防止上游挂起长期占用连接）
@@ -2939,7 +2941,8 @@ func (s *AntigravityGatewayService) handleGeminiStreamToNonStreaming(c *gin.Cont
 	if s.settingService.cfg != nil && s.settingService.cfg.Gateway.MaxLineSize > 0 {
 		maxLineSize = s.settingService.cfg.Gateway.MaxLineSize
 	}
-	scanner.Buffer(make([]byte, 64*1024), maxLineSize)
+	scanBuf := getSSEScannerBuf64K()
+	scanner.Buffer(scanBuf[:0], maxLineSize)
 
 	usage := &ClaudeUsage{}
 	var firstTokenMs *int
@@ -2967,7 +2970,8 @@ func (s *AntigravityGatewayService) handleGeminiStreamToNonStreaming(c *gin.Cont
 
 	var lastReadAt int64
 	atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
-	go func() {
+	go func(scanBuf *sseScannerBuf64K) {
+		defer putSSEScannerBuf64K(scanBuf)
 		defer close(events)
 		for scanner.Scan() {
 			atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
@@ -2978,7 +2982,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamToNonStreaming(c *gin.Cont
 		if err := scanner.Err(); err != nil {
 			_ = sendEvent(scanEvent{err: err})
 		}
-	}()
+	}(scanBuf)
 	defer close(done)
 
 	// 上游数据间隔超时保护（防止上游挂起长期占用连接）
@@ -3402,7 +3406,8 @@ func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Cont
 	if s.settingService.cfg != nil && s.settingService.cfg.Gateway.MaxLineSize > 0 {
 		maxLineSize = s.settingService.cfg.Gateway.MaxLineSize
 	}
-	scanner.Buffer(make([]byte, 64*1024), maxLineSize)
+	scanBuf := getSSEScannerBuf64K()
+	scanner.Buffer(scanBuf[:0], maxLineSize)
 
 	var firstTokenMs *int
 	var last map[string]any
@@ -3428,7 +3433,8 @@ func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Cont
 
 	var lastReadAt int64
 	atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
-	go func() {
+	go func(scanBuf *sseScannerBuf64K) {
+		defer putSSEScannerBuf64K(scanBuf)
 		defer close(events)
 		for scanner.Scan() {
 			atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
@@ -3439,7 +3445,7 @@ func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Cont
 		if err := scanner.Err(); err != nil {
 			_ = sendEvent(scanEvent{err: err})
 		}
-	}()
+	}(scanBuf)
 	defer close(done)
 
 	// 上游数据间隔超时保护（防止上游挂起长期占用连接）
@@ -3586,7 +3592,8 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 	if s.settingService.cfg != nil && s.settingService.cfg.Gateway.MaxLineSize > 0 {
 		maxLineSize = s.settingService.cfg.Gateway.MaxLineSize
 	}
-	scanner.Buffer(make([]byte, 64*1024), maxLineSize)
+	scanBuf := getSSEScannerBuf64K()
+	scanner.Buffer(scanBuf[:0], maxLineSize)
 
 	// 辅助函数：转换 antigravity.ClaudeUsage 到 service.ClaudeUsage
 	convertUsage := func(agUsage *antigravity.ClaudeUsage) *ClaudeUsage {
@@ -3618,7 +3625,8 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 	}
 	var lastReadAt int64
 	atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
-	go func() {
+	go func(scanBuf *sseScannerBuf64K) {
+		defer putSSEScannerBuf64K(scanBuf)
 		defer close(events)
 		for scanner.Scan() {
 			atomic.StoreInt64(&lastReadAt, time.Now().UnixNano())
@@ -3629,7 +3637,7 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 		if err := scanner.Err(); err != nil {
 			_ = sendEvent(scanEvent{err: err})
 		}
-	}()
+	}(scanBuf)
 	defer close(done)
 
 	streamInterval := time.Duration(0)
