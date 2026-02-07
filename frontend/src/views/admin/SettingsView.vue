@@ -706,6 +706,65 @@
           </div>
         </div>
 
+        <!-- Daily Check-in Settings -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.dailyCheckin.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.dailyCheckin.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="font-medium text-gray-900 dark:text-white">{{
+                  t('admin.settings.dailyCheckin.enabled')
+                }}</label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.dailyCheckin.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.daily_checkin_enabled" />
+            </div>
+            <div
+              class="grid grid-cols-1 gap-6 border-t border-gray-100 pt-4 dark:border-dark-700 md:grid-cols-2"
+            >
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.dailyCheckin.rewardMin') }}
+                </label>
+                <input
+                  v-model.number="form.daily_checkin_reward_min"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="input"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.dailyCheckin.rewardMinHint') }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.dailyCheckin.rewardMax') }}
+                </label>
+                <input
+                  v-model.number="form.daily_checkin_reward_max"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="input"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.dailyCheckin.rewardMaxHint') }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Site Settings -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -1266,6 +1325,9 @@ const form = reactive<SettingsForm>({
   totp_encryption_key_configured: false,
   default_balance: 0,
   default_concurrency: 1,
+  daily_checkin_enabled: false,
+  daily_checkin_reward_min: 1,
+  daily_checkin_reward_max: 3,
   site_name: 'Sub2API',
   site_logo: '',
   site_subtitle: 'Subscription to API Conversion Platform',
@@ -1391,6 +1453,15 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  if (form.daily_checkin_reward_min < 0) {
+    appStore.showError(t('admin.settings.dailyCheckin.invalidMin'))
+    return
+  }
+  if (form.daily_checkin_reward_max < form.daily_checkin_reward_min) {
+    appStore.showError(t('admin.settings.dailyCheckin.invalidRange'))
+    return
+  }
+
   saving.value = true
   try {
     const payload: UpdateSettingsRequest = {
@@ -1402,6 +1473,9 @@ async function saveSettings() {
       totp_enabled: form.totp_enabled,
       default_balance: form.default_balance,
       default_concurrency: form.default_concurrency,
+      daily_checkin_enabled: form.daily_checkin_enabled,
+      daily_checkin_reward_min: form.daily_checkin_reward_min,
+      daily_checkin_reward_max: form.daily_checkin_reward_max,
       site_name: form.site_name,
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,

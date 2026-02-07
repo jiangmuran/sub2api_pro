@@ -41,13 +41,14 @@ func ProvideRedeemService(
 	redeemRepo RedeemCodeRepository,
 	userRepo UserRepository,
 	subscriptionService *SubscriptionService,
+	settingService *SettingService,
 	cache RedeemCache,
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 	distributorService *DistributorService,
 ) *RedeemService {
-	svc := NewRedeemService(redeemRepo, userRepo, subscriptionService, cache, billingCacheService, entClient, authCacheInvalidator)
+	svc := NewRedeemService(redeemRepo, userRepo, subscriptionService, settingService, cache, billingCacheService, entClient, authCacheInvalidator)
 	svc.SetDistributorService(distributorService)
 	return svc
 }

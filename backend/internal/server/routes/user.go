@@ -77,6 +77,8 @@ func RegisterUserRoutes(
 		{
 			redeem.POST("", h.Redeem.Redeem)
 			redeem.GET("/history", h.Redeem.GetHistory)
+			redeem.GET("/checkin/status", h.Redeem.GetDailyCheckinStatus)
+			redeem.POST("/checkin", h.Redeem.DailyCheckin)
 		}
 
 		// 用户订阅

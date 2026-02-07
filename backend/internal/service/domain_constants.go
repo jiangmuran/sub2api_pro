@@ -116,8 +116,11 @@ const (
 	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // “购买订阅”页面 URL（作为 iframe src）
 
 	// 默认配置
-	SettingKeyDefaultConcurrency = "default_concurrency" // 新用户默认并发量
-	SettingKeyDefaultBalance     = "default_balance"     // 新用户默认余额
+	SettingKeyDefaultConcurrency    = "default_concurrency"      // 新用户默认并发量
+	SettingKeyDefaultBalance        = "default_balance"          // 新用户默认余额
+	SettingKeyDailyCheckinEnabled   = "daily_checkin_enabled"    // 是否启用每日签到奖励
+	SettingKeyDailyCheckinRewardMin = "daily_checkin_reward_min" // 每日签到最小奖励金额
+	SettingKeyDailyCheckinRewardMax = "daily_checkin_reward_max" // 每日签到最大奖励金额
 
 	// 管理员 API Key
 	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）

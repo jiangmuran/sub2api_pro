@@ -735,6 +735,16 @@ export default {
     passwordTooShort: '密码至少需要 8 个字符',
     passwordChangeSuccess: '密码修改成功',
     passwordChangeFailed: '密码修改失败',
+    checkin: {
+      checkInNow: '每日签到',
+      checkedInToday: '今日已签到',
+      checkingIn: '签到中...',
+      loading: '加载中...',
+      rewardAmount: '今日签到奖励：+${amount}',
+      success: '签到成功，获得 ${amount} 余额',
+      failed: '签到失败',
+      unavailable: '签到功能暂不可用'
+    },
     // TOTP 2FA
     totp: {
       title: '双因素认证 (2FA)',
@@ -3527,6 +3537,18 @@ export default {
         whitelistUsers: '白名单用户（仅记录）',
         whitelistUsersHint: 'user_id 或邮箱，逗号/空格/换行分隔',
         whitelistUsersNote: '仅这些用户的聊天记录会被保存。'
+      },
+      dailyCheckin: {
+        title: '每日签到',
+        description: '配置用户每日签到奖励金额区间',
+        enabled: '启用每日签到',
+        enabledHint: '启用后，普通用户可在个人资料页每天签到一次',
+        rewardMin: '最小奖励金额',
+        rewardMinHint: '签到奖励下限（单位：USD，必须大于等于 0）',
+        rewardMax: '最大奖励金额',
+        rewardMaxHint: '签到奖励上限（单位：USD，必须大于等于最小值）',
+        invalidMin: '最小奖励金额必须大于等于 0',
+        invalidRange: '最大奖励金额必须大于等于最小奖励金额'
       },
       site: {
         title: '站点设置',

@@ -236,6 +236,17 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	// 默认配置
 	updates[SettingKeyDefaultConcurrency] = strconv.Itoa(settings.DefaultConcurrency)
 	updates[SettingKeyDefaultBalance] = strconv.FormatFloat(settings.DefaultBalance, 'f', 8, 64)
+	updates[SettingKeyDailyCheckinEnabled] = strconv.FormatBool(settings.DailyCheckinEnabled)
+	dailyCheckinMin := settings.DailyCheckinRewardMin
+	if dailyCheckinMin < 0 {
+		dailyCheckinMin = 0
+	}
+	dailyCheckinMax := settings.DailyCheckinRewardMax
+	if dailyCheckinMax < dailyCheckinMin {
+		dailyCheckinMax = dailyCheckinMin
+	}
+	updates[SettingKeyDailyCheckinRewardMin] = strconv.FormatFloat(dailyCheckinMin, 'f', 8, 64)
+	updates[SettingKeyDailyCheckinRewardMax] = strconv.FormatFloat(dailyCheckinMax, 'f', 8, 64)
 
 	// Model fallback configuration
 	updates[SettingKeyEnableModelFallback] = strconv.FormatBool(settings.EnableModelFallback)
@@ -405,6 +416,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyPurchaseSubscriptionURL:     "",
 		SettingKeyDefaultConcurrency:          strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:              strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyDailyCheckinEnabled:         "false",
+		SettingKeyDailyCheckinRewardMin:       "1.00000000",
+		SettingKeyDailyCheckinRewardMax:       "3.00000000",
 		SettingKeySMTPPort:                    "587",
 		SettingKeySMTPUseTLS:                  "false",
 		// Model fallback defaults
@@ -486,6 +500,21 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.DefaultBalance = balance
 	} else {
 		result.DefaultBalance = s.cfg.Default.UserBalance
+	}
+
+	result.DailyCheckinEnabled = settings[SettingKeyDailyCheckinEnabled] == "true"
+	if min, err := strconv.ParseFloat(settings[SettingKeyDailyCheckinRewardMin], 64); err == nil && min >= 0 {
+		result.DailyCheckinRewardMin = min
+	} else {
+		result.DailyCheckinRewardMin = 1
+	}
+	if max, err := strconv.ParseFloat(settings[SettingKeyDailyCheckinRewardMax], 64); err == nil && max >= result.DailyCheckinRewardMin {
+		result.DailyCheckinRewardMax = max
+	} else {
+		result.DailyCheckinRewardMax = 3
+		if result.DailyCheckinRewardMax < result.DailyCheckinRewardMin {
+			result.DailyCheckinRewardMax = result.DailyCheckinRewardMin
+		}
 	}
 
 	// 敏感信息直接返回，方便测试连接时使用

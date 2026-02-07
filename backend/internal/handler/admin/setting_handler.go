@@ -78,6 +78,9 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PurchaseSubscriptionURL:               settings.PurchaseSubscriptionURL,
 		DefaultConcurrency:                    settings.DefaultConcurrency,
 		DefaultBalance:                        settings.DefaultBalance,
+		DailyCheckinEnabled:                   settings.DailyCheckinEnabled,
+		DailyCheckinRewardMin:                 settings.DailyCheckinRewardMin,
+		DailyCheckinRewardMax:                 settings.DailyCheckinRewardMax,
 		EnableModelFallback:                   settings.EnableModelFallback,
 		FallbackModelAnthropic:                settings.FallbackModelAnthropic,
 		FallbackModelOpenAI:                   settings.FallbackModelOpenAI,
@@ -143,8 +146,11 @@ type UpdateSettingsRequest struct {
 	PurchaseSubscriptionURL     *string `json:"purchase_subscription_url"`
 
 	// 默认配置
-	DefaultConcurrency int     `json:"default_concurrency"`
-	DefaultBalance     float64 `json:"default_balance"`
+	DefaultConcurrency    int     `json:"default_concurrency"`
+	DefaultBalance        float64 `json:"default_balance"`
+	DailyCheckinEnabled   bool    `json:"daily_checkin_enabled"`
+	DailyCheckinRewardMin float64 `json:"daily_checkin_reward_min"`
+	DailyCheckinRewardMax float64 `json:"daily_checkin_reward_max"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -197,6 +203,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 	if req.DefaultBalance < 0 {
 		req.DefaultBalance = 0
+	}
+	if req.DailyCheckinRewardMin < 0 {
+		response.BadRequest(c, "Daily check-in reward min must be greater than or equal to 0")
+		return
+	}
+	if req.DailyCheckinRewardMax < req.DailyCheckinRewardMin {
+		response.BadRequest(c, "Daily check-in reward max must be greater than or equal to min")
+		return
 	}
 	if req.SMTPPort <= 0 {
 		req.SMTPPort = 587
@@ -377,6 +391,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PurchaseSubscriptionURL:     purchaseURL,
 		DefaultConcurrency:          req.DefaultConcurrency,
 		DefaultBalance:              req.DefaultBalance,
+		DailyCheckinEnabled:         req.DailyCheckinEnabled,
+		DailyCheckinRewardMin:       req.DailyCheckinRewardMin,
+		DailyCheckinRewardMax:       req.DailyCheckinRewardMax,
 		EnableModelFallback:         req.EnableModelFallback,
 		FallbackModelAnthropic:      req.FallbackModelAnthropic,
 		FallbackModelOpenAI:         req.FallbackModelOpenAI,
@@ -506,6 +523,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PurchaseSubscriptionURL:               updatedSettings.PurchaseSubscriptionURL,
 		DefaultConcurrency:                    updatedSettings.DefaultConcurrency,
 		DefaultBalance:                        updatedSettings.DefaultBalance,
+		DailyCheckinEnabled:                   updatedSettings.DailyCheckinEnabled,
+		DailyCheckinRewardMin:                 updatedSettings.DailyCheckinRewardMin,
+		DailyCheckinRewardMax:                 updatedSettings.DailyCheckinRewardMax,
 		EnableModelFallback:                   updatedSettings.EnableModelFallback,
 		FallbackModelAnthropic:                updatedSettings.FallbackModelAnthropic,
 		FallbackModelOpenAI:                   updatedSettings.FallbackModelOpenAI,
@@ -633,6 +653,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.DefaultBalance != after.DefaultBalance {
 		changed = append(changed, "default_balance")
+	}
+	if before.DailyCheckinEnabled != after.DailyCheckinEnabled {
+		changed = append(changed, "daily_checkin_enabled")
+	}
+	if before.DailyCheckinRewardMin != after.DailyCheckinRewardMin {
+		changed = append(changed, "daily_checkin_reward_min")
+	}
+	if before.DailyCheckinRewardMax != after.DailyCheckinRewardMax {
+		changed = append(changed, "daily_checkin_reward_max")
 	}
 	if before.EnableModelFallback != after.EnableModelFallback {
 		changed = append(changed, "enable_model_fallback")

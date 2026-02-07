@@ -69,7 +69,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService)
 	redeemCache := repository.NewRedeemCache(redisClient)
 	distributorService := service.NewDistributorService(db, userRepository, groupRepository)
-	redeemService := service.ProvideRedeemService(redeemCodeRepository, userRepository, subscriptionService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator, distributorService)
+	redeemService := service.ProvideRedeemService(redeemCodeRepository, userRepository, subscriptionService, settingService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator, distributorService)
 	secretEncryptor, err := repository.NewAESEncryptor(configConfig)
 	if err != nil {
 		return nil, err

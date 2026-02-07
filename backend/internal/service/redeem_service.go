@@ -6,26 +6,35 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
+	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	timezonepkg "github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
 var (
-	ErrRedeemCodeNotFound  = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
-	ErrRedeemCodeUsed      = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
-	ErrInsufficientBalance = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
-	ErrRedeemRateLimited   = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrRedeemCodeLocked    = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
+	ErrRedeemCodeNotFound   = infraerrors.NotFound("REDEEM_CODE_NOT_FOUND", "redeem code not found")
+	ErrRedeemCodeUsed       = infraerrors.Conflict("REDEEM_CODE_USED", "redeem code already used")
+	ErrInsufficientBalance  = infraerrors.BadRequest("INSUFFICIENT_BALANCE", "insufficient balance")
+	ErrRedeemRateLimited    = infraerrors.TooManyRequests("REDEEM_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrRedeemCodeLocked     = infraerrors.Conflict("REDEEM_CODE_LOCKED", "redeem code is being processed, please try again")
+	ErrDailyCheckinDisabled = infraerrors.Forbidden("DAILY_CHECKIN_DISABLED", "daily check-in is disabled")
+	ErrDailyCheckinRole     = infraerrors.Forbidden("DAILY_CHECKIN_ROLE_FORBIDDEN", "only regular users can use daily check-in")
+	ErrDailyCheckinDone     = infraerrors.Conflict("DAILY_CHECKIN_ALREADY_DONE", "already checked in today")
 )
 
 const (
 	redeemMaxErrorsPerHour  = 20
 	redeemRateLimitDuration = time.Hour
 	redeemLockDuration      = 10 * time.Second // 锁超时时间，防止死锁
+	dailyCheckinCodePrefix  = "CKI"
+	dailyCheckinRecordNote  = "daily check-in reward"
 )
 
 // RedeemCache defines cache operations for redeem service
@@ -71,11 +80,29 @@ type RedeemCodeResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// DailyCheckinStatus 每日签到状态
+type DailyCheckinStatus struct {
+	Enabled        bool
+	CheckedInToday bool
+	RewardMin      float64
+	RewardMax      float64
+	RewardAmount   *float64
+}
+
+// DailyCheckinResult 每日签到结果
+type DailyCheckinResult struct {
+	Message      string
+	RewardAmount float64
+	NewBalance   float64
+	CheckedInAt  time.Time
+}
+
 // RedeemService 兑换码服务
 type RedeemService struct {
 	redeemRepo           RedeemCodeRepository
 	userRepo             UserRepository
 	subscriptionService  *SubscriptionService
+	settingService       *SettingService
 	cache                RedeemCache
 	billingCacheService  *BillingCacheService
 	entClient            *dbent.Client
@@ -88,6 +115,7 @@ func NewRedeemService(
 	redeemRepo RedeemCodeRepository,
 	userRepo UserRepository,
 	subscriptionService *SubscriptionService,
+	settingService *SettingService,
 	cache RedeemCache,
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
@@ -97,6 +125,7 @@ func NewRedeemService(
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
 		subscriptionService:  subscriptionService,
+		settingService:       settingService,
 		cache:                cache,
 		billingCacheService:  billingCacheService,
 		entClient:            entClient,
@@ -458,4 +487,212 @@ func (s *RedeemService) GetUserHistory(ctx context.Context, userID int64, limit 
 		return nil, fmt.Errorf("get user redeem history: %w", err)
 	}
 	return codes, nil
+}
+
+// GetDailyCheckinStatus 获取每日签到状态
+func (s *RedeemService) GetDailyCheckinStatus(ctx context.Context, userID int64) (*DailyCheckinStatus, error) {
+	enabled, rewardMin, rewardMax, err := s.getDailyCheckinConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	if user.Role != RoleUser {
+		enabled = false
+	}
+
+	now := timezonepkg.Now()
+	checkinCode := buildDailyCheckinCode(userID, now)
+	redeemRecord, err := s.redeemRepo.GetByCode(ctx, checkinCode)
+	checkedInToday := err == nil
+	if err != nil && !errors.Is(err, ErrRedeemCodeNotFound) {
+		return nil, fmt.Errorf("get daily check-in status: %w", err)
+	}
+
+	var rewardAmount *float64
+	if checkedInToday {
+		value := redeemRecord.Value
+		rewardAmount = &value
+	}
+
+	return &DailyCheckinStatus{
+		Enabled:        enabled,
+		CheckedInToday: checkedInToday,
+		RewardMin:      rewardMin,
+		RewardMax:      rewardMax,
+		RewardAmount:   rewardAmount,
+	}, nil
+}
+
+// DailyCheckin 执行每日签到
+func (s *RedeemService) DailyCheckin(ctx context.Context, userID int64) (*DailyCheckinResult, error) {
+	enabled, rewardMin, rewardMax, err := s.getDailyCheckinConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, ErrDailyCheckinDisabled
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	if user.Role != RoleUser {
+		return nil, ErrDailyCheckinRole
+	}
+
+	rewardAmount, err := randomRewardInRange(rewardMin, rewardMax)
+	if err != nil {
+		return nil, err
+	}
+
+	now := timezonepkg.Now()
+	usedBy := userID
+	usedAt := now
+	redeemRecord := &RedeemCode{
+		Code:   buildDailyCheckinCode(userID, now),
+		Type:   RedeemTypeBalance,
+		Value:  rewardAmount,
+		Status: StatusUsed,
+		UsedBy: &usedBy,
+		UsedAt: &usedAt,
+		Notes:  dailyCheckinRecordNote,
+	}
+
+	if err := s.applyDailyCheckin(ctx, userID, rewardAmount, redeemRecord); err != nil {
+		return nil, err
+	}
+
+	updatedUser, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get updated user: %w", err)
+	}
+
+	s.invalidateRedeemCaches(ctx, userID, redeemRecord)
+
+	return &DailyCheckinResult{
+		Message:      "Daily check-in successful",
+		RewardAmount: rewardAmount,
+		NewBalance:   updatedUser.Balance,
+		CheckedInAt:  now,
+	}, nil
+}
+
+func (s *RedeemService) applyDailyCheckin(ctx context.Context, userID int64, rewardAmount float64, redeemRecord *RedeemCode) error {
+	apply := func(execCtx context.Context) error {
+		if err := s.redeemRepo.Create(execCtx, redeemRecord); err != nil {
+			if isUniqueConstraintError(err) {
+				return ErrDailyCheckinDone.WithCause(err)
+			}
+			return fmt.Errorf("create daily check-in record: %w", err)
+		}
+		if err := s.userRepo.UpdateBalance(execCtx, userID, rewardAmount); err != nil {
+			return fmt.Errorf("update user balance: %w", err)
+		}
+		return nil
+	}
+
+	if s.entClient == nil {
+		return apply(ctx)
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := apply(txCtx); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (s *RedeemService) getDailyCheckinConfig(ctx context.Context) (enabled bool, rewardMin, rewardMax float64, err error) {
+	enabled = false
+	rewardMin = 1
+	rewardMax = 3
+
+	if s.settingService == nil {
+		return enabled, rewardMin, rewardMax, nil
+	}
+
+	settings, err := s.settingService.GetAllSettings(ctx)
+	if err != nil {
+		return false, 0, 0, fmt.Errorf("get settings: %w", err)
+	}
+
+	enabled = settings.DailyCheckinEnabled
+	rewardMin = settings.DailyCheckinRewardMin
+	rewardMax = settings.DailyCheckinRewardMax
+	if rewardMin < 0 {
+		rewardMin = 0
+	}
+	if rewardMax < rewardMin {
+		rewardMax = rewardMin
+	}
+
+	return enabled, rewardMin, rewardMax, nil
+}
+
+func buildDailyCheckinCode(userID int64, now time.Time) string {
+	datePart := now.In(timezonepkg.Location()).Format("20060102")
+	userPart := strings.ToUpper(strconv.FormatInt(userID, 36))
+	return fmt.Sprintf("%s-%s-%s", dailyCheckinCodePrefix, userPart, datePart)
+}
+
+func randomRewardInRange(minAmount, maxAmount float64) (float64, error) {
+	minCents, maxCents := rewardBoundsInCents(minAmount, maxAmount)
+	if maxCents <= minCents {
+		return float64(minCents) / 100, nil
+	}
+
+	delta := maxCents - minCents + 1
+	randomOffset, err := rand.Int(rand.Reader, big.NewInt(delta))
+	if err != nil {
+		return 0, fmt.Errorf("generate random reward: %w", err)
+	}
+
+	rewardCents := minCents + randomOffset.Int64()
+	return float64(rewardCents) / 100, nil
+}
+
+func rewardBoundsInCents(minAmount, maxAmount float64) (int64, int64) {
+	if minAmount < 0 {
+		minAmount = 0
+	}
+	if maxAmount < minAmount {
+		maxAmount = minAmount
+	}
+
+	minCents := int64(math.Round(minAmount * 100))
+	maxCents := int64(math.Round(maxAmount * 100))
+	if maxCents < minCents {
+		maxCents = minCents
+	}
+	return minCents, maxCents
+}
+
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if dbent.IsConstraintError(err) {
+		return true
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "duplicate key") ||
+		strings.Contains(message, "unique constraint") ||
+		strings.Contains(message, "duplicate entry")
 }

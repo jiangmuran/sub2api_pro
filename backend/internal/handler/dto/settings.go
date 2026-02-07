@@ -38,8 +38,11 @@ type SystemSettings struct {
 	PurchaseSubscriptionEnabled bool   `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     string `json:"purchase_subscription_url"`
 
-	DefaultConcurrency int     `json:"default_concurrency"`
-	DefaultBalance     float64 `json:"default_balance"`
+	DefaultConcurrency    int     `json:"default_concurrency"`
+	DefaultBalance        float64 `json:"default_balance"`
+	DailyCheckinEnabled   bool    `json:"daily_checkin_enabled"`
+	DailyCheckinRewardMin float64 `json:"daily_checkin_reward_min"`
+	DailyCheckinRewardMax float64 `json:"daily_checkin_reward_max"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`

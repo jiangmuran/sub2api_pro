@@ -25,6 +25,21 @@ export interface RedeemHistoryItem {
   }
 }
 
+export interface DailyCheckinStatus {
+  enabled: boolean
+  checked_in_today: boolean
+  reward_min: number
+  reward_max: number
+  reward_amount?: number
+}
+
+export interface DailyCheckinResult {
+  message: string
+  reward_amount: number
+  new_balance: number
+  checked_in_at: string
+}
+
 /**
  * Redeem a code
  * @param code - Redeem code string
@@ -51,6 +66,22 @@ export async function redeem(code: string): Promise<{
 }
 
 /**
+ * Get daily check-in status
+ */
+export async function getDailyCheckinStatus(): Promise<DailyCheckinStatus> {
+  const { data } = await apiClient.get<DailyCheckinStatus>('/redeem/checkin/status')
+  return data
+}
+
+/**
+ * Perform daily check-in
+ */
+export async function dailyCheckin(): Promise<DailyCheckinResult> {
+  const { data } = await apiClient.post<DailyCheckinResult>('/redeem/checkin')
+  return data
+}
+
+/**
  * Get user's redemption history
  * @returns List of redeemed codes
  */
@@ -61,6 +92,8 @@ export async function getHistory(): Promise<RedeemHistoryItem[]> {
 
 export const redeemAPI = {
   redeem,
+  getDailyCheckinStatus,
+  dailyCheckin,
   getHistory
 }
 
