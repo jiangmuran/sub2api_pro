@@ -3284,6 +3284,8 @@ export default {
     settings: {
       title: 'System Settings',
       description: 'Manage registration, email verification, default values, and SMTP settings',
+      quickNav: 'Quick Navigation',
+      quickNavHint: 'Jump directly to each settings section',
       registration: {
         title: 'Registration Settings',
         description: 'Control user registration and verification',

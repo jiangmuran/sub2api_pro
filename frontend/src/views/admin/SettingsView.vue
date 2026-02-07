@@ -1,15 +1,41 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-4xl space-y-6">
-      <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center py-12">
-        <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600"></div>
+    <div class="mx-auto w-full max-w-7xl space-y-4">
+      <!-- 电梯导航（移动端） -->
+      <div
+        v-if="!loading && settingsSections.length"
+        data-settings-mobile-nav
+        class="sticky top-[4rem] z-20 -mx-4 border-y border-gray-200/80 bg-gray-50/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 xl:hidden dark:border-dark-700/80 dark:bg-dark-950/90"
+      >
+        <div class="flex gap-2 overflow-x-auto pb-1">
+          <button
+            v-for="section in settingsSections"
+            :key="`mobile-${section.id}`"
+            type="button"
+            class="whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+            :class="
+              activeSectionId === section.id
+                ? 'border-primary-200 bg-primary-50 text-primary-700 dark:border-primary-800/80 dark:bg-primary-900/30 dark:text-primary-300'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-primary-200 hover:text-primary-700 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:border-primary-800/80 dark:hover:text-primary-300'
+            "
+            @click="scrollToSection(section.id)"
+          >
+            {{ t(section.titleKey) }}
+          </button>
+        </div>
       </div>
 
-      <!-- Settings Form -->
-      <form v-else @submit.prevent="saveSettings" class="space-y-6">
+      <div class="xl:grid xl:grid-cols-[minmax(0,1fr)_16rem] xl:items-start xl:gap-6">
+        <div class="mx-auto w-full max-w-4xl space-y-6">
+          <!-- Loading State -->
+          <div v-if="loading" class="flex items-center justify-center py-12">
+            <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600"></div>
+          </div>
+
+          <!-- Settings Form -->
+          <form v-else @submit.prevent="saveSettings" class="space-y-6">
         <!-- Admin API Key Settings -->
-        <div class="card">
+        <section id="settings-admin-api-key" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.adminApiKey.title') }}
@@ -145,10 +171,10 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Stream Timeout Settings -->
-        <div class="card">
+        <section id="settings-stream-timeout" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.streamTimeout.title') }}
@@ -283,10 +309,10 @@
               </div>
             </template>
           </div>
-        </div>
+        </section>
 
         <!-- Registration Settings -->
-        <div class="card">
+        <section id="settings-registration" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.registration.title') }}
@@ -394,10 +420,10 @@
               />
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Cloudflare Turnstile Settings -->
-        <div class="card">
+        <section id="settings-turnstile" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.turnstile.title') }}
@@ -467,10 +493,10 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- LinuxDo Connect OAuth 登录 -->
-        <div class="card">
+        <section id="settings-linuxdo" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.linuxdo.title') }}
@@ -567,10 +593,10 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Default Settings -->
-        <div class="card">
+        <section id="settings-defaults" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.defaults.title') }}
@@ -614,7 +640,7 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Security Chat Logs -->
         <div class="card">
@@ -707,7 +733,7 @@
         </div>
 
         <!-- Daily Check-in Settings -->
-        <div class="card">
+        <section id="settings-daily-checkin" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.dailyCheckin.title') }}
@@ -763,10 +789,10 @@
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Site Settings -->
-        <div class="card">
+        <section id="settings-site" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.site.title') }}
@@ -955,10 +981,10 @@
               <Toggle v-model="form.hide_ccs_import_button" />
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- SMTP Settings - Only show when email verification is enabled -->
-        <div v-if="form.email_verify_enabled" class="card">
+        <section id="settings-smtp" v-if="form.email_verify_enabled" class="card">
           <div
             class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
           >
@@ -1096,10 +1122,10 @@
               <Toggle v-model="form.smtp_use_tls" />
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Purchase Subscription Page -->
-        <div class="card">
+        <section id="settings-purchase" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.purchase.title') }}
@@ -1141,10 +1167,10 @@
               </p>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- Send Test Email - Only show when email verification is enabled -->
-        <div v-if="form.email_verify_enabled" class="card">
+        <section id="settings-test-email" v-if="form.email_verify_enabled" class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.testEmail.title') }}
@@ -1200,7 +1226,7 @@
               </button>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- OpenAI Invalid Bearer Auto Recover -->
         <div class="card">
@@ -1266,11 +1292,55 @@
         </div>
       </form>
     </div>
+
+    <!-- 电梯导航（桌面端） -->
+    <aside v-if="!loading && settingsSections.length" class="hidden xl:block h-full">
+      <div class="sticky top-24">
+        <div class="card overflow-hidden">
+          <div class="border-b border-gray-100 px-4 py-3 dark:border-dark-700">
+            <p
+              class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            >
+              {{ t('admin.settings.quickNav') }}
+            </p>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.quickNavHint') }}
+            </p>
+          </div>
+          <nav class="max-h-[calc(100vh-9rem)] space-y-1 overflow-y-auto p-2">
+            <button
+              v-for="section in settingsSections"
+              :key="`desktop-${section.id}`"
+              type="button"
+              class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors"
+              :class="
+                activeSectionId === section.id
+                  ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-dark-700 dark:hover:text-white'
+              "
+              @click="scrollToSection(section.id)"
+            >
+              <span class="truncate">{{ t(section.titleKey) }}</span>
+              <span
+                class="h-2 w-2 rounded-full transition-colors"
+                :class="
+                  activeSectionId === section.id
+                    ? 'bg-primary-500 dark:bg-primary-400'
+                    : 'bg-gray-300 dark:bg-dark-500'
+                "
+              ></span>
+            </button>
+          </nav>
+        </div>
+      </div>
+    </aside>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
 import type { SystemSettings, UpdateSettingsRequest } from '@/api/admin/settings'
@@ -1380,6 +1450,116 @@ const form = reactive<SettingsForm>({
   openai_invalid_bearer_auto_recover_enabled: true,
   openai_invalid_bearer_auto_recover_cooldown_minutes: 5
 })
+
+type SettingsSection = {
+  id: string
+  titleKey: string
+  requiresEmailVerify?: boolean
+}
+
+const settingsSectionsAll: SettingsSection[] = [
+  { id: 'settings-admin-api-key', titleKey: 'admin.settings.adminApiKey.title' },
+  { id: 'settings-stream-timeout', titleKey: 'admin.settings.streamTimeout.title' },
+  { id: 'settings-registration', titleKey: 'admin.settings.registration.title' },
+  { id: 'settings-turnstile', titleKey: 'admin.settings.turnstile.title' },
+  { id: 'settings-linuxdo', titleKey: 'admin.settings.linuxdo.title' },
+  { id: 'settings-defaults', titleKey: 'admin.settings.defaults.title' },
+  { id: 'settings-daily-checkin', titleKey: 'admin.settings.dailyCheckin.title' },
+  { id: 'settings-site', titleKey: 'admin.settings.site.title' },
+  { id: 'settings-smtp', titleKey: 'admin.settings.smtp.title', requiresEmailVerify: true },
+  { id: 'settings-purchase', titleKey: 'admin.settings.purchase.title' },
+  { id: 'settings-test-email', titleKey: 'admin.settings.testEmail.title', requiresEmailVerify: true }
+]
+
+const settingsSections = computed(() =>
+  settingsSectionsAll.filter(
+    (section) => !section.requiresEmailVerify || form.email_verify_enabled
+  )
+)
+const activeSectionId = ref(settingsSectionsAll[0].id)
+let isScrollTicking = false
+
+function getSectionScrollOffset() {
+  if (typeof window === 'undefined') return 96
+
+  const headerEl = document.querySelector('header')
+  const headerHeight = headerEl instanceof HTMLElement ? headerEl.offsetHeight : 64
+  const mobileNavEl = document.querySelector('[data-settings-mobile-nav]')
+  const mobileNavHeight = mobileNavEl instanceof HTMLElement ? mobileNavEl.offsetHeight : 0
+
+  return headerHeight + mobileNavHeight + 16
+}
+
+function updateActiveSectionByScroll() {
+  if (typeof window === 'undefined' || loading.value) return
+
+  if (!settingsSections.value.length) {
+    activeSectionId.value = ''
+    return
+  }
+
+  const probeY = window.scrollY + getSectionScrollOffset()
+  let currentSectionId = settingsSections.value[0].id
+
+  for (const section of settingsSections.value) {
+    const sectionEl = document.getElementById(section.id)
+    if (!sectionEl) continue
+
+    if (sectionEl.offsetTop <= probeY) {
+      currentSectionId = section.id
+      continue
+    }
+
+    break
+  }
+
+  activeSectionId.value = currentSectionId
+}
+
+function scheduleActiveSectionUpdate() {
+  if (typeof window === 'undefined' || isScrollTicking) return
+
+  isScrollTicking = true
+  window.requestAnimationFrame(() => {
+    updateActiveSectionByScroll()
+    isScrollTicking = false
+  })
+}
+
+function scrollToSection(sectionId: string) {
+  if (typeof window === 'undefined') return
+
+  const sectionEl = document.getElementById(sectionId)
+  if (!sectionEl) return
+
+  activeSectionId.value = sectionId
+
+  const top = sectionEl.getBoundingClientRect().top + window.scrollY - getSectionScrollOffset()
+  window.scrollTo({
+    top: Math.max(top, 0),
+    behavior: 'smooth'
+  })
+}
+
+watch(
+  [loading, settingsSections],
+  async ([isLoading, sections]) => {
+    if (!sections.length) {
+      activeSectionId.value = ''
+      return
+    }
+
+    if (!sections.some((section) => section.id === activeSectionId.value)) {
+      activeSectionId.value = sections[0].id
+    }
+
+    if (isLoading) return
+
+    await nextTick()
+    scheduleActiveSectionUpdate()
+  },
+  { immediate: true }
+)
 
 // LinuxDo OAuth redirect URL suggestion
 const linuxdoRedirectUrlSuggestion = computed(() => {
@@ -1684,5 +1864,13 @@ onMounted(() => {
   loadSettings()
   loadAdminApiKey()
   loadStreamTimeoutSettings()
+
+  window.addEventListener('scroll', scheduleActiveSectionUpdate, { passive: true })
+  window.addEventListener('resize', scheduleActiveSectionUpdate)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', scheduleActiveSectionUpdate)
+  window.removeEventListener('resize', scheduleActiveSectionUpdate)
 })
 </script>

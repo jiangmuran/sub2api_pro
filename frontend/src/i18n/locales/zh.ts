@@ -3459,6 +3459,8 @@ export default {
     settings: {
       title: '系统设置',
       description: '管理注册、邮箱验证、默认值和 SMTP 设置',
+      quickNav: '快捷导航',
+      quickNavHint: '点击可快速定位对应配置项',
       registration: {
         title: '注册设置',
         description: '控制用户注册和验证',
