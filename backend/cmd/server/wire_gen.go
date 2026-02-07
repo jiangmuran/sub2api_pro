@@ -66,7 +66,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator)
 	authService := service.NewAuthService(userRepository, redeemCodeRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService)
 	userService := service.NewUserService(userRepository, apiKeyAuthCacheInvalidator)
-	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService)
+	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService, configConfig)
 	redeemCache := repository.NewRedeemCache(redisClient)
 	distributorService := service.NewDistributorService(db, userRepository, groupRepository)
 	redeemService := service.ProvideRedeemService(redeemCodeRepository, userRepository, subscriptionService, settingService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator, distributorService)
