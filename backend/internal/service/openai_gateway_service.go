@@ -968,6 +968,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	if usage == nil {
+		usage = &OpenAIUsage{}
+	}
+
 	reasoningEffort := extractOpenAIReasoningEffort(reqBody, originalModel)
 
 	return &OpenAIForwardResult{
