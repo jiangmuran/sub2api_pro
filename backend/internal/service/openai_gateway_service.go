@@ -1046,7 +1046,6 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			reqStream = true
 		}
 	}
-
 	log.Printf(
 		"[OpenAI 自动透传] 命中自动透传分支: account=%d name=%s type=%s model=%s stream=%v",
 		account.ID,
