@@ -34,6 +34,10 @@ const (
 	// OpenAI Platform API for API Key accounts (fallback)
 	openaiPlatformAPIURL   = "https://api.openai.com/v1/responses"
 	openaiStickySessionTTL = time.Hour // 粘性会话TTL
+	codexCLIUserAgent      = "codex_cli_rs/0.98.0"
+
+	// OpenAIParsedRequestBodyKey 缓存 handler 侧已解析的请求体，避免重复解析。
+	OpenAIParsedRequestBodyKey = "openai_parsed_request_body"
 )
 
 // openaiSSEDataRe matches SSE data lines with optional whitespace after colon.
@@ -45,6 +49,19 @@ var openaiAllowedHeaders = map[string]bool{
 	"accept-language": true,
 	"content-type":    true,
 	"conversation_id": true,
+	"user-agent":      true,
+	"originator":      true,
+	"session_id":      true,
+}
+
+// OpenAI passthrough allowed headers whitelist.
+// 透传模式下仅放行这些低风险请求头，避免将非标准/环境噪声头传给上游触发风控。
+var openaiPassthroughAllowedHeaders = map[string]bool{
+	"accept":          true,
+	"accept-language": true,
+	"content-type":    true,
+	"conversation_id": true,
+	"openai-beta":     true,
 	"user-agent":      true,
 	"originator":      true,
 	"session_id":      true,
@@ -1135,15 +1152,12 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		return nil, err
 	}
 
-	// 透传客户端请求头（尽可能原样），并做安全剔除。
+	// 透传客户端请求头（安全白名单）。
 	allowTimeoutHeaders := s.isOpenAIPassthroughTimeoutHeadersAllowed()
 	if c != nil && c.Request != nil {
 		for key, values := range c.Request.Header {
-			lower := strings.ToLower(key)
-			if isOpenAIPassthroughBlockedRequestHeader(lower) {
-				continue
-			}
-			if !allowTimeoutHeaders && isOpenAIPassthroughTimeoutHeader(lower) {
+			lower := strings.ToLower(strings.TrimSpace(key))
+			if !isOpenAIPassthroughAllowedRequestHeader(lower, allowTimeoutHeaders) {
 				continue
 			}
 			for _, v := range values {
@@ -1160,9 +1174,13 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 
 	// OAuth 透传到 ChatGPT internal API 时补齐必要头。
 	if account.Type == AccountTypeOAuth {
+		promptCacheKey := strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
 		req.Host = "chatgpt.com"
 		if chatgptAccountID := account.GetChatGPTAccountID(); chatgptAccountID != "" {
 			req.Header.Set("chatgpt-account-id", chatgptAccountID)
+		}
+		if req.Header.Get("accept") == "" {
+			req.Header.Set("accept", "text/event-stream")
 		}
 		if req.Header.Get("OpenAI-Beta") == "" {
 			req.Header.Set("OpenAI-Beta", "responses=experimental")
@@ -1170,6 +1188,27 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		if req.Header.Get("originator") == "" {
 			req.Header.Set("originator", "codex_cli_rs")
 		}
+		if promptCacheKey != "" {
+			if req.Header.Get("conversation_id") == "" {
+				req.Header.Set("conversation_id", promptCacheKey)
+			}
+			if req.Header.Get("session_id") == "" {
+				req.Header.Set("session_id", promptCacheKey)
+			}
+		}
+	}
+
+	// 透传模式也支持账户自定义 User-Agent 与 ForceCodexCLI 兜底。
+	customUA := account.GetOpenAIUserAgent()
+	if customUA != "" {
+		req.Header.Set("user-agent", customUA)
+	}
+	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
+		req.Header.Set("user-agent", codexCLIUserAgent)
+	}
+	// OAuth 安全透传：对非 Codex UA 统一兜底，降低被上游风控拦截概率。
+	if account.Type == AccountTypeOAuth && !openai.IsCodexCLIRequest(req.Header.Get("user-agent")) {
+		req.Header.Set("user-agent", codexCLIUserAgent)
 	}
 
 	if req.Header.Get("content-type") == "" {
@@ -1218,23 +1257,14 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(ctx context.Contex
 	return fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
 }
 
-func isOpenAIPassthroughBlockedRequestHeader(lowerKey string) bool {
-	switch lowerKey {
-	// hop-by-hop
-	case "connection", "transfer-encoding", "keep-alive", "proxy-connection", "upgrade", "te", "trailer":
-		return true
-	// 入站鉴权与潜在泄露
-	case "authorization", "x-api-key", "x-goog-api-key", "cookie", "proxy-authorization":
-		return true
-	// 由 Go http client 自动协商压缩；透传模式需避免上游返回压缩体影响 SSE/usage 解析
-	case "accept-encoding":
-		return true
-	// 由 HTTP 库管理
-	case "host", "content-length":
-		return true
-	default:
+func isOpenAIPassthroughAllowedRequestHeader(lowerKey string, allowTimeoutHeaders bool) bool {
+	if lowerKey == "" {
 		return false
 	}
+	if isOpenAIPassthroughTimeoutHeader(lowerKey) {
+		return allowTimeoutHeaders
+	}
+	return openaiPassthroughAllowedHeaders[lowerKey]
 }
 
 func isOpenAIPassthroughTimeoutHeader(lowerKey string) bool {
@@ -1537,6 +1567,11 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		req.Header.Set("user-agent", customUA)
 	}
 
+	// 若开启 ForceCodexCLI，则强制将上游 User-Agent 伪装为 Codex CLI。
+	// 用于网关未透传/改写 User-Agent 时，仍能命中 Codex 侧识别逻辑。
+	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
+		req.Header.Set("user-agent", codexCLIUserAgent)
+	}
 	// Ensure required headers exist
 	if req.Header.Get("content-type") == "" {
 		req.Header.Set("content-type", "application/json")
