@@ -359,6 +359,7 @@ type SecurityChatMessageFilter struct {
 	UserID    *int64
 	APIKeyID  *int64
 	AllowEmptySession bool
+	IgnoreTimeRange  bool
 
 	Page     int
 	PageSize int

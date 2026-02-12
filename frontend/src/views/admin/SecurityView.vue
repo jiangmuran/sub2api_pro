@@ -529,8 +529,8 @@ const summarize = async () => {
   aiError.value = ''
   try {
     const payload: Record<string, any> = {
-      start_time: filters.startDate ? toISO(filters.startDate) : undefined,
-      end_time: filters.endDate ? toISO(filters.endDate, true) : undefined,
+      start_time: selectedSession.value ? undefined : (filters.startDate ? toISO(filters.startDate) : undefined),
+      end_time: selectedSession.value ? undefined : (filters.endDate ? toISO(filters.endDate, true) : undefined),
       user_id: filters.userId ? Number(filters.userId) : undefined,
       session_id: selectedSession.value?.session_id,
       api_key_id: selectedSession.value?.api_key_id || selectedApiKeyId.value || undefined

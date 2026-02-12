@@ -183,6 +183,7 @@ func (h *SecurityHandler) SummarizeChat(c *gin.Context) {
 	}
 	if req.SessionID != nil && strings.TrimSpace(*req.SessionID) != "" {
 		filter.SessionID = strings.TrimSpace(*req.SessionID)
+		filter.IgnoreTimeRange = true
 	} else {
 		filter.UserID = req.UserID
 		filter.APIKeyID = req.APIKeyID

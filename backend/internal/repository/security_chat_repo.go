@@ -314,8 +314,10 @@ func (r *securityChatRepository) ListMessages(ctx context.Context, filter *servi
 		args = append(args, values...)
 	}
 
-	// time range is always applied
-	conditions = append(conditions, "created_at >= $1", "created_at < $2")
+	// time range is applied unless explicitly ignored
+	if !filter.IgnoreTimeRange {
+		conditions = append(conditions, "created_at >= $1", "created_at < $2")
+	}
 
 	if strings.TrimSpace(filter.SessionID) != "" {
 		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), strings.TrimSpace(filter.SessionID))
