@@ -484,6 +484,7 @@ func TestAPIContracts(t *testing.T) {
 					"security_chat_ai_enabled": false,
 					"security_chat_ai_base_url": "https://api.openai.com/v1",
 					"security_chat_ai_model": "gpt-4o-mini",
+					"security_chat_excluded_users": "",
 					"site_name": "Sub2API",
 						"site_logo": "",
 						"site_subtitle": "Subtitle",

@@ -21,6 +21,7 @@ type SecurityChatRepository interface {
 	DeleteExpiredSessions(ctx context.Context, cutoff time.Time) (int64, error)
 	DeleteSession(ctx context.Context, sessionID string, userID *int64, apiKeyID *int64) (int64, int64, error)
 	DeleteSessions(ctx context.Context, sessionIDs []string, userID *int64, apiKeyID *int64) (int64, int64, error)
+	DeleteSessionsByFilter(ctx context.Context, filter *SecurityChatSessionFilter) (int64, int64, error)
 }
 
 type SecurityChatService struct {
@@ -200,6 +201,75 @@ func (s *SecurityChatService) DeleteSessions(ctx context.Context, sessionIDs []s
 		return 0, 0, fmt.Errorf("session_ids required")
 	}
 	return s.repo.DeleteSessions(ctx, cleaned, userID, apiKeyID)
+}
+
+func (s *SecurityChatService) DeleteSessionsByFilter(ctx context.Context, filter *SecurityChatSessionFilter) (int64, int64, error) {
+	if s == nil || s.repo == nil {
+		return 0, 0, nil
+	}
+	if filter == nil {
+		return 0, 0, fmt.Errorf("filter required")
+	}
+	return s.repo.DeleteSessionsByFilter(ctx, filter)
+}
+
+func (s *SecurityChatService) ShouldCapture(ctx context.Context, userID *int64, userEmail string) bool {
+	if s == nil || s.settingRepo == nil {
+		return true
+	}
+	value, err := s.settingRepo.GetValue(ctx, SettingKeySecurityChatExcludedUsers)
+	if err != nil {
+		return true
+	}
+	list := parseExcludedUsers(value)
+	if len(list.ids) == 0 && len(list.emails) == 0 {
+		return true
+	}
+	if userID != nil {
+		if _, ok := list.ids[*userID]; ok {
+			return false
+		}
+	}
+	if userEmail != "" {
+		if _, ok := list.emails[strings.ToLower(strings.TrimSpace(userEmail))]; ok {
+			return false
+		}
+	}
+	return true
+}
+
+type excludedUserList struct {
+	ids    map[int64]struct{}
+	emails map[string]struct{}
+}
+
+func parseExcludedUsers(raw string) excludedUserList {
+	result := excludedUserList{ids: map[int64]struct{}{}, emails: map[string]struct{}{}}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return result
+	}
+	separators := []rune{',', '\n', '\t', ' '}
+	fields := strings.FieldsFunc(raw, func(r rune) bool {
+		for _, sep := range separators {
+			if r == sep {
+				return true
+			}
+		}
+		return false
+	})
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		if id, err := strconv.ParseInt(field, 10, 64); err == nil {
+			result.ids[id] = struct{}{}
+			continue
+		}
+		result.emails[strings.ToLower(field)] = struct{}{}
+	}
+	return result
 }
 
 type SecurityChatCaptureInput struct {

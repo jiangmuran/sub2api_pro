@@ -63,6 +63,7 @@ type SystemSettings struct {
 	SecurityChatAIEnabled     bool   `json:"security_chat_ai_enabled"`
 	SecurityChatAIBaseURL     string `json:"security_chat_ai_base_url"`
 	SecurityChatAIModel       string `json:"security_chat_ai_model"`
+	SecurityChatExcludedUsers string `json:"security_chat_excluded_users"`
 }
 
 type PublicSettings struct {

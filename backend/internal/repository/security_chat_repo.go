@@ -557,3 +557,68 @@ func (r *securityChatRepository) DeleteSessions(ctx context.Context, sessionIDs 
 
 	return logsDeleted, sessionsDeleted, nil
 }
+
+func (r *securityChatRepository) DeleteSessionsByFilter(ctx context.Context, filter *service.SecurityChatSessionFilter) (int64, int64, error) {
+	if r == nil || r.db == nil {
+		return 0, 0, fmt.Errorf("nil security chat repository")
+	}
+	if filter == nil {
+		return 0, 0, fmt.Errorf("filter required")
+	}
+
+	_, _, startTime, endTime := filter.Normalize()
+	conditions := make([]string, 0, 8)
+	args := make([]any, 0, 10)
+	args = append(args, startTime.UTC(), endTime.UTC())
+
+	addCondition := func(condition string, values ...any) {
+		conditions = append(conditions, condition)
+		args = append(args, values...)
+	}
+
+	conditions = append(conditions, "last_at >= $1", "last_at < $2")
+	if filter.UserID != nil && *filter.UserID > 0 {
+		addCondition(fmt.Sprintf("user_id = $%d", len(args)+1), *filter.UserID)
+	}
+	if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
+		addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
+	}
+	if s := strings.TrimSpace(filter.SessionID); s != "" {
+		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), s)
+	}
+	if p := strings.TrimSpace(filter.Platform); p != "" {
+		addCondition(fmt.Sprintf("platform = $%d", len(args)+1), strings.ToLower(p))
+	}
+	if m := strings.TrimSpace(filter.Model); m != "" {
+		addCondition(fmt.Sprintf("model = $%d", len(args)+1), m)
+	}
+	if q := strings.TrimSpace(filter.Query); q != "" {
+		like := "%" + strings.ToLower(q) + "%"
+		startIdx := len(args) + 1
+		addCondition(
+			fmt.Sprintf("(LOWER(COALESCE(session_id,'')) LIKE $%d OR LOWER(COALESCE(message_preview,'')) LIKE $%d)", startIdx, startIdx+1),
+			like, like,
+		)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	deleteLogsQuery := fmt.Sprintf("DELETE FROM security_chat_logs WHERE session_id IN (SELECT session_id FROM security_chat_sessions %s)", where)
+	resLogs, err := r.db.ExecContext(ctx, deleteLogsQuery, args...)
+	if err != nil {
+		return 0, 0, err
+	}
+	logsDeleted, _ := resLogs.RowsAffected()
+
+	deleteSessionsQuery := fmt.Sprintf("DELETE FROM security_chat_sessions %s", where)
+	resSessions, err := r.db.ExecContext(ctx, deleteSessionsQuery, args...)
+	if err != nil {
+		return logsDeleted, 0, err
+	}
+	sessionsDeleted, _ := resSessions.RowsAffected()
+
+	return logsDeleted, sessionsDeleted, nil
+}

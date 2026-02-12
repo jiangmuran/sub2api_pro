@@ -140,6 +140,7 @@ const (
 	SettingKeySecurityChatAIEnabled     = "security_chat_ai_enabled"
 	SettingKeySecurityChatAIBaseURL     = "security_chat_ai_base_url"
 	SettingKeySecurityChatAIModel       = "security_chat_ai_model"
+	SettingKeySecurityChatExcludedUsers = "security_chat_excluded_users"
 
 	// =========================
 	// Ops Monitoring (vNext)

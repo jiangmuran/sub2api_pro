@@ -29,8 +29,8 @@
               </h2>
               <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
                 <span>{{ sessions.total }}</span>
-                <button class="btn btn-ghost btn-xs" type="button" :disabled="selectedSessionIds.size === 0" @click="bulkDelete">
-                  {{ t('admin.security.bulkDelete') }} ({{ selectedSessionIds.size }})
+                <button class="btn btn-ghost btn-xs" type="button" :disabled="!canBulkDelete" @click="bulkDelete">
+                  {{ t('admin.security.bulkDelete') }} {{ bulkDeleteLabel }}
                 </button>
               </div>
             </div>
@@ -92,7 +92,7 @@
 
             <div v-else class="space-y-2">
               <label class="flex items-center gap-2 text-xs text-gray-500">
-                <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
+                <input type="checkbox" :checked="selectAllMode" @change="toggleSelectAll" />
                 {{ t('admin.security.selectAll') }}
               </label>
               <button
@@ -108,7 +108,13 @@
               >
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <input type="checkbox" :checked="selectedSessionIds.has(item.session_id)" @click.stop @change="toggleSelect(item.session_id)" />
+                    <input
+                      type="checkbox"
+                      :checked="selectAllMode || selectedSessionIds.has(item.session_id)"
+                      :disabled="selectAllMode"
+                      @click.stop
+                      @change="toggleSelect(item.session_id)"
+                    />
                     <div class="text-sm font-semibold">
                       {{ item.session_id }}
                     </div>
@@ -305,11 +311,15 @@ const messages = ref(
 const selectedSession = ref<SecurityChatSession | null>(null)
 const selectedSessionKey = computed(() => (selectedSession.value ? sessionKey(selectedSession.value) : ''))
 const selectedSessionIds = ref<Set<string>>(new Set())
+const selectAllMode = ref(false)
 
-const allSelected = computed(() => {
-  if (!sessions.items.length) return false
-  return sessions.items.every((item) => selectedSessionIds.value.has(item.session_id))
+const canBulkDelete = computed(() => selectAllMode.value || selectedSessionIds.value.size > 0)
+const bulkDeleteLabel = computed(() => {
+  if (selectAllMode.value) return `(${t('admin.security.allResults')})`
+  if (selectedSessionIds.value.size > 0) return `(${selectedSessionIds.value.size})`
+  return ''
 })
+
 
 const apiKeys = ref<SecurityApiKey[]>([])
 const selectedApiKeyId = ref<number>(0)
@@ -491,6 +501,7 @@ const refresh = async () => {
   aiError.value = ''
   aiChatMessages.value = []
   selectedSessionIds.value = new Set()
+  selectAllMode.value = false
   await fetchSessions()
 }
 
@@ -614,21 +625,33 @@ const toggleSelect = (sessionId: string) => {
 }
 
 const toggleSelectAll = () => {
-  if (allSelected.value) {
-    selectedSessionIds.value = new Set()
+  if (selectAllMode.value) {
+    selectAllMode.value = false
     return
   }
-  const set = new Set<string>()
-  sessions.items.forEach((item) => set.add(item.session_id))
-  selectedSessionIds.value = set
+  selectAllMode.value = true
+  selectedSessionIds.value = new Set()
 }
 
 const bulkDelete = async () => {
-  if (selectedSessionIds.value.size === 0) return
+  if (!canBulkDelete.value) return
   if (!confirm(t('admin.security.bulkDeleteConfirm'))) return
-  await adminAPI.security.bulkDeleteSessions({
-    session_ids: Array.from(selectedSessionIds.value)
-  })
+  if (selectAllMode.value) {
+    await adminAPI.security.bulkDeleteSessions({
+      select_all: true,
+      start_time: filters.startDate ? toISO(filters.startDate) : undefined,
+      end_time: filters.endDate ? toISO(filters.endDate, true) : undefined,
+      user_id: filters.userId ? Number(filters.userId) : undefined,
+      api_key_id: filters.apiKeyId ? Number(filters.apiKeyId) : undefined,
+      platform: filters.platform || undefined,
+      model: filters.model || undefined,
+      q: filters.query || undefined
+    })
+  } else {
+    await adminAPI.security.bulkDeleteSessions({
+      session_ids: Array.from(selectedSessionIds.value)
+    })
+  }
   await refresh()
 }
 

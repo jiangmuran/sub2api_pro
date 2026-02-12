@@ -3351,7 +3351,8 @@ export default {
       deleteConfirm: '确定删除该会话及其记录吗？',
       selectAll: '全选',
       bulkDelete: '批量删除',
-      bulkDeleteConfirm: '确定删除选中会话及其记录吗？'
+      bulkDeleteConfirm: '确定删除选中会话及其记录吗？',
+      allResults: '全部结果'
     },
     settings: {
       title: '系统设置',
@@ -3425,7 +3426,10 @@ export default {
         aiKey: 'AI API Key',
         aiKeyPlaceholder: '粘贴 API Key',
         aiKeyConfigured: '已配置（留空保留）',
-        aiKeyHint: '保存在系统设置中，留空将保持当前值。'
+        aiKeyHint: '保存在系统设置中，留空将保持当前值。',
+        excludedUsers: '排除用户（不记录）',
+        excludedUsersHint: 'user_id 或邮箱，逗号/空格/换行分隔',
+        excludedUsersNote: '这些用户的聊天记录将不会被保存。'
       },
       site: {
         title: '站点设置',

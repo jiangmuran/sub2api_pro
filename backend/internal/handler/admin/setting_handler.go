@@ -93,6 +93,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SecurityChatAIEnabled:                settings.SecurityChatAIEnabled,
 		SecurityChatAIBaseURL:                settings.SecurityChatAIBaseURL,
 		SecurityChatAIModel:                  settings.SecurityChatAIModel,
+		SecurityChatExcludedUsers:            settings.SecurityChatExcludedUsers,
 	})
 }
 
@@ -164,6 +165,7 @@ type UpdateSettingsRequest struct {
 	SecurityChatAIEnabled     *bool   `json:"security_chat_ai_enabled"`
 	SecurityChatAIBaseURL     *string `json:"security_chat_ai_base_url"`
 	SecurityChatAIModel       *string `json:"security_chat_ai_model"`
+	SecurityChatExcludedUsers *string `json:"security_chat_excluded_users"`
 }
 
 // UpdateSettings 更新系统设置
@@ -625,6 +627,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SecurityChatAIModel != after.SecurityChatAIModel {
 		changed = append(changed, "security_chat_ai_model")
+	}
+	if before.SecurityChatExcludedUsers != after.SecurityChatExcludedUsers {
+		changed = append(changed, "security_chat_excluded_users")
 	}
 	return changed
 }

@@ -460,24 +460,28 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService, securityChat *service.Sec
 					enqueueOpsRequestLog(ops, entry, requestBody, responseBody)
 					if securityChat != nil {
 						var userID *int64
+						var userEmail string
 						if apiKey.User != nil {
 							userID = &apiKey.User.ID
+							userEmail = apiKey.User.Email
 						}
-						securityChat.RecordChat(c.Request.Context(), &service.SecurityChatCaptureInput{
-							RequestID:       requestID,
-							ClientRequestID: clientRequestID,
-							UserID:          userID,
-							APIKeyID:        &apiKey.ID,
-							AccountID:       accountID,
-							GroupID:         apiKey.GroupID,
-							Platform:        platform,
-							Model:           modelName,
-							RequestPath:     c.Request.URL.Path,
-							Stream:          stream,
-							StatusCode:      status,
-							RequestBody:     requestBody,
-							ResponseBody:    responseBody,
-						})
+						if securityChat.ShouldCapture(c.Request.Context(), userID, userEmail) {
+							securityChat.RecordChat(c.Request.Context(), &service.SecurityChatCaptureInput{
+								RequestID:       requestID,
+								ClientRequestID: clientRequestID,
+								UserID:          userID,
+								APIKeyID:        &apiKey.ID,
+								AccountID:       accountID,
+								GroupID:         apiKey.GroupID,
+								Platform:        platform,
+								Model:           modelName,
+								RequestPath:     c.Request.URL.Path,
+								Stream:          stream,
+								StatusCode:      status,
+								RequestBody:     requestBody,
+								ResponseBody:    responseBody,
+							})
+						}
 					}
 				}
 			}

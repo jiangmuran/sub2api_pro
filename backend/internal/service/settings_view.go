@@ -65,6 +65,7 @@ type SystemSettings struct {
 	SecurityChatAIEnabled     bool
 	SecurityChatAIBaseURL     string
 	SecurityChatAIModel       string
+	SecurityChatExcludedUsers string
 }
 
 type PublicSettings struct {

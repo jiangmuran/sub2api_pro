@@ -666,6 +666,19 @@
                 </label>
                 <input v-model="form.security_chat_ai_model" type="text" class="input" />
               </div>
+              <div class="md:col-span-2">
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.security.excludedUsers') }}
+                </label>
+                <textarea
+                  v-model="form.security_chat_excluded_users"
+                  class="input min-h-[90px]"
+                  :placeholder="t('admin.settings.security.excludedUsersHint')"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.security.excludedUsersNote') }}
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -1235,7 +1248,8 @@ const form = reactive<SettingsForm>({
   security_chat_retention_days: 7,
   security_chat_ai_enabled: false,
   security_chat_ai_base_url: 'https://api.openai.com/v1',
-  security_chat_ai_model: 'gpt-4o-mini'
+  security_chat_ai_model: 'gpt-4o-mini',
+  security_chat_excluded_users: ''
 })
 
 // LinuxDo OAuth redirect URL suggestion
@@ -1355,7 +1369,8 @@ async function saveSettings() {
       security_chat_retention_days: form.security_chat_retention_days,
       security_chat_ai_enabled: form.security_chat_ai_enabled,
       security_chat_ai_base_url: form.security_chat_ai_base_url,
-      security_chat_ai_model: form.security_chat_ai_model
+      security_chat_ai_model: form.security_chat_ai_model,
+      security_chat_excluded_users: form.security_chat_excluded_users
     }
     const updated = await adminAPI.settings.updateSettings(payload)
     Object.assign(form, updated)

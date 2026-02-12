@@ -324,9 +324,52 @@ func (h *SecurityHandler) BulkDeleteSessions(c *gin.Context) {
 		SessionIDs []string `json:"session_ids"`
 		UserID     *int64   `json:"user_id"`
 		APIKeyID   *int64   `json:"api_key_id"`
+		SelectAll  bool     `json:"select_all"`
+		StartTime  string   `json:"start_time"`
+		EndTime    string   `json:"end_time"`
+		Query      string   `json:"q"`
+		Platform   string   `json:"platform"`
+		Model      string   `json:"model"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if req.SelectAll {
+		startTime, endTime, err := parseOpsTimeRange(c, "24h")
+		if err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		if strings.TrimSpace(req.StartTime) != "" || strings.TrimSpace(req.EndTime) != "" {
+			values := c.Request.URL.Query()
+			values.Set("start_time", strings.TrimSpace(req.StartTime))
+			values.Set("end_time", strings.TrimSpace(req.EndTime))
+			c.Request.URL.RawQuery = values.Encode()
+			startTime, endTime, err = parseOpsTimeRange(c, "24h")
+			if err != nil {
+				response.BadRequest(c, err.Error())
+				return
+			}
+		}
+		filter := &service.SecurityChatSessionFilter{
+			StartTime: &startTime,
+			EndTime:   &endTime,
+			UserID:    req.UserID,
+			APIKeyID:  req.APIKeyID,
+			Query:     strings.TrimSpace(req.Query),
+			Platform:  strings.TrimSpace(req.Platform),
+			Model:     strings.TrimSpace(req.Model),
+		}
+		logsDeleted, sessionsDeleted, err := h.chatService.DeleteSessionsByFilter(c.Request.Context(), filter)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		response.Success(c, map[string]any{
+			"logs_deleted": logsDeleted,
+			"sessions_deleted": sessionsDeleted,
+		})
 		return
 	}
 	logsDeleted, sessionsDeleted, err := h.chatService.DeleteSessions(c.Request.Context(), req.SessionIDs, req.UserID, req.APIKeyID)

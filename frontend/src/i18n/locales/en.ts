@@ -3177,7 +3177,8 @@ export default {
       deleteConfirm: 'Delete this session and all its logs?',
       selectAll: 'Select all',
       bulkDelete: 'Bulk delete',
-      bulkDeleteConfirm: 'Delete selected sessions and all their logs?'
+      bulkDeleteConfirm: 'Delete selected sessions and all their logs?',
+      allResults: 'all results'
     },
     settings: {
       title: 'System Settings',
@@ -3251,7 +3252,10 @@ export default {
         aiKey: 'AI API Key',
         aiKeyPlaceholder: 'Paste API key',
         aiKeyConfigured: 'Configured (leave blank to keep)',
-        aiKeyHint: 'Stored in settings; leave empty to keep existing key.'
+        aiKeyHint: 'Stored in settings; leave empty to keep existing key.',
+        excludedUsers: 'Exclude users (no logging)',
+        excludedUsersHint: 'user_id or email, separated by comma/space/newline',
+        excludedUsersNote: 'These users will not have chat logs recorded.'
       },
       site: {
         title: 'Site Settings',
