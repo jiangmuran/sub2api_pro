@@ -65,6 +65,12 @@ INSERT INTO ops_system_metrics (
   memory_used_mb,
   memory_total_mb,
   memory_usage_percent,
+  disk_used_mb,
+  disk_total_mb,
+  disk_usage_percent,
+  disk_used_mb,
+  disk_total_mb,
+  disk_usage_percent,
 
   db_ok,
   redis_ok,
@@ -85,11 +91,11 @@ INSERT INTO ops_system_metrics (
   $12,$13,$14,$15,
   $16,$17,$18,$19,$20,$21,
   $22,$23,$24,$25,$26,$27,
-  $28,$29,$30,$31,
-  $32,$33,
-  $34,$35,
-  $36,$37,$38,
-  $39,$40
+  $28,$29,$30,$31,$32,$33,$34,
+  $35,$36,
+  $37,$38,
+  $39,$40,$41,
+  $42,$43
 )`
 
 	_, err := r.db.ExecContext(
@@ -132,6 +138,9 @@ INSERT INTO ops_system_metrics (
 		opsNullInt(input.MemoryUsedMB),
 		opsNullInt(input.MemoryTotalMB),
 		opsNullFloat64(input.MemoryUsagePercent),
+		opsNullInt(input.DiskUsedMB),
+		opsNullInt(input.DiskTotalMB),
+		opsNullFloat64(input.DiskUsagePercent),
 
 		opsNullBool(input.DBOK),
 		opsNullBool(input.RedisOK),
@@ -193,6 +202,9 @@ LIMIT 1`
 	var memUsed sql.NullInt64
 	var memTotal sql.NullInt64
 	var memPct sql.NullFloat64
+	var diskUsed sql.NullInt64
+	var diskTotal sql.NullInt64
+	var diskPct sql.NullFloat64
 	var dbOK sql.NullBool
 	var redisOK sql.NullBool
 	var redisTotal sql.NullInt64
@@ -212,6 +224,9 @@ LIMIT 1`
 		&memUsed,
 		&memTotal,
 		&memPct,
+		&diskUsed,
+		&diskTotal,
+		&diskPct,
 		&dbOK,
 		&redisOK,
 		&redisTotal,
@@ -241,6 +256,18 @@ LIMIT 1`
 	if memPct.Valid {
 		v := memPct.Float64
 		out.MemoryUsagePercent = &v
+	}
+	if diskUsed.Valid {
+		v := diskUsed.Int64
+		out.DiskUsedMB = &v
+	}
+	if diskTotal.Valid {
+		v := diskTotal.Int64
+		out.DiskTotalMB = &v
+	}
+	if diskPct.Valid {
+		v := diskPct.Float64
+		out.DiskUsagePercent = &v
 	}
 	if dbOK.Valid {
 		v := dbOK.Bool

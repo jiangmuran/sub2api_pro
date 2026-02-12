@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 )
 
@@ -337,6 +338,9 @@ func (c *OpsMetricsCollector) collectAndPersist(ctx context.Context) error {
 		MemoryUsedMB:       sys.memoryUsedMB,
 		MemoryTotalMB:      sys.memoryTotalMB,
 		MemoryUsagePercent: sys.memoryUsagePercent,
+		DiskUsedMB:         sys.diskUsedMB,
+		DiskTotalMB:        sys.diskTotalMB,
+		DiskUsagePercent:   sys.diskUsagePercent,
 
 		DBOK:    boolPtr(dbOK),
 		RedisOK: boolPtr(redisOK),
@@ -583,6 +587,9 @@ type opsCollectedSystemStats struct {
 	memoryUsedMB       *int64
 	memoryTotalMB      *int64
 	memoryUsagePercent *float64
+	diskUsedMB         *int64
+	diskTotalMB        *int64
+	diskUsagePercent   *float64
 }
 
 func (c *OpsMetricsCollector) collectSystemStats(ctx context.Context) (*opsCollectedSystemStats, error) {
@@ -641,7 +648,42 @@ func (c *OpsMetricsCollector) collectSystemStats(ctx context.Context) (*opsColle
 		}
 	}
 
+	if du := collectDiskUsage(ctx, c.cfg); du != nil {
+		out.diskUsedMB = du.usedMB
+		out.diskTotalMB = du.totalMB
+		out.diskUsagePercent = du.usagePercent
+	}
+
 	return out, nil
+}
+
+type opsCollectedDiskUsage struct {
+	usedMB       *int64
+	totalMB      *int64
+	usagePercent *float64
+}
+
+func collectDiskUsage(ctx context.Context, cfg *config.Config) *opsCollectedDiskUsage {
+	path := "/"
+	if cfg != nil {
+		if p := strings.TrimSpace(cfg.Pricing.DataDir); p != "" {
+			path = p
+		}
+	}
+	usage, err := disk.UsageWithContext(ctx, path)
+	if err != nil || usage == nil {
+		// fallback to root if data dir fails
+		if path != "/" {
+			usage, err = disk.UsageWithContext(ctx, "/")
+		}
+	}
+	if err != nil || usage == nil {
+		return nil
+	}
+	usedMB := int64(usage.Used / bytesPerMB)
+	totalMB := int64(usage.Total / bytesPerMB)
+	pct := roundTo1DP(usage.UsedPercent)
+	return &opsCollectedDiskUsage{usedMB: &usedMB, totalMB: &totalMB, usagePercent: &pct}
 }
 
 func (c *OpsMetricsCollector) tryCgroupCPUPercent(now time.Time) *float64 {

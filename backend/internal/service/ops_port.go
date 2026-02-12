@@ -249,6 +249,9 @@ type OpsInsertSystemMetricsInput struct {
 	MemoryUsedMB       *int64
 	MemoryTotalMB      *int64
 	MemoryUsagePercent *float64
+	DiskUsedMB         *int64
+	DiskTotalMB        *int64
+	DiskUsagePercent   *float64
 
 	DBOK    *bool
 	RedisOK *bool
@@ -273,6 +276,9 @@ type OpsSystemMetricsSnapshot struct {
 	MemoryUsedMB       *int64   `json:"memory_used_mb"`
 	MemoryTotalMB      *int64   `json:"memory_total_mb"`
 	MemoryUsagePercent *float64 `json:"memory_usage_percent"`
+	DiskUsedMB         *int64   `json:"disk_used_mb"`
+	DiskTotalMB        *int64   `json:"disk_total_mb"`
+	DiskUsagePercent   *float64 `json:"disk_usage_percent"`
 
 	DBOK    *bool `json:"db_ok"`
 	RedisOK *bool `json:"redis_ok"`
