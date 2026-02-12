@@ -251,6 +251,75 @@ func (s *OpsService) RecordError(ctx context.Context, entry *OpsInsertErrorLogIn
 	return nil
 }
 
+func (s *OpsService) RecordRequest(ctx context.Context, entry *OpsInsertRequestLogInput, rawRequestBody []byte, rawResponseBody []byte) error {
+	if entry == nil {
+		return nil
+	}
+	if !s.IsMonitoringEnabled(ctx) {
+		return nil
+	}
+	if s.opsRepo == nil {
+		return nil
+	}
+
+	if entry.CreatedAt.IsZero() {
+		entry.CreatedAt = time.Now()
+	}
+
+	entry.RequestID = strings.TrimSpace(entry.RequestID)
+	if entry.RequestID == "" {
+		return nil
+	}
+
+	if len(rawRequestBody) > 0 {
+		sanitized, truncated, bytesLen := sanitizeAndTrimRequestBody(rawRequestBody, opsMaxStoredRequestBodyBytes)
+		if sanitized != "" {
+			entry.RequestBodyJSON = &sanitized
+		}
+		entry.RequestBodyTruncated = truncated
+		entry.RequestBodyBytes = &bytesLen
+	}
+
+	if len(rawResponseBody) > 0 {
+		resp := string(rawResponseBody)
+		sanitized, truncated := sanitizeErrorBodyForStorage(resp, opsMaxStoredErrorBodyBytes)
+		if sanitized != "" {
+			entry.ResponseBody = &sanitized
+		}
+		entry.ResponseBodyTruncated = truncated
+		bytesLen := len(rawResponseBody)
+		entry.ResponseBodyBytes = &bytesLen
+	}
+
+	if _, err := s.opsRepo.InsertRequestLog(ctx, entry); err != nil {
+		log.Printf("[Ops] RecordRequest failed: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (s *OpsService) GetRequestLogDetail(ctx context.Context, requestID string) (*OpsRequestLogDetail, error) {
+	if err := s.RequireMonitoringEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if s.opsRepo == nil {
+		return nil, infraerrors.ServiceUnavailable("OPS_REPO_UNAVAILABLE", "Ops repository not available")
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return nil, infraerrors.BadRequest("OPS_REQUEST_ID_REQUIRED", "request_id is required")
+	}
+
+	entry, err := s.opsRepo.GetRequestLogByRequestID(ctx, requestID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, infraerrors.NotFound("OPS_REQUEST_LOG_NOT_FOUND", "ops request log not found")
+		}
+		return nil, infraerrors.InternalServer("OPS_REQUEST_LOG_LOAD_FAILED", "Failed to load ops request log").WithCause(err)
+	}
+	return entry, nil
+}
+
 func (s *OpsService) GetErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error) {
 	if err := s.RequireMonitoringEnabled(ctx); err != nil {
 		return nil, err

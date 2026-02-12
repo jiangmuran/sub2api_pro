@@ -706,6 +706,28 @@ func (h *OpsHandler) ListRequestDetails(c *gin.Context) {
 	response.Paginated(c, out.Items, out.Total, out.Page, out.PageSize)
 }
 
+// GetRequestLog returns admin-only request/response logs for successful requests.
+// GET /api/v1/admin/ops/requests/:request_id/log
+func (h *OpsHandler) GetRequestLog(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	requestID := strings.TrimSpace(c.Param("request_id"))
+	if requestID == "" {
+		response.BadRequest(c, "request_id is required")
+		return
+	}
+
+	entry, err := h.opsService.GetRequestLogDetail(c.Request.Context(), requestID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, entry)
+}
+
 type opsRetryRequest struct {
 	Mode            string `json:"mode"`
 	PinnedAccountID *int64 `json:"pinned_account_id"`

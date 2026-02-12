@@ -143,6 +143,7 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 		// Request drilldown (success + error)
 		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
+		ops.GET("/requests/:request_id/log", h.Admin.Ops.GetRequestLog)
 
 		// Dashboard (vNext - raw path for MVP)
 		ops.GET("/dashboard/overview", h.Admin.Ops.GetDashboardOverview)

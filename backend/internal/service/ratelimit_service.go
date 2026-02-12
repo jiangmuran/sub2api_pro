@@ -94,9 +94,24 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 	// apikey 类型账号：检查自定义错误码配置
 	// 如果启用且错误码不在列表中，则不处理（不停止调度、不标记限流/过载）
 	customErrorCodesEnabled := account.IsCustomErrorCodesEnabled()
-	if !account.ShouldHandleErrorCode(statusCode) {
-		slog.Info("account_error_code_skipped", "account_id", account.ID, "status_code", statusCode)
-		return false
+
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
+	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	if upstreamMsg != "" {
+		upstreamMsg = truncateForLog([]byte(upstreamMsg), 512)
+	}
+
+	orgDisabled := false
+	if statusCode == 400 {
+		orgDisabled = strings.Contains(strings.ToLower(upstreamMsg), "organization has been disabled")
+	}
+
+	if customErrorCodesEnabled && !account.ShouldHandleErrorCode(statusCode) {
+		// 仍然处理关键鉴权/付费错误，避免错误配置导致账号被持续调度
+		if statusCode != 401 && statusCode != 402 && statusCode != 403 && !orgDisabled {
+			slog.Info("account_error_code_skipped", "account_id", account.ID, "status_code", statusCode)
+			return false
+		}
 	}
 
 	// 先尝试临时不可调度规则（401除外）
@@ -107,16 +122,10 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		}
 	}
 
-	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
-	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
-	if upstreamMsg != "" {
-		upstreamMsg = truncateForLog([]byte(upstreamMsg), 512)
-	}
-
 	switch statusCode {
 	case 400:
 		// 只有当错误信息包含 "organization has been disabled" 时才禁用
-		if strings.Contains(strings.ToLower(upstreamMsg), "organization has been disabled") {
+		if orgDisabled {
 			msg := "Organization disabled (400): " + upstreamMsg
 			s.handleAuthError(ctx, account, msg)
 			shouldDisable = true

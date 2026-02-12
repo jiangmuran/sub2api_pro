@@ -120,6 +120,14 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTran
 		delete(reqBody, "max_completion_tokens")
 		result.Modified = true
 	}
+	if _, ok := reqBody["service_tier"]; ok {
+		delete(reqBody, "service_tier")
+		result.Modified = true
+	}
+	if _, ok := reqBody["temperature"]; ok {
+		delete(reqBody, "temperature")
+		result.Modified = true
+	}
 
 	if normalizeCodexTools(reqBody) {
 		result.Modified = true
@@ -135,10 +143,30 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTran
 	}
 
 	// 续链场景保留 item_reference 与 id，避免 call_id 上下文丢失。
-	if input, ok := reqBody["input"].([]any); ok {
-		input = filterCodexInput(input, needsToolContinuation)
-		reqBody["input"] = input
-		result.Modified = true
+	if input, ok := reqBody["input"]; ok {
+		switch v := input.(type) {
+		case []any:
+			v = filterCodexInput(v, needsToolContinuation)
+			reqBody["input"] = v
+			result.Modified = true
+		case map[string]any:
+			reqBody["input"] = []any{v}
+			result.Modified = true
+		case string:
+			reqBody["input"] = []any{map[string]any{"role": "user", "content": v}}
+			result.Modified = true
+		}
+	} else if messages, ok := reqBody["messages"]; ok {
+		switch v := messages.(type) {
+		case []any:
+			reqBody["input"] = v
+			delete(reqBody, "messages")
+			result.Modified = true
+		case map[string]any:
+			reqBody["input"] = []any{v}
+			delete(reqBody, "messages")
+			result.Modified = true
+		}
 	}
 
 	return result

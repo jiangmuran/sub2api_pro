@@ -38,6 +38,10 @@ const (
 	opsErrorLogQueueSizePerWorker = 128
 	opsErrorLogMinQueueSize       = 256
 	opsErrorLogMaxQueueSize       = 8192
+
+	opsRequestLogTimeout   = 5 * time.Second
+	opsRequestLogQueueSize = 1024
+	opsRequestLogWorkers   = 4
 )
 
 type opsErrorLogJob struct {
@@ -64,7 +68,59 @@ var (
 	opsErrorLogShutdownCh   = make(chan struct{})
 	opsErrorLogShutdownOnce sync.Once
 	opsErrorLogDrained      atomic.Bool
+
+	opsRequestLogOnce  sync.Once
+	opsRequestLogQueue chan opsRequestLogJob
 )
+
+type opsRequestLogJob struct {
+	ops          *service.OpsService
+	entry        *service.OpsInsertRequestLogInput
+	requestBody  []byte
+	responseBody []byte
+}
+
+func startOpsRequestLogWorkers() {
+	if opsRequestLogQueue != nil {
+		return
+	}
+	opsRequestLogQueue = make(chan opsRequestLogJob, opsRequestLogQueueSize)
+	for i := 0; i < opsRequestLogWorkers; i++ {
+		go func() {
+			for job := range opsRequestLogQueue {
+				if job.ops == nil || job.entry == nil {
+					continue
+				}
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("[OpsRequestLogger] worker panic: %v\n%s", r, debug.Stack())
+						}
+					}()
+					ctx, cancel := context.WithTimeout(context.Background(), opsRequestLogTimeout)
+					_ = job.ops.RecordRequest(ctx, job.entry, job.requestBody, job.responseBody)
+					cancel()
+				}()
+			}
+		}()
+	}
+}
+
+func enqueueOpsRequestLog(ops *service.OpsService, entry *service.OpsInsertRequestLogInput, requestBody []byte, responseBody []byte) {
+	if ops == nil || entry == nil {
+		return
+	}
+	opsRequestLogOnce.Do(startOpsRequestLogWorkers)
+	if opsRequestLogQueue == nil {
+		return
+	}
+	select {
+	case opsRequestLogQueue <- opsRequestLogJob{ops: ops, entry: entry, requestBody: requestBody, responseBody: responseBody}:
+	default:
+		// Drop to avoid blocking request handling.
+		return
+	}
+}
 
 func startOpsErrorLogWorkers() {
 	opsErrorLogMu.Lock()
@@ -273,10 +329,11 @@ type opsCaptureWriter struct {
 	gin.ResponseWriter
 	limit int
 	buf   bytes.Buffer
+	captureAll bool
 }
 
 func (w *opsCaptureWriter) Write(b []byte) (int, error) {
-	if w.Status() >= 400 && w.limit > 0 && w.buf.Len() < w.limit {
+	if (w.captureAll || w.Status() >= 400) && w.limit > 0 && w.buf.Len() < w.limit {
 		remaining := w.limit - w.buf.Len()
 		if len(b) > remaining {
 			_, _ = w.buf.Write(b[:remaining])
@@ -288,7 +345,7 @@ func (w *opsCaptureWriter) Write(b []byte) (int, error) {
 }
 
 func (w *opsCaptureWriter) WriteString(s string) (int, error) {
-	if w.Status() >= 400 && w.limit > 0 && w.buf.Len() < w.limit {
+	if (w.captureAll || w.Status() >= 400) && w.limit > 0 && w.buf.Len() < w.limit {
 		remaining := w.limit - w.buf.Len()
 		if len(s) > remaining {
 			_, _ = w.buf.WriteString(s[:remaining])
@@ -306,7 +363,8 @@ func (w *opsCaptureWriter) WriteString(s string) (int, error) {
 // - Streaming errors after the response has started (SSE) may still need explicit logging.
 func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		w := &opsCaptureWriter{ResponseWriter: c.Writer, limit: 64 * 1024}
+		captureAll := ops != nil
+		w := &opsCaptureWriter{ResponseWriter: c.Writer, limit: 64 * 1024, captureAll: captureAll}
 		c.Writer = w
 		c.Next()
 
@@ -319,6 +377,87 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 
 		status := c.Writer.Status()
 		if status < 400 {
+			// Record successful requests for admin debugging (request/response bodies)
+			requestID := c.Writer.Header().Get("X-Request-Id")
+			if requestID == "" {
+				requestID = c.Writer.Header().Get("x-request-id")
+			}
+			clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+			if strings.TrimSpace(requestID) == "" {
+				requestID = strings.TrimSpace(clientRequestID)
+			}
+			if strings.TrimSpace(requestID) != "" {
+				model, _ := c.Get(opsModelKey)
+				streamV, _ := c.Get(opsStreamKey)
+				accountIDV, _ := c.Get(opsAccountIDKey)
+
+				var modelName string
+				if s, ok := model.(string); ok {
+					modelName = s
+				}
+				stream := false
+				if b, ok := streamV.(bool); ok {
+					stream = b
+				}
+
+				var accountID *int64
+				if v, ok := accountIDV.(int64); ok && v > 0 {
+					accountID = &v
+				}
+
+				apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+				fallbackPlatform := guessPlatformFromPath(c.Request.URL.Path)
+				platform := resolveOpsPlatform(apiKey, fallbackPlatform)
+
+				entry := &service.OpsInsertRequestLogInput{
+					RequestID:       requestID,
+					ClientRequestID: clientRequestID,
+					AccountID:       accountID,
+					Platform:        platform,
+					Model:           modelName,
+					RequestPath: func() string {
+						if c.Request != nil && c.Request.URL != nil {
+							return c.Request.URL.Path
+						}
+						return ""
+					}(),
+					Stream:     stream,
+					UserAgent:  c.GetHeader("User-Agent"),
+					StatusCode: status,
+					CreatedAt:  time.Now(),
+				}
+
+				if apiKey != nil {
+					entry.APIKeyID = &apiKey.ID
+					if apiKey.User != nil {
+						entry.UserID = &apiKey.User.ID
+					}
+					if apiKey.GroupID != nil {
+						entry.GroupID = apiKey.GroupID
+					}
+					if apiKey.Group != nil && apiKey.Group.Platform != "" {
+						entry.Platform = apiKey.Group.Platform
+					}
+				}
+
+				var clientIP string
+				if ip := strings.TrimSpace(ip.GetClientIP(c)); ip != "" {
+					clientIP = ip
+					entry.ClientIP = &clientIP
+				}
+
+				var requestBody []byte
+				if v, ok := c.Get(opsRequestBodyKey); ok {
+					if b, ok := v.([]byte); ok && len(b) > 0 {
+						requestBody = b
+					}
+				}
+				responseBody := w.buf.Bytes()
+				if apiKey != nil {
+					enqueueOpsRequestLog(ops, entry, requestBody, responseBody)
+				}
+			}
+
 			// Even when the client request succeeds, we still want to persist upstream error attempts
 			// (retries/failover) so ops can observe upstream instability that gets "covered" by retries.
 			var events []*service.OpsUpstreamErrorEvent

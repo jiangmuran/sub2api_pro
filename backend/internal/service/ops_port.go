@@ -7,9 +7,11 @@ import (
 
 type OpsRepository interface {
 	InsertErrorLog(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error)
+	InsertRequestLog(ctx context.Context, input *OpsInsertRequestLogInput) (int64, error)
 	ListErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error)
 	GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error)
 	ListRequestDetails(ctx context.Context, filter *OpsRequestDetailFilter) ([]*OpsRequestDetail, int64, error)
+	GetRequestLogByRequestID(ctx context.Context, requestID string) (*OpsRequestLogDetail, error)
 
 	InsertRetryAttempt(ctx context.Context, input *OpsInsertRetryAttemptInput) (int64, error)
 	UpdateRetryAttempt(ctx context.Context, input *OpsUpdateRetryAttemptInput) error
@@ -109,6 +111,68 @@ type OpsInsertErrorLogInput struct {
 	RetryCount  int
 
 	CreatedAt time.Time
+}
+
+type OpsInsertRequestLogInput struct {
+	RequestID       string
+	ClientRequestID string
+
+	UserID    *int64
+	APIKeyID  *int64
+	AccountID *int64
+	GroupID   *int64
+	ClientIP  *string
+
+	Platform    string
+	Model       string
+	RequestPath string
+	Stream      bool
+	UserAgent   string
+
+	StatusCode        int
+	DurationMs        *int
+	TimeToFirstTokenMs *int64
+
+	RequestBodyJSON      *string
+	RequestBodyTruncated bool
+	RequestBodyBytes     *int
+
+	ResponseBody          *string
+	ResponseBodyTruncated bool
+	ResponseBodyBytes     *int
+
+	CreatedAt time.Time
+}
+
+type OpsRequestLogDetail struct {
+	ID        int64     `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	RequestID string    `json:"request_id"`
+
+	ClientRequestID *string `json:"client_request_id,omitempty"`
+	UserID          *int64  `json:"user_id,omitempty"`
+	APIKeyID        *int64  `json:"api_key_id,omitempty"`
+	AccountID       *int64  `json:"account_id,omitempty"`
+	GroupID         *int64  `json:"group_id,omitempty"`
+	ClientIP        *string `json:"client_ip,omitempty"`
+
+	Platform    *string `json:"platform,omitempty"`
+	Model       *string `json:"model,omitempty"`
+	RequestPath *string `json:"request_path,omitempty"`
+	Stream      bool    `json:"stream"`
+	UserAgent   *string `json:"user_agent,omitempty"`
+
+	StatusCode        *int   `json:"status_code,omitempty"`
+	DurationMs        *int   `json:"duration_ms,omitempty"`
+	TimeToFirstTokenMs *int64 `json:"time_to_first_token_ms,omitempty"`
+
+	RequestBody          *string `json:"request_body,omitempty"`
+	RequestBodyTruncated bool    `json:"request_body_truncated"`
+	RequestBodyBytes     *int    `json:"request_body_bytes,omitempty"`
+
+	ResponseBody          *string `json:"response_body,omitempty"`
+	ResponseBodyTruncated bool    `json:"response_body_truncated"`
+	ResponseBodyBytes     *int    `json:"response_body_bytes,omitempty"`
 }
 
 type OpsInsertRetryAttemptInput struct {

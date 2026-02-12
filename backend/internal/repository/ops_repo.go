@@ -112,6 +112,248 @@ INSERT INTO ops_error_logs (
 	return id, nil
 }
 
+func (r *opsRepository) InsertRequestLog(ctx context.Context, input *service.OpsInsertRequestLogInput) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, fmt.Errorf("nil ops repository")
+	}
+	if input == nil {
+		return 0, fmt.Errorf("nil ops request log input")
+	}
+
+	query := `
+INSERT INTO ops_request_logs (
+    request_id,
+    client_request_id,
+    user_id,
+    api_key_id,
+    account_id,
+    group_id,
+    client_ip,
+    platform,
+    model,
+    request_path,
+    stream,
+    user_agent,
+    status_code,
+    duration_ms,
+    time_to_first_token_ms,
+    request_body,
+    request_body_truncated,
+    request_body_bytes,
+    response_body,
+    response_body_truncated,
+    response_body_bytes,
+    created_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+ON CONFLICT (request_id) DO UPDATE SET
+    client_request_id = EXCLUDED.client_request_id,
+    user_id = EXCLUDED.user_id,
+    api_key_id = EXCLUDED.api_key_id,
+    account_id = EXCLUDED.account_id,
+    group_id = EXCLUDED.group_id,
+    client_ip = EXCLUDED.client_ip,
+    platform = EXCLUDED.platform,
+    model = EXCLUDED.model,
+    request_path = EXCLUDED.request_path,
+    stream = EXCLUDED.stream,
+    user_agent = EXCLUDED.user_agent,
+    status_code = EXCLUDED.status_code,
+    duration_ms = EXCLUDED.duration_ms,
+    time_to_first_token_ms = EXCLUDED.time_to_first_token_ms,
+    request_body = COALESCE(EXCLUDED.request_body, ops_request_logs.request_body),
+    request_body_truncated = EXCLUDED.request_body_truncated,
+    request_body_bytes = EXCLUDED.request_body_bytes,
+    response_body = COALESCE(EXCLUDED.response_body, ops_request_logs.response_body),
+    response_body_truncated = EXCLUDED.response_body_truncated,
+    response_body_bytes = EXCLUDED.response_body_bytes
+RETURNING id;
+`
+
+	var id int64
+	err := r.db.QueryRowContext(
+		ctx,
+		query,
+		input.RequestID,
+		opsNullString(input.ClientRequestID),
+		opsNullInt64(input.UserID),
+		opsNullInt64(input.APIKeyID),
+		opsNullInt64(input.AccountID),
+		opsNullInt64(input.GroupID),
+		opsNullString(input.ClientIP),
+		opsNullString(input.Platform),
+		opsNullString(input.Model),
+		opsNullString(input.RequestPath),
+		input.Stream,
+		opsNullString(input.UserAgent),
+		opsNullInt(input.StatusCode),
+		opsNullInt(input.DurationMs),
+		opsNullInt64(input.TimeToFirstTokenMs),
+		opsNullString(input.RequestBodyJSON),
+		input.RequestBodyTruncated,
+		opsNullInt(input.RequestBodyBytes),
+		opsNullString(input.ResponseBody),
+		input.ResponseBodyTruncated,
+		opsNullInt(input.ResponseBodyBytes),
+		input.CreatedAt,
+	).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (r *opsRepository) GetRequestLogByRequestID(ctx context.Context, requestID string) (*service.OpsRequestLogDetail, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("nil ops repository")
+	}
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return nil, sql.ErrNoRows
+	}
+
+	query := `
+SELECT
+    id,
+    created_at,
+    request_id,
+    client_request_id,
+    user_id,
+    api_key_id,
+    account_id,
+    group_id,
+    client_ip::TEXT,
+    platform,
+    model,
+    request_path,
+    stream,
+    user_agent,
+    status_code,
+    duration_ms,
+    time_to_first_token_ms,
+    request_body::TEXT,
+    request_body_truncated,
+    request_body_bytes,
+    response_body,
+    response_body_truncated,
+    response_body_bytes
+FROM ops_request_logs
+WHERE request_id = $1
+LIMIT 1;
+`
+
+	row := r.db.QueryRowContext(ctx, query, requestID)
+	var out service.OpsRequestLogDetail
+	var clientRequestID sql.NullString
+	var userID sql.NullInt64
+	var apiKeyID sql.NullInt64
+	var accountID sql.NullInt64
+	var groupID sql.NullInt64
+	var clientIP sql.NullString
+	var platform sql.NullString
+	var model sql.NullString
+	var requestPath sql.NullString
+	var userAgent sql.NullString
+	var statusCode sql.NullInt64
+	var durationMs sql.NullInt64
+	var ttft sql.NullInt64
+	var requestBody sql.NullString
+	var requestBodyBytes sql.NullInt64
+	var responseBody sql.NullString
+	var responseBodyBytes sql.NullInt64
+
+	if err := row.Scan(
+		&out.ID,
+		&out.CreatedAt,
+		&out.RequestID,
+		&clientRequestID,
+		&userID,
+		&apiKeyID,
+		&accountID,
+		&groupID,
+		&clientIP,
+		&platform,
+		&model,
+		&requestPath,
+		&out.Stream,
+		&userAgent,
+		&statusCode,
+		&durationMs,
+		&ttft,
+		&requestBody,
+		&out.RequestBodyTruncated,
+		&requestBodyBytes,
+		&responseBody,
+		&out.ResponseBodyTruncated,
+		&responseBodyBytes,
+	); err != nil {
+		return nil, err
+	}
+
+	if clientRequestID.Valid {
+		out.ClientRequestID = &clientRequestID.String
+	}
+	if userID.Valid {
+		v := userID.Int64
+		out.UserID = &v
+	}
+	if apiKeyID.Valid {
+		v := apiKeyID.Int64
+		out.APIKeyID = &v
+	}
+	if accountID.Valid {
+		v := accountID.Int64
+		out.AccountID = &v
+	}
+	if groupID.Valid {
+		v := groupID.Int64
+		out.GroupID = &v
+	}
+	if clientIP.Valid {
+		out.ClientIP = &clientIP.String
+	}
+	if platform.Valid {
+		out.Platform = &platform.String
+	}
+	if model.Valid {
+		out.Model = &model.String
+	}
+	if requestPath.Valid {
+		out.RequestPath = &requestPath.String
+	}
+	if userAgent.Valid {
+		out.UserAgent = &userAgent.String
+	}
+	if statusCode.Valid {
+		v := int(statusCode.Int64)
+		out.StatusCode = &v
+	}
+	if durationMs.Valid {
+		v := int(durationMs.Int64)
+		out.DurationMs = &v
+	}
+	if ttft.Valid {
+		v := ttft.Int64
+		out.TimeToFirstTokenMs = &v
+	}
+	if requestBody.Valid {
+		out.RequestBody = &requestBody.String
+	}
+	if requestBodyBytes.Valid {
+		v := int(requestBodyBytes.Int64)
+		out.RequestBodyBytes = &v
+	}
+	if responseBody.Valid {
+		out.ResponseBody = &responseBody.String
+	}
+	if responseBodyBytes.Valid {
+		v := int(responseBodyBytes.Int64)
+		out.ResponseBodyBytes = &v
+	}
+
+	return &out, nil
+}
+
 func (r *opsRepository) ListErrorLogs(ctx context.Context, filter *service.OpsErrorLogFilter) (*service.OpsErrorLogList, error) {
 	if r == nil || r.db == nil {
 		return nil, fmt.Errorf("nil ops repository")
@@ -929,6 +1171,7 @@ WHERE id = $1`
 	)
 	return err
 }
+
 
 func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 	clauses := make([]string, 0, 12)

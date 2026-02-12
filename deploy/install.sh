@@ -1057,18 +1057,22 @@ main() {
                     print_completion
                 fi
             else
-                # Fresh install with latest version
-                configure_server
-                get_latest_version
-                download_and_extract
-                create_user
-                setup_directories
-                install_service
-                prepare_for_setup
-                get_public_ip
-                start_service
-                enable_autostart
-                print_completion
+                # Install or upgrade to latest version
+                if [ -f "$INSTALL_DIR/sub2api" ]; then
+                    upgrade
+                else
+                    configure_server
+                    get_latest_version
+                    download_and_extract
+                    create_user
+                    setup_directories
+                    install_service
+                    prepare_for_setup
+                    get_public_ip
+                    start_service
+                    enable_autostart
+                    print_completion
+                fi
             fi
             exit 0
             ;;
@@ -1151,18 +1155,22 @@ main() {
             print_completion
         fi
     else
-        # Install latest version
-        configure_server
-        get_latest_version
-        download_and_extract
-        create_user
-        setup_directories
-        install_service
-        prepare_for_setup
-        get_public_ip
-        start_service
-        enable_autostart
-        print_completion
+        # Install or upgrade latest version
+        if [ -f "$INSTALL_DIR/sub2api" ]; then
+            upgrade
+        else
+            configure_server
+            get_latest_version
+            download_and_extract
+            create_user
+            setup_directories
+            install_service
+            prepare_for_setup
+            get_public_ip
+            start_service
+            enable_autostart
+            print_completion
+        fi
     fi
 }
 
