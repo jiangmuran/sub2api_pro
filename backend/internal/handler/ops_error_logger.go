@@ -376,13 +376,16 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		}
 
 		status := c.Writer.Status()
+		var apiKey *service.APIKey
+		var clientRequestID string
+		var requestID string
 		if status < 400 {
 			// Record successful requests for admin debugging (request/response bodies)
-			requestID := c.Writer.Header().Get("X-Request-Id")
+			requestID = c.Writer.Header().Get("X-Request-Id")
 			if requestID == "" {
 				requestID = c.Writer.Header().Get("x-request-id")
 			}
-			clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+			clientRequestID, _ = c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 			if strings.TrimSpace(requestID) == "" {
 				requestID = strings.TrimSpace(clientRequestID)
 			}
@@ -405,7 +408,7 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 					accountID = &v
 				}
 
-				apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+			apiKey, _ = middleware2.GetAPIKeyFromContext(c)
 				fallbackPlatform := guessPlatformFromPath(c.Request.URL.Path)
 				platform := resolveOpsPlatform(apiKey, fallbackPlatform)
 
