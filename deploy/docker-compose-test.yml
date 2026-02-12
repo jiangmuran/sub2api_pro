@@ -17,7 +17,7 @@ services:
   # Sub2API Application
   # ===========================================================================
   sub2api:
-    image: sub2api:latest
+    image: sub2api_pro:latest
     build:
       context: ..
       dockerfile: Dockerfile

@@ -21,7 +21,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # GitHub raw content base URL
-GITHUB_RAW_URL="https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy"
+GITHUB_RAW_URL="https://raw.githubusercontent.com/jiangmuran/sub2api_pro/main/deploy"
 
 # Print colored message
 print_info() {
@@ -54,7 +54,7 @@ command_exists() {
 main() {
     echo ""
     echo "=========================================="
-    echo "  Sub2API Deployment Preparation"
+    echo "  Sub2API Pro Deployment Preparation"
     echo "=========================================="
     echo ""
 

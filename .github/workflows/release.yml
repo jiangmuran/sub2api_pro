@@ -194,8 +194,8 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ secrets.DOCKERHUB_USERNAME }}/sub2api
-          short-description: "Sub2API - AI API Gateway Platform"
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/sub2api_pro
+          short-description: "Sub2API Pro - AI API Gateway Platform"
           readme-filepath: ./deploy/DOCKER.md
 
       # Send Telegram notification
@@ -232,7 +232,7 @@ jobs:
           fi
 
           # 构建消息内容
-          MESSAGE="🚀 *Sub2API 新版本发布！*"$'\n'$'\n'
+          MESSAGE="🚀 *Sub2API Pro 新版本发布！*"$'\n'$'\n'
           MESSAGE+="📦 版本号: \`${VERSION}\`"$'\n'$'\n'
 
           # 添加更新内容
@@ -244,7 +244,7 @@ jobs:
           MESSAGE+="\`\`\`bash"$'\n'
           # 根据是否配置 DockerHub 动态生成
           if [ -n "$DOCKERHUB_USERNAME" ]; then
-            DOCKER_IMAGE="${DOCKERHUB_USERNAME}/sub2api"
+            DOCKER_IMAGE="${DOCKERHUB_USERNAME}/sub2api_pro"
             MESSAGE+="# Docker Hub"$'\n'
             MESSAGE+="docker pull ${DOCKER_IMAGE}:${TAG_NAME}"$'\n'
             MESSAGE+="# GitHub Container Registry"$'\n'
@@ -256,8 +256,8 @@ jobs:
           if [ -n "$DOCKERHUB_USERNAME" ]; then
             MESSAGE+="• [Docker Hub](https://hub.docker.com/r/${DOCKER_IMAGE})"$'\n'
           fi
-          MESSAGE+="• [GitHub Packages](https://github.com/${REPO}/pkgs/container/sub2api)"$'\n'$'\n'
-          MESSAGE+="#Sub2API #Release #${TAG_NAME//./_}"
+          MESSAGE+="• [GitHub Packages](https://github.com/${REPO}/pkgs/container/sub2api_pro)"$'\n'$'\n'
+          MESSAGE+="#Sub2APIPro #Release #${TAG_NAME//./_}"
 
           # 发送消息
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
