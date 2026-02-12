@@ -14,9 +14,11 @@ import (
 
 type SecurityChatRepository interface {
 	InsertChatLog(ctx context.Context, input *SecurityChatLogInput) (int64, error)
+	UpsertSession(ctx context.Context, input *SecurityChatSessionUpsertInput) error
 	ListSessions(ctx context.Context, filter *SecurityChatSessionFilter) ([]*SecurityChatSession, int64, error)
 	ListMessages(ctx context.Context, filter *SecurityChatMessageFilter) ([]*SecurityChatLog, int64, error)
 	DeleteExpired(ctx context.Context, cutoff time.Time) (int64, error)
+	DeleteExpiredSessions(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 type SecurityChatService struct {
@@ -96,6 +98,24 @@ func (s *SecurityChatService) RecordChat(ctx context.Context, input *SecurityCha
 		CreatedAt:       createdAt,
 		ExpiresAt:       expiresAt,
 	})
+	if err != nil {
+		return err
+	}
+	if err := s.repo.UpsertSession(ctx, &SecurityChatSessionUpsertInput{
+		SessionID:      sessionID,
+		UserID:         input.UserID,
+		APIKeyID:       input.APIKeyID,
+		AccountID:      input.AccountID,
+		GroupID:        input.GroupID,
+		Platform:       input.Platform,
+		Model:          input.Model,
+		MessagePreview: preview,
+		FirstAt:        createdAt,
+		LastAt:         createdAt,
+		ExpiresAt:      expiresAt,
+	}); err != nil {
+		return err
+	}
 	return err
 }
 
@@ -143,7 +163,13 @@ func (s *SecurityChatService) CleanupExpired(ctx context.Context) (int64, error)
 	if s == nil || s.repo == nil {
 		return 0, nil
 	}
-	return s.repo.DeleteExpired(ctx, time.Now().UTC())
+	cutoff := time.Now().UTC()
+	deletedLogs, err := s.repo.DeleteExpired(ctx, cutoff)
+	if err != nil {
+		return deletedLogs, err
+	}
+	deletedSessions, err := s.repo.DeleteExpiredSessions(ctx, cutoff)
+	return deletedLogs + deletedSessions, err
 }
 
 type SecurityChatCaptureInput struct {
@@ -186,6 +212,20 @@ type SecurityChatLogInput struct {
 	MessagePreview  string
 	CreatedAt       time.Time
 	ExpiresAt       time.Time
+}
+
+type SecurityChatSessionUpsertInput struct {
+	SessionID      string
+	UserID         *int64
+	APIKeyID       *int64
+	AccountID      *int64
+	GroupID        *int64
+	Platform       string
+	Model          string
+	MessagePreview string
+	FirstAt        time.Time
+	LastAt         time.Time
+	ExpiresAt      time.Time
 }
 
 type SecurityChatLog struct {
@@ -419,23 +459,23 @@ func extractSecuritySessionID(requestBody []byte, clientRequestID string, reques
 		for _, key := range []string{"session_id", "conversation_id", "thread_id"} {
 			if v, ok := req[key].(string); ok {
 				if s := strings.TrimSpace(v); s != "" {
-					return s
+					return buildSessionKey(s, userID, apiKeyID)
 				}
 			}
 		}
 		if meta, ok := req["metadata"].(map[string]any); ok {
 			if v, ok := meta["session_id"].(string); ok {
 				if s := strings.TrimSpace(v); s != "" {
-					return s
+					return buildSessionKey(s, userID, apiKeyID)
 				}
 			}
 		}
 	}
 	if s := strings.TrimSpace(clientRequestID); s != "" {
-		return s
+		return buildSessionKey(s, userID, apiKeyID)
 	}
 	if s := strings.TrimSpace(requestID); s != "" {
-		return s
+		return buildSessionKey(s, userID, apiKeyID)
 	}
 	if !createdAt.IsZero() {
 		uid := int64(0)
@@ -450,6 +490,22 @@ func extractSecuritySessionID(requestBody []byte, clientRequestID string, reques
 		return fmt.Sprintf("auto:%d:%d:%s", uid, kid, window.Format("20060102T1504"))
 	}
 	return ""
+}
+
+func buildSessionKey(base string, userID *int64, apiKeyID *int64) string {
+	base = strings.TrimSpace(base)
+	uid := int64(0)
+	kid := int64(0)
+	if userID != nil {
+		uid = *userID
+	}
+	if apiKeyID != nil {
+		kid = *apiKeyID
+	}
+	if base == "" {
+		return fmt.Sprintf("auto:%d:%d", uid, kid)
+	}
+	return fmt.Sprintf("%s:%d:%d", base, uid, kid)
 }
 
 func normalizeMessage(msg any) (role string, content string) {

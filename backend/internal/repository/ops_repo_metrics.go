@@ -176,6 +176,9 @@ SELECT
   memory_used_mb,
   memory_total_mb,
   memory_usage_percent,
+  disk_used_mb,
+  disk_total_mb,
+  disk_usage_percent,
 
   db_ok,
   redis_ok,

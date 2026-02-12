@@ -19,6 +19,70 @@ func NewSecurityChatRepository(db *sql.DB) service.SecurityChatRepository {
 	return &securityChatRepository{db: db}
 }
 
+func (r *securityChatRepository) UpsertSession(ctx context.Context, input *service.SecurityChatSessionUpsertInput) error {
+	if r == nil || r.db == nil {
+		return fmt.Errorf("nil security chat repository")
+	}
+	if input == nil {
+		return fmt.Errorf("nil security chat session input")
+	}
+	if strings.TrimSpace(input.SessionID) == "" {
+		return fmt.Errorf("empty session_id")
+	}
+	firstAt := input.FirstAt
+	if firstAt.IsZero() {
+		firstAt = time.Now().UTC()
+	}
+	lastAt := input.LastAt
+	if lastAt.IsZero() {
+		lastAt = firstAt
+	}
+
+	query := `
+INSERT INTO security_chat_sessions (
+    session_id,
+    user_id,
+    api_key_id,
+    account_id,
+    group_id,
+    platform,
+    model,
+    message_preview,
+    first_at,
+    last_at,
+    expires_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+ON CONFLICT (session_id) DO UPDATE SET
+    user_id = COALESCE(EXCLUDED.user_id, security_chat_sessions.user_id),
+    api_key_id = COALESCE(EXCLUDED.api_key_id, security_chat_sessions.api_key_id),
+    account_id = COALESCE(EXCLUDED.account_id, security_chat_sessions.account_id),
+    group_id = COALESCE(EXCLUDED.group_id, security_chat_sessions.group_id),
+    platform = COALESCE(NULLIF(EXCLUDED.platform, ''), security_chat_sessions.platform),
+    model = COALESCE(NULLIF(EXCLUDED.model, ''), security_chat_sessions.model),
+    message_preview = COALESCE(NULLIF(EXCLUDED.message_preview, ''), security_chat_sessions.message_preview),
+    last_at = GREATEST(security_chat_sessions.last_at, EXCLUDED.last_at),
+    expires_at = GREATEST(security_chat_sessions.expires_at, EXCLUDED.expires_at);
+`
+
+	_, err := r.db.ExecContext(
+		ctx,
+		query,
+		strings.TrimSpace(input.SessionID),
+		opsNullInt64(input.UserID),
+		opsNullInt64(input.APIKeyID),
+		opsNullInt64(input.AccountID),
+		opsNullInt64(input.GroupID),
+		opsNullString(input.Platform),
+		opsNullString(input.Model),
+		opsNullString(input.MessagePreview),
+		firstAt,
+		lastAt,
+		input.ExpiresAt,
+	)
+	return err
+}
+
 func (r *securityChatRepository) InsertChatLog(ctx context.Context, input *service.SecurityChatLogInput) (int64, error) {
 	if r == nil || r.db == nil {
 		return 0, fmt.Errorf("nil security chat repository")
@@ -148,11 +212,8 @@ func (r *securityChatRepository) ListSessions(ctx context.Context, filter *servi
 
 	countQuery := fmt.Sprintf(`
 SELECT COUNT(1)
-FROM (
-  SELECT DISTINCT session_id, user_id, api_key_id
-  FROM security_chat_logs
-  WHERE created_at >= $1 AND created_at < $2 %s
-) s;
+FROM security_chat_sessions
+WHERE last_at >= $1 AND last_at < $2 %s;
 `, where)
 	var total int64
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -164,7 +225,7 @@ FROM (
 	}
 
 	listQuery := fmt.Sprintf(`
-SELECT DISTINCT ON (session_id, user_id, api_key_id)
+SELECT
   session_id,
   user_id,
   api_key_id,
@@ -173,11 +234,15 @@ SELECT DISTINCT ON (session_id, user_id, api_key_id)
   platform,
   model,
   message_preview,
-  created_at AS last_at,
-  (SELECT COUNT(1) FROM security_chat_logs s2 WHERE s2.session_id = s1.session_id AND s2.api_key_id IS NOT DISTINCT FROM s1.api_key_id AND s2.user_id IS NOT DISTINCT FROM s1.user_id) AS request_count
-FROM security_chat_logs s1
-WHERE created_at >= $1 AND created_at < $2 %s
-ORDER BY session_id, user_id, api_key_id, created_at DESC
+  last_at,
+  (SELECT COUNT(1)
+     FROM security_chat_logs l
+    WHERE l.session_id = s.session_id
+      AND l.user_id IS NOT DISTINCT FROM s.user_id
+      AND l.api_key_id IS NOT DISTINCT FROM s.api_key_id) AS request_count
+FROM security_chat_sessions s
+WHERE last_at >= $1 AND last_at < $2 %s
+ORDER BY last_at DESC
 LIMIT $%d OFFSET $%d;
 `, where, len(args)+1, len(args)+2)
 
@@ -389,6 +454,18 @@ func (r *securityChatRepository) DeleteExpired(ctx context.Context, cutoff time.
 		return 0, fmt.Errorf("nil security chat repository")
 	}
 	res, err := r.db.ExecContext(ctx, `DELETE FROM security_chat_logs WHERE expires_at < $1`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+func (r *securityChatRepository) DeleteExpiredSessions(ctx context.Context, cutoff time.Time) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, fmt.Errorf("nil security chat repository")
+	}
+	res, err := r.db.ExecContext(ctx, `DELETE FROM security_chat_sessions WHERE expires_at < $1`, cutoff)
 	if err != nil {
 		return 0, err
 	}
