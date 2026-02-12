@@ -151,17 +151,17 @@ RETURNING id;
 }
 
 type securityChatSessionRow struct {
-	SessionID     string
-	UserID        sql.NullInt64
-	UserEmail     sql.NullString
-	APIKeyID      sql.NullInt64
-	AccountID     sql.NullInt64
-	GroupID       sql.NullInt64
-	Platform      sql.NullString
-	Model         sql.NullString
+	SessionID      string
+	UserID         sql.NullInt64
+	UserEmail      sql.NullString
+	APIKeyID       sql.NullInt64
+	AccountID      sql.NullInt64
+	GroupID        sql.NullInt64
+	Platform       sql.NullString
+	Model          sql.NullString
 	MessagePreview sql.NullString
-	LastAt        time.Time
-	RequestCount  int64
+	LastAt         time.Time
+	RequestCount   int64
 }
 
 func (r *securityChatRepository) ListSessions(ctx context.Context, filter *service.SecurityChatSessionFilter) ([]*service.SecurityChatSession, int64, error) {
@@ -263,9 +263,9 @@ LIMIT $%d OFFSET $%d;
 		if err := rows.Scan(
 			&row.SessionID,
 			&row.UserID,
-		&row.UserEmail,
-		&row.APIKeyID,
-		&row.AccountID,
+			&row.UserEmail,
+			&row.APIKeyID,
+			&row.AccountID,
 			&row.GroupID,
 			&row.Platform,
 			&row.Model,
@@ -316,6 +316,7 @@ func (r *securityChatRepository) ListMessages(ctx context.Context, filter *servi
 
 	// time range is applied unless explicitly ignored
 	if !filter.IgnoreTimeRange {
+		args = append(args, startTime.UTC(), endTime.UTC())
 		conditions = append(conditions, "created_at >= $1", "created_at < $2")
 	}
 
@@ -377,18 +378,18 @@ LIMIT $%d OFFSET $%d;
 	items := make([]*service.SecurityChatLog, 0)
 	for rows.Next() {
 		var (
-			row service.SecurityChatLog
-			messagesRaw string
-			userID sql.NullInt64
-			apiKeyID sql.NullInt64
-			accountID sql.NullInt64
-			groupID sql.NullInt64
-			platform sql.NullString
-			model sql.NullString
-			requestID sql.NullString
+			row             service.SecurityChatLog
+			messagesRaw     string
+			userID          sql.NullInt64
+			apiKeyID        sql.NullInt64
+			accountID       sql.NullInt64
+			groupID         sql.NullInt64
+			platform        sql.NullString
+			model           sql.NullString
+			requestID       sql.NullString
 			clientRequestID sql.NullString
-			requestPath sql.NullString
-			statusCode sql.NullInt64
+			requestPath     sql.NullString
+			statusCode      sql.NullInt64
 		)
 		if err := rows.Scan(
 			&row.ID,
