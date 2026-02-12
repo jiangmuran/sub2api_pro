@@ -292,6 +292,32 @@ func (h *SecurityHandler) DeleteSession(c *gin.Context) {
 	})
 }
 
+// POST /api/v1/admin/security/sessions/bulk-delete
+func (h *SecurityHandler) BulkDeleteSessions(c *gin.Context) {
+	if h.chatService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Security service not available")
+		return
+	}
+	var req struct {
+		SessionIDs []string `json:"session_ids"`
+		UserID     *int64   `json:"user_id"`
+		APIKeyID   *int64   `json:"api_key_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	logsDeleted, sessionsDeleted, err := h.chatService.DeleteSessions(c.Request.Context(), req.SessionIDs, req.UserID, req.APIKeyID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, map[string]any{
+		"logs_deleted": logsDeleted,
+		"sessions_deleted": sessionsDeleted,
+	})
+}
+
 // POST /api/v1/admin/security/ai-chat
 func (h *SecurityHandler) ChatWithAI(c *gin.Context) {
 	if h.aiService == nil {

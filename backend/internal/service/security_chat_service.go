@@ -20,6 +20,7 @@ type SecurityChatRepository interface {
 	DeleteExpired(ctx context.Context, cutoff time.Time) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, cutoff time.Time) (int64, error)
 	DeleteSession(ctx context.Context, sessionID string, userID *int64, apiKeyID *int64) (int64, int64, error)
+	DeleteSessions(ctx context.Context, sessionIDs []string, userID *int64, apiKeyID *int64) (int64, int64, error)
 }
 
 type SecurityChatService struct {
@@ -182,6 +183,23 @@ func (s *SecurityChatService) DeleteSession(ctx context.Context, sessionID strin
 		return 0, 0, fmt.Errorf("session_id required")
 	}
 	return s.repo.DeleteSession(ctx, sessionID, userID, apiKeyID)
+}
+
+func (s *SecurityChatService) DeleteSessions(ctx context.Context, sessionIDs []string, userID *int64, apiKeyID *int64) (int64, int64, error) {
+	if s == nil || s.repo == nil {
+		return 0, 0, nil
+	}
+	cleaned := make([]string, 0, len(sessionIDs))
+	for _, id := range sessionIDs {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			cleaned = append(cleaned, id)
+		}
+	}
+	if len(cleaned) == 0 {
+		return 0, 0, fmt.Errorf("session_ids required")
+	}
+	return s.repo.DeleteSessions(ctx, cleaned, userID, apiKeyID)
 }
 
 type SecurityChatCaptureInput struct {

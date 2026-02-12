@@ -3348,7 +3348,10 @@ export default {
       expand: '展开',
       collapse: '收起',
       deleteSession: '删除会话',
-      deleteConfirm: '确定删除该会话及其记录吗？'
+      deleteConfirm: '确定删除该会话及其记录吗？',
+      selectAll: '全选',
+      bulkDelete: '批量删除',
+      bulkDeleteConfirm: '确定删除选中会话及其记录吗？'
     },
     settings: {
       title: '系统设置',

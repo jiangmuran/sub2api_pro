@@ -91,6 +91,11 @@ export async function deleteSession(sessionId: string, params?: Record<string, a
   return data
 }
 
+export async function bulkDeleteSessions(payload: Record<string, any>): Promise<any> {
+  const { data } = await apiClient.post('/admin/security/sessions/bulk-delete', payload)
+  return data
+}
+
 export async function chatWithAI(payload: Record<string, any>): Promise<SecurityChatSummary> {
   const { data } = await apiClient.post<SecurityChatSummary>('/admin/security/ai-chat', payload)
   return data
@@ -102,5 +107,6 @@ export default {
   summarize,
   listApiKeys,
   deleteSession,
+  bulkDeleteSessions,
   chatWithAI
 }

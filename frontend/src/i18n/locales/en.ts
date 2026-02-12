@@ -3174,7 +3174,10 @@ export default {
       expand: 'Expand',
       collapse: 'Collapse',
       deleteSession: 'Delete Session',
-      deleteConfirm: 'Delete this session and all its logs?'
+      deleteConfirm: 'Delete this session and all its logs?',
+      selectAll: 'Select all',
+      bulkDelete: 'Bulk delete',
+      bulkDeleteConfirm: 'Delete selected sessions and all their logs?'
     },
     settings: {
       title: 'System Settings',
