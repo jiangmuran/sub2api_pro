@@ -496,8 +496,8 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				return
 			}
 
-			apiKey, _ := middleware2.GetAPIKeyFromContext(c)
-			clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+			apiKey, _ = middleware2.GetAPIKeyFromContext(c)
+			clientRequestID, _ = c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 
 			model, _ := c.Get(opsModelKey)
 			streamV, _ := c.Get(opsStreamKey)
@@ -530,9 +530,12 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			fallbackPlatform := guessPlatformFromPath(c.Request.URL.Path)
 			platform := resolveOpsPlatform(apiKey, fallbackPlatform)
 
-			requestID := c.Writer.Header().Get("X-Request-Id")
+			requestID = c.Writer.Header().Get("X-Request-Id")
 			if requestID == "" {
 				requestID = c.Writer.Header().Get("x-request-id")
+			}
+			if requestID == "" {
+				requestID = strings.TrimSpace(clientRequestID)
 			}
 
 			// Best-effort backfill single upstream fields from the last event (if present).
