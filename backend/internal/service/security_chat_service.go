@@ -61,13 +61,13 @@ func (s *SecurityChatService) RecordChat(ctx context.Context, input *SecurityCha
 		return nil
 	}
 
-	sessionID := extractSecuritySessionID(input.RequestBody, input.ClientRequestID, input.RequestID)
+	retentionDays := s.GetRetentionDays(ctx)
+	createdAt := time.Now().UTC()
+
+	sessionID := extractSecuritySessionID(input.RequestBody, input.ClientRequestID, input.RequestID, input.UserID, input.APIKeyID, createdAt)
 	if sessionID == "" {
 		return nil
 	}
-
-	retentionDays := s.GetRetentionDays(ctx)
-	createdAt := time.Now().UTC()
 	expiresAt := createdAt.AddDate(0, 0, retentionDays)
 
 	preview := ""
@@ -413,7 +413,7 @@ func buildSecurityChatMessages(platform string, requestBody []byte, responseBody
 	return msgs
 }
 
-func extractSecuritySessionID(requestBody []byte, clientRequestID string, requestID string) string {
+func extractSecuritySessionID(requestBody []byte, clientRequestID string, requestID string, userID *int64, apiKeyID *int64, createdAt time.Time) string {
 	var req map[string]any
 	if err := json.Unmarshal(requestBody, &req); err == nil {
 		for _, key := range []string{"session_id", "conversation_id", "thread_id"} {
@@ -434,7 +434,22 @@ func extractSecuritySessionID(requestBody []byte, clientRequestID string, reques
 	if s := strings.TrimSpace(clientRequestID); s != "" {
 		return s
 	}
-	return strings.TrimSpace(requestID)
+	if s := strings.TrimSpace(requestID); s != "" {
+		return s
+	}
+	if !createdAt.IsZero() {
+		uid := int64(0)
+		kid := int64(0)
+		if userID != nil {
+			uid = *userID
+		}
+		if apiKeyID != nil {
+			kid = *apiKeyID
+		}
+		window := createdAt.UTC().Truncate(15 * time.Minute)
+		return fmt.Sprintf("auto:%d:%d:%s", uid, kid, window.Format("20060102T1504"))
+	}
+	return ""
 }
 
 func normalizeMessage(msg any) (role string, content string) {

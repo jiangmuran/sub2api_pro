@@ -112,7 +112,7 @@
                 <div class="mt-1 text-xs text-gray-500">
                   {{ formatTime(item.last_at) }}
                 </div>
-                <div v-if="item.message_preview" class="mt-2 line-clamp-2 text-xs text-gray-600">
+                <div v-if="item.message_preview" class="mt-2 line-clamp-1 text-xs text-gray-600">
                   {{ item.message_preview }}
                 </div>
               </button>
@@ -173,7 +173,7 @@
               {{ t('admin.security.emptyMessages') }}
             </div>
             <div v-else class="space-y-6">
-              <div v-for="block in messageBlocks" :key="block.key" class="space-y-4">
+              <div v-for="block in messageBlocks" :key="block.key" class="space-y-3">
                 <div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:border-dark-700 dark:bg-dark-800">
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <span>{{ formatTime(block.created_at) }}</span>
@@ -379,7 +379,13 @@ const messageBlocks = computed(() => {
       })
       currentKey = key
     }
-    blocks[blocks.length - 1].messages.push(msg)
+    const target = blocks[blocks.length - 1]
+    const last = target.messages[target.messages.length - 1]
+    if (last && last.role === msg.role && last.source === msg.source) {
+      last.content = `${last.content}\n${msg.content}`
+    } else {
+      target.messages.push({ ...msg })
+    }
   })
   return blocks
 })

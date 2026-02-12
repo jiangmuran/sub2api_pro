@@ -235,13 +235,16 @@ func (r *securityChatRepository) ListMessages(ctx context.Context, filter *servi
 	offset := (page - 1) * pageSize
 
 	conditions := make([]string, 0, 8)
-	args := make([]any, 0, 10)
+	args := make([]any, 0, 12)
 	args = append(args, startTime.UTC(), endTime.UTC())
 
 	addCondition := func(condition string, values ...any) {
 		conditions = append(conditions, condition)
 		args = append(args, values...)
 	}
+
+	// time range is always applied
+	conditions = append(conditions, "created_at >= $1", "created_at < $2")
 
 	if strings.TrimSpace(filter.SessionID) != "" {
 		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), strings.TrimSpace(filter.SessionID))
