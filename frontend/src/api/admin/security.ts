@@ -10,6 +10,7 @@ export interface SecurityChatMessage {
 export interface SecurityChatSession {
   session_id: string
   user_id?: number
+  user_email?: string
   api_key_id?: number
   account_id?: number
   group_id?: number

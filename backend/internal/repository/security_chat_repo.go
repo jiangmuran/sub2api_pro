@@ -153,6 +153,7 @@ RETURNING id;
 type securityChatSessionRow struct {
 	SessionID     string
 	UserID        sql.NullInt64
+	UserEmail     sql.NullString
 	APIKeyID      sql.NullInt64
 	AccountID     sql.NullInt64
 	GroupID       sql.NullInt64
@@ -227,23 +228,25 @@ WHERE last_at >= $1 AND last_at < $2 %s;
 
 	listQuery := fmt.Sprintf(`
 SELECT
-  session_id,
-  user_id,
-  api_key_id,
-  account_id,
-  group_id,
-  platform,
-  model,
-  message_preview,
-  last_at,
+  s.session_id,
+  s.user_id,
+  u.email,
+  s.api_key_id,
+  s.account_id,
+  s.group_id,
+  s.platform,
+  s.model,
+  s.message_preview,
+  s.last_at,
   (SELECT COUNT(1)
      FROM security_chat_logs l
     WHERE l.session_id = s.session_id
       AND l.user_id IS NOT DISTINCT FROM s.user_id
       AND l.api_key_id IS NOT DISTINCT FROM s.api_key_id) AS request_count
 FROM security_chat_sessions s
-WHERE last_at >= $1 AND last_at < $2 %s
-ORDER BY last_at DESC
+LEFT JOIN users u ON u.id = s.user_id
+WHERE s.last_at >= $1 AND s.last_at < $2 %s
+ORDER BY s.last_at DESC
 LIMIT $%d OFFSET $%d;
 `, where, len(args)+1, len(args)+2)
 
@@ -260,8 +263,9 @@ LIMIT $%d OFFSET $%d;
 		if err := rows.Scan(
 			&row.SessionID,
 			&row.UserID,
-			&row.APIKeyID,
-			&row.AccountID,
+		&row.UserEmail,
+		&row.APIKeyID,
+		&row.AccountID,
 			&row.GroupID,
 			&row.Platform,
 			&row.Model,
@@ -278,6 +282,7 @@ LIMIT $%d OFFSET $%d;
 			row.APIKeyID,
 			row.AccountID,
 			row.GroupID,
+			row.UserEmail,
 			row.Platform,
 			row.Model,
 			row.MessagePreview,

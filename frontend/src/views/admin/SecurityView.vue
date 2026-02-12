@@ -116,7 +116,7 @@
                   <span class="text-xs text-gray-400">{{ item.request_count }}</span>
                 </div>
                 <div class="mt-1 text-xs text-gray-500">
-                  {{ t('admin.security.user') }}: {{ item.user_id || '-' }} ·
+                  {{ t('admin.security.user') }}: {{ item.user_email || '-' }} ·
                   {{ t('admin.security.apiKey') }}: {{ item.api_key_id || '-' }}
                 </div>
                 <div class="mt-1 text-xs text-gray-500">

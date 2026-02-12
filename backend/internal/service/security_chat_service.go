@@ -279,6 +279,7 @@ type SecurityChatLog struct {
 type SecurityChatSession struct {
 	SessionID     string    `json:"session_id"`
 	UserID        *int64    `json:"user_id,omitempty"`
+	UserEmail     *string   `json:"user_email,omitempty"`
 	APIKeyID      *int64    `json:"api_key_id,omitempty"`
 	AccountID     *int64    `json:"account_id,omitempty"`
 	GroupID       *int64    `json:"group_id,omitempty"`
@@ -395,7 +396,7 @@ func (f *SecurityChatMessageFilter) Normalize() (page, pageSize int, startTime, 
 	return page, pageSize, startTime, endTime
 }
 
-func SecurityChatSessionFromRow(sessionID string, userID, apiKeyID, accountID, groupID sql.NullInt64, platform, model, preview sql.NullString, lastAt time.Time, requestCount int64) *SecurityChatSession {
+func SecurityChatSessionFromRow(sessionID string, userID, apiKeyID, accountID, groupID sql.NullInt64, userEmail, platform, model, preview sql.NullString, lastAt time.Time, requestCount int64) *SecurityChatSession {
 	item := &SecurityChatSession{
 		SessionID:    sessionID,
 		LastAt:       lastAt,
@@ -404,6 +405,10 @@ func SecurityChatSessionFromRow(sessionID string, userID, apiKeyID, accountID, g
 	if userID.Valid {
 		v := userID.Int64
 		item.UserID = &v
+	}
+	if userEmail.Valid {
+		v := userEmail.String
+		item.UserEmail = &v
 	}
 	if apiKeyID.Valid {
 		v := apiKeyID.Int64

@@ -874,7 +874,7 @@ export default {
       statusFilter: '状态筛选',
       allStatuses: '全部状态',
       admin: '管理员',
-      user: '用户',
+      user: '邮箱',
       disabled: '禁用',
       email: '邮箱',
       password: '密码',

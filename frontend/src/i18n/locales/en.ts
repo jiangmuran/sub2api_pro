@@ -846,7 +846,7 @@ export default {
       allRoles: 'All Roles',
       allStatus: 'All Status',
       admin: 'Admin',
-      user: 'User',
+      user: 'Email',
       disabled: 'Disabled',
       email: 'Email',
       password: 'Password',
