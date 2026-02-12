@@ -185,7 +185,7 @@ func (h *SecurityHandler) SummarizeChat(c *gin.Context) {
 		filter.SessionID = strings.TrimSpace(*req.SessionID)
 	}
 
-	logs, _, err := h.chatService.ListMessages(c.Request.Context(), filter)
+	logs, err := h.chatService.ListMessages(c.Request.Context(), filter)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

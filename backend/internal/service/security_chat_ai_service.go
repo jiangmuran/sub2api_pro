@@ -225,7 +225,7 @@ func extractChatCompletionResult(raw []byte) (string, OpenAIUsage) {
 			} `json:"message"`
 			Text string `json:"text"`
 		} `json:"choices"`
-	}{}
+	}
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return "", OpenAIUsage{}
 	}
