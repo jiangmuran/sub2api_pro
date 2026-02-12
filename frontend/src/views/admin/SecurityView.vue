@@ -126,6 +126,14 @@
                   {{ item.message_preview }}
                 </div>
               </button>
+              <Pagination
+                v-if="sessions.total > 0"
+                :page="sessions.page"
+                :total="sessions.total"
+                :page-size="sessions.page_size"
+                @update:page="handlePageChange"
+                @update:pageSize="handlePageSizeChange"
+              />
             </div>
           </div>
         </div>
@@ -268,6 +276,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
 import { adminAPI } from '@/api'
@@ -371,6 +380,17 @@ const fetchSessions = async () => {
   } finally {
     loadingSessions.value = false
   }
+}
+
+const handlePageChange = async (page: number) => {
+  sessions.page = page
+  await fetchSessions()
+}
+
+const handlePageSizeChange = async (size: number) => {
+  sessions.page_size = size
+  sessions.page = 1
+  await fetchSessions()
 }
 
 const fetchMessages = async (session: SecurityChatSession) => {

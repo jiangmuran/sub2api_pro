@@ -193,7 +193,12 @@ func (h *SecurityHandler) SummarizeChat(c *gin.Context) {
 		return
 	}
 	if len(logs.Items) == 0 {
-		response.BadRequest(c, "No chat logs found")
+		response.Success(c, &service.SecurityChatSummaryResult{
+			Summary:           "No chat logs found",
+			SensitiveFindings: []string{},
+			RecommendedActions: []string{},
+			RiskLevel:         "low",
+		})
 		return
 	}
 	messages := make([]service.SecurityChatMessage, 0)
