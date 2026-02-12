@@ -1,4 +1,4 @@
-# Sub2API
+# Sub2API Pro
 
 <div align="center">
 
@@ -9,6 +9,8 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
 
 **AI API Gateway Platform for Subscription Quota Distribution**
+
+Forked from [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api). Original author: Wei-Shaw.
 
 English | [中文](README_CN.md)
 
@@ -28,7 +30,7 @@ Demo credentials (shared demo environment; **not** created automatically for sel
 
 ## Overview
 
-Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions (like Claude Code $200/month). Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
+Sub2API Pro is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions (like Claude Code $200/month). Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
 
 ## Features
 
@@ -73,7 +75,7 @@ One-click installation script that downloads pre-built binaries from GitHub Rele
 #### Installation Steps
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/jiangmuran/sub2api_pro/main/deploy/install.sh | sudo bash
 ```
 
 The script will:
@@ -123,7 +125,7 @@ sudo journalctl -u sub2api -f
 sudo systemctl restart sub2api
 
 # Uninstall
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash -s -- uninstall -y
+curl -sSL https://raw.githubusercontent.com/jiangmuran/sub2api_pro/main/deploy/install.sh | sudo bash -s -- uninstall -y
 ```
 
 ---
@@ -146,7 +148,7 @@ Use the automated deployment script for easy setup:
 mkdir -p sub2api-deploy && cd sub2api-deploy
 
 # Download and run deployment preparation script
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh | bash
+curl -sSL https://raw.githubusercontent.com/jiangmuran/sub2api_pro/main/deploy/docker-deploy.sh | bash
 
 # Start services
 docker-compose -f docker-compose.local.yml up -d
@@ -168,7 +170,7 @@ If you prefer manual setup:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Wei-Shaw/sub2api.git
+git clone https://github.com/jiangmuran/sub2api_pro.git
 cd sub2api/deploy
 
 # 2. Copy environment configuration
@@ -307,7 +309,7 @@ Build and run from source code for development or customization.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/Wei-Shaw/sub2api.git
+git clone https://github.com/jiangmuran/sub2api_pro.git
 cd sub2api
 
 # 2. Install pnpm (if not already installed)

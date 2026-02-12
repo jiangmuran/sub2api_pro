@@ -1,6 +1,8 @@
-# Sub2API Deployment Files
+# Sub2API Pro Deployment Files
 
-This directory contains files for deploying Sub2API on Linux servers.
+This directory contains files for deploying Sub2API Pro on Linux servers.
+
+Forked from [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api). Original author: Wei-Shaw.
 
 ## Deployment Methods
 
