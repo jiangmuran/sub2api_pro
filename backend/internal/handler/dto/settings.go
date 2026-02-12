@@ -57,6 +57,12 @@ type SystemSettings struct {
 	OpsRealtimeMonitoringEnabled bool   `json:"ops_realtime_monitoring_enabled"`
 	OpsQueryModeDefault          string `json:"ops_query_mode_default"`
 	OpsMetricsIntervalSeconds    int    `json:"ops_metrics_interval_seconds"`
+
+	// Security chat logs
+	SecurityChatRetentionDays int `json:"security_chat_retention_days"`
+	SecurityChatAIEnabled     bool   `json:"security_chat_ai_enabled"`
+	SecurityChatAIBaseURL     string `json:"security_chat_ai_base_url"`
+	SecurityChatAIModel       string `json:"security_chat_ai_model"`
 }
 
 type PublicSettings struct {

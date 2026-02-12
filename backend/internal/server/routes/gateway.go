@@ -17,11 +17,12 @@ func RegisterGatewayRoutes(
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
 	opsService *service.OpsService,
+	securityChatService *service.SecurityChatService,
 	cfg *config.Config,
 ) {
 	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize)
 	clientRequestID := middleware.ClientRequestID()
-	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
+	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService, securityChatService)
 
 	// API网关（Claude API兼容）
 	gateway := r.Group("/v1")

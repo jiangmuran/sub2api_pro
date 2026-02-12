@@ -66,6 +66,12 @@ export interface SystemSettings {
   ops_realtime_monitoring_enabled: boolean
   ops_query_mode_default: 'auto' | 'raw' | 'preagg' | string
   ops_metrics_interval_seconds: number
+
+  // Security chat logs
+  security_chat_retention_days: number
+  security_chat_ai_enabled: boolean
+  security_chat_ai_base_url: string
+  security_chat_ai_model: string
 }
 
 export interface UpdateSettingsRequest {
@@ -112,6 +118,10 @@ export interface UpdateSettingsRequest {
   ops_realtime_monitoring_enabled?: boolean
   ops_query_mode_default?: 'auto' | 'raw' | 'preagg' | string
   ops_metrics_interval_seconds?: number
+  security_chat_retention_days?: number
+  security_chat_ai_enabled?: boolean
+  security_chat_ai_base_url?: string
+  security_chat_ai_model?: string
 }
 
 /**

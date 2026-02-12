@@ -270,6 +270,7 @@ export default {
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
+    security: 'Security',
     settings: 'Settings',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
@@ -3139,6 +3140,30 @@ export default {
     },
 
     // Settings
+    security: {
+      title: 'Security Management',
+      description: 'Review and audit user chat sessions',
+      sessions: 'Sessions',
+      chat: 'Conversation',
+      selectSession: 'Select a session to review messages',
+      empty: 'No sessions found',
+      emptyMessages: 'No messages found in this session',
+      userId: 'User ID',
+      apiKeyId: 'API Key ID',
+      sessionId: 'Session ID',
+      platform: 'Platform',
+      model: 'Model',
+      user: 'User',
+      apiKey: 'API Key',
+      requestId: 'Request ID',
+      status: 'Status',
+      aiSummarize: 'AI Summary',
+      aiHint: 'Generate a security review summary for the selected range/session',
+      aiSummary: 'Summary',
+      aiRisk: 'Risk',
+      aiFindings: 'Sensitive Findings',
+      aiActions: 'Recommended Actions'
+    },
     settings: {
       title: 'System Settings',
       description: 'Manage registration, email verification, default values, and SMTP settings',
@@ -3198,6 +3223,20 @@ export default {
         defaultBalanceHint: 'Initial balance for new users',
         defaultConcurrency: 'Default Concurrency',
         defaultConcurrencyHint: 'Maximum concurrent requests for new users'
+      },
+      security: {
+        title: 'Security Logs',
+        description: 'Configure chat log retention for security review',
+        retentionDays: 'Chat Log Retention (days)',
+        retentionDaysHint: 'Default 7 days. Shorter means less storage, longer means more history.',
+        aiEnable: 'Enable AI Summary',
+        aiEnableHint: 'Allow AI to summarize selected chat ranges',
+        aiBaseUrl: 'AI Base URL',
+        aiModel: 'AI Model',
+        aiKey: 'AI API Key',
+        aiKeyPlaceholder: 'Paste API key',
+        aiKeyConfigured: 'Configured (leave blank to keep)',
+        aiKeyHint: 'Stored in settings; leave empty to keep existing key.'
       },
       site: {
         title: 'Site Settings',

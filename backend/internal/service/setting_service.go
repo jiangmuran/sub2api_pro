@@ -256,6 +256,14 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		updates[SettingKeyOpsMetricsIntervalSeconds] = strconv.Itoa(settings.OpsMetricsIntervalSeconds)
 	}
 
+	// Security chat logs
+	if settings.SecurityChatRetentionDays > 0 {
+		updates[SettingKeySecurityChatRetentionDays] = strconv.Itoa(settings.SecurityChatRetentionDays)
+	}
+	updates[SettingKeySecurityChatAIEnabled] = strconv.FormatBool(settings.SecurityChatAIEnabled)
+	updates[SettingKeySecurityChatAIBaseURL] = strings.TrimSpace(settings.SecurityChatAIBaseURL)
+	updates[SettingKeySecurityChatAIModel] = strings.TrimSpace(settings.SecurityChatAIModel)
+
 	err := s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil && s.onUpdate != nil {
 		s.onUpdate() // Invalidate cache after settings update
@@ -402,6 +410,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpsRealtimeMonitoringEnabled: "true",
 		SettingKeyOpsQueryModeDefault:          "auto",
 		SettingKeyOpsMetricsIntervalSeconds:    "60",
+
+		// Security chat logs
+		SettingKeySecurityChatRetentionDays: "7",
+		SettingKeySecurityChatAIEnabled:     "false",
+		SettingKeySecurityChatAIBaseURL:     "https://api.openai.com/v1",
+		SettingKeySecurityChatAIModel:       "gpt-4o-mini",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
@@ -525,6 +539,23 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 			result.OpsMetricsIntervalSeconds = v
 		}
 	}
+
+	result.SecurityChatRetentionDays = 7
+	if raw := strings.TrimSpace(settings[SettingKeySecurityChatRetentionDays]); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			if v < 1 {
+				v = 1
+			}
+			if v > 365 {
+				v = 365
+			}
+			result.SecurityChatRetentionDays = v
+		}
+	}
+
+	result.SecurityChatAIEnabled = settings[SettingKeySecurityChatAIEnabled] == "true"
+	result.SecurityChatAIBaseURL = s.getStringOrDefault(settings, SettingKeySecurityChatAIBaseURL, "https://api.openai.com/v1")
+	result.SecurityChatAIModel = s.getStringOrDefault(settings, SettingKeySecurityChatAIModel, "gpt-4o-mini")
 
 	return result
 }

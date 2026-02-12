@@ -20,6 +20,7 @@ import antigravityAPI from './antigravity'
 import userAttributesAPI from './userAttributes'
 import opsAPI from './ops'
 import errorPassthroughAPI from './errorPassthrough'
+import securityAPI from './security'
 
 /**
  * Unified admin API object for convenient access
@@ -41,7 +42,8 @@ export const adminAPI = {
   antigravity: antigravityAPI,
   userAttributes: userAttributesAPI,
   ops: opsAPI,
-  errorPassthrough: errorPassthroughAPI
+  errorPassthrough: errorPassthroughAPI,
+  security: securityAPI
 }
 
 export {
@@ -61,7 +63,8 @@ export {
   antigravityAPI,
   userAttributesAPI,
   opsAPI,
-  errorPassthroughAPI
+  errorPassthroughAPI,
+  securityAPI
 }
 
 export default adminAPI

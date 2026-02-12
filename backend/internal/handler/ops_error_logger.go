@@ -361,7 +361,7 @@ func (w *opsCaptureWriter) WriteString(s string) (int, error) {
 // Notes:
 // - It buffers response bodies only when status >= 400 to avoid overhead for successful traffic.
 // - Streaming errors after the response has started (SSE) may still need explicit logging.
-func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
+func OpsErrorLoggerMiddleware(ops *service.OpsService, securityChat *service.SecurityChatService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		captureAll := ops != nil
 		w := &opsCaptureWriter{ResponseWriter: c.Writer, limit: 64 * 1024, captureAll: captureAll}
@@ -458,6 +458,27 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 				responseBody := w.buf.Bytes()
 				if apiKey != nil {
 					enqueueOpsRequestLog(ops, entry, requestBody, responseBody)
+					if securityChat != nil {
+						var userID *int64
+						if apiKey.User != nil {
+							userID = &apiKey.User.ID
+						}
+						securityChat.RecordChat(c.Request.Context(), &service.SecurityChatCaptureInput{
+							RequestID:       requestID,
+							ClientRequestID: clientRequestID,
+							UserID:          userID,
+							APIKeyID:        &apiKey.ID,
+							AccountID:       accountID,
+							GroupID:         apiKey.GroupID,
+							Platform:        platform,
+							Model:           modelName,
+							RequestPath:     c.Request.URL.Path,
+							Stream:          stream,
+							StatusCode:      status,
+							RequestBody:     requestBody,
+							ResponseBody:    responseBody,
+						})
+					}
 				}
 			}
 

@@ -89,6 +89,10 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		OpsRealtimeMonitoringEnabled:         settings.OpsRealtimeMonitoringEnabled,
 		OpsQueryModeDefault:                  settings.OpsQueryModeDefault,
 		OpsMetricsIntervalSeconds:            settings.OpsMetricsIntervalSeconds,
+		SecurityChatRetentionDays:            settings.SecurityChatRetentionDays,
+		SecurityChatAIEnabled:                settings.SecurityChatAIEnabled,
+		SecurityChatAIBaseURL:                settings.SecurityChatAIBaseURL,
+		SecurityChatAIModel:                  settings.SecurityChatAIModel,
 	})
 }
 
@@ -154,6 +158,12 @@ type UpdateSettingsRequest struct {
 	OpsRealtimeMonitoringEnabled *bool   `json:"ops_realtime_monitoring_enabled"`
 	OpsQueryModeDefault          *string `json:"ops_query_mode_default"`
 	OpsMetricsIntervalSeconds    *int    `json:"ops_metrics_interval_seconds"`
+
+	// Security chat logs
+	SecurityChatRetentionDays *int `json:"security_chat_retention_days"`
+	SecurityChatAIEnabled     *bool   `json:"security_chat_ai_enabled"`
+	SecurityChatAIBaseURL     *string `json:"security_chat_ai_base_url"`
+	SecurityChatAIModel       *string `json:"security_chat_ai_model"`
 }
 
 // UpdateSettings 更新系统设置
@@ -288,6 +298,27 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		req.OpsMetricsIntervalSeconds = &v
 	}
 
+	if req.SecurityChatRetentionDays != nil {
+		v := *req.SecurityChatRetentionDays
+		if v < 1 {
+			v = 1
+		}
+		if v > 365 {
+			v = 365
+		}
+		req.SecurityChatRetentionDays = &v
+	}
+	if req.SecurityChatAIBaseURL != nil {
+		if v := strings.TrimSpace(*req.SecurityChatAIBaseURL); v != "" {
+			req.SecurityChatAIBaseURL = &v
+		}
+	}
+	if req.SecurityChatAIModel != nil {
+		if v := strings.TrimSpace(*req.SecurityChatAIModel); v != "" {
+			req.SecurityChatAIModel = &v
+		}
+	}
+
 	settings := &service.SystemSettings{
 		RegistrationEnabled:         req.RegistrationEnabled,
 		EmailVerifyEnabled:          req.EmailVerifyEnabled,
@@ -352,6 +383,30 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.OpsMetricsIntervalSeconds
 		}(),
+		SecurityChatRetentionDays: func() int {
+			if req.SecurityChatRetentionDays != nil {
+				return *req.SecurityChatRetentionDays
+			}
+			return previousSettings.SecurityChatRetentionDays
+		}(),
+		SecurityChatAIEnabled: func() bool {
+			if req.SecurityChatAIEnabled != nil {
+				return *req.SecurityChatAIEnabled
+			}
+			return previousSettings.SecurityChatAIEnabled
+		}(),
+		SecurityChatAIBaseURL: func() string {
+			if req.SecurityChatAIBaseURL != nil {
+				return *req.SecurityChatAIBaseURL
+			}
+			return previousSettings.SecurityChatAIBaseURL
+		}(),
+		SecurityChatAIModel: func() string {
+			if req.SecurityChatAIModel != nil {
+				return *req.SecurityChatAIModel
+			}
+			return previousSettings.SecurityChatAIModel
+		}(),
 	}
 
 	if err := h.settingService.UpdateSettings(c.Request.Context(), settings); err != nil {
@@ -413,6 +468,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		OpsRealtimeMonitoringEnabled:         updatedSettings.OpsRealtimeMonitoringEnabled,
 		OpsQueryModeDefault:                  updatedSettings.OpsQueryModeDefault,
 		OpsMetricsIntervalSeconds:            updatedSettings.OpsMetricsIntervalSeconds,
+		SecurityChatRetentionDays:            updatedSettings.SecurityChatRetentionDays,
+		SecurityChatAIEnabled:                updatedSettings.SecurityChatAIEnabled,
+		SecurityChatAIBaseURL:                updatedSettings.SecurityChatAIBaseURL,
+		SecurityChatAIModel:                  updatedSettings.SecurityChatAIModel,
 	})
 }
 
@@ -554,6 +613,18 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.OpsMetricsIntervalSeconds != after.OpsMetricsIntervalSeconds {
 		changed = append(changed, "ops_metrics_interval_seconds")
+	}
+	if before.SecurityChatRetentionDays != after.SecurityChatRetentionDays {
+		changed = append(changed, "security_chat_retention_days")
+	}
+	if before.SecurityChatAIEnabled != after.SecurityChatAIEnabled {
+		changed = append(changed, "security_chat_ai_enabled")
+	}
+	if before.SecurityChatAIBaseURL != after.SecurityChatAIBaseURL {
+		changed = append(changed, "security_chat_ai_base_url")
+	}
+	if before.SecurityChatAIModel != after.SecurityChatAIModel {
+		changed = append(changed, "security_chat_ai_model")
 	}
 	return changed
 }

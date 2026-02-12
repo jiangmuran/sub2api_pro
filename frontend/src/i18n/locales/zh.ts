@@ -270,6 +270,7 @@ export default {
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
+    security: '安全管理',
     settings: '系统设置',
     myAccount: '我的账户',
     lightMode: '浅色模式',
@@ -3313,6 +3314,30 @@ export default {
     },
 
     // Settings
+    security: {
+      title: '安全管理',
+      description: '审查与追踪用户会话聊天记录',
+      sessions: '会话列表',
+      chat: '对话内容',
+      selectSession: '请选择一个会话查看聊天记录',
+      empty: '暂无会话记录',
+      emptyMessages: '该会话暂无聊天记录',
+      userId: '用户 ID',
+      apiKeyId: 'API Key ID',
+      sessionId: '会话 ID',
+      platform: '平台',
+      model: '模型',
+      user: '用户',
+      apiKey: 'API Key',
+      requestId: '请求 ID',
+      status: '状态',
+      aiSummarize: 'AI 整理',
+      aiHint: '对当前范围/会话生成安全审查摘要',
+      aiSummary: '摘要',
+      aiRisk: '风险等级',
+      aiFindings: '敏感信息',
+      aiActions: '建议操作'
+    },
     settings: {
       title: '系统设置',
       description: '管理注册、邮箱验证、默认值和 SMTP 设置',
@@ -3372,6 +3397,20 @@ export default {
         defaultBalanceHint: '新用户的初始余额',
         defaultConcurrency: '默认并发数',
         defaultConcurrencyHint: '新用户的最大并发请求数'
+      },
+      security: {
+        title: '安全日志',
+        description: '配置聊天记录的保留时间，用于安全审查',
+        retentionDays: '聊天记录保留天数',
+        retentionDaysHint: '默认 7 天，保留更久会占用更多存储',
+        aiEnable: '启用 AI 整理',
+        aiEnableHint: '允许 AI 对选择范围进行整理',
+        aiBaseUrl: 'AI 接口地址',
+        aiModel: 'AI 模型',
+        aiKey: 'AI API Key',
+        aiKeyPlaceholder: '粘贴 API Key',
+        aiKeyConfigured: '已配置（留空保留）',
+        aiKeyHint: '保存在系统设置中，留空将保持当前值。'
       },
       site: {
         title: '站点设置',

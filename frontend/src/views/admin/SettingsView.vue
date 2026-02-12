@@ -616,6 +616,60 @@
           </div>
         </div>
 
+        <!-- Security Chat Logs -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.security.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.security.description') }}
+            </p>
+          </div>
+          <div class="p-6">
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.security.retentionDays') }}
+                </label>
+                <input
+                  v-model.number="form.security_chat_retention_days"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="input"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.security.retentionDaysHint') }}
+                </p>
+              </div>
+              <div class="flex items-center gap-3">
+                <Toggle v-model="form.security_chat_ai_enabled" />
+                <div>
+                  <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.security.aiEnable') }}
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.security.aiEnableHint') }}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.security.aiBaseUrl') }}
+                </label>
+                <input v-model="form.security_chat_ai_base_url" type="text" class="input" />
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.security.aiModel') }}
+                </label>
+                <input v-model="form.security_chat_ai_model" type="text" class="input" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Site Settings -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -1085,6 +1139,7 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
 import type { SystemSettings, UpdateSettingsRequest } from '@/api/admin/settings'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Toggle from '@/components/common/Toggle.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import { useClipboard } from '@/composables/useClipboard'
@@ -1177,7 +1232,11 @@ const form = reactive<SettingsForm>({
   ops_monitoring_enabled: true,
   ops_realtime_monitoring_enabled: true,
   ops_query_mode_default: 'auto',
-  ops_metrics_interval_seconds: 60
+  ops_metrics_interval_seconds: 60,
+  security_chat_retention_days: 7,
+  security_chat_ai_enabled: false,
+  security_chat_ai_base_url: 'https://api.openai.com/v1',
+  security_chat_ai_model: 'gpt-4o-mini'
 })
 
 // LinuxDo OAuth redirect URL suggestion
@@ -1293,7 +1352,11 @@ async function saveSettings() {
       fallback_model_gemini: form.fallback_model_gemini,
       fallback_model_antigravity: form.fallback_model_antigravity,
       enable_identity_patch: form.enable_identity_patch,
-      identity_patch_prompt: form.identity_patch_prompt
+      identity_patch_prompt: form.identity_patch_prompt,
+      security_chat_retention_days: form.security_chat_retention_days,
+      security_chat_ai_enabled: form.security_chat_ai_enabled,
+      security_chat_ai_base_url: form.security_chat_ai_base_url,
+      security_chat_ai_model: form.security_chat_ai_model
     }
     const updated = await adminAPI.settings.updateSettings(payload)
     Object.assign(form, updated)

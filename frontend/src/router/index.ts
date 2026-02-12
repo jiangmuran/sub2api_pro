@@ -337,6 +337,18 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'admin.usage.description'
     }
   },
+  {
+    path: '/admin/security',
+    name: 'AdminSecurity',
+    component: () => import('@/views/admin/SecurityView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Security Management',
+      titleKey: 'admin.security.title',
+      descriptionKey: 'admin.security.description'
+    }
+  },
 
   // ==================== 404 Not Found ====================
   {

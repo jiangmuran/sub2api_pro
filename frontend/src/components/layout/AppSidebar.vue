@@ -214,6 +214,21 @@ const ChartIcon = {
     )
 }
 
+const ShieldIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M9 12.75L11.25 15 15 9.75m6-3v6.75c0 5.523-3.995 8.972-7.5 10.5-3.505-1.528-7.5-4.977-7.5-10.5V6.75l7.5-3 7.5 3z'
+        })
+      ]
+    )
+}
+
 const GiftIcon = {
   render: () =>
     h(
@@ -490,6 +505,7 @@ const adminNavItems = computed(() => {
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
+    { path: '/admin/security', label: t('nav.security'), icon: ShieldIcon },
   ]
 
   // 简单模式下，在系统设置前插入 API密钥

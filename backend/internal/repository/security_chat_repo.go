@@ -1,0 +1,394 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/service"
+)
+
+type securityChatRepository struct {
+	db *sql.DB
+}
+
+func NewSecurityChatRepository(db *sql.DB) service.SecurityChatRepository {
+	return &securityChatRepository{db: db}
+}
+
+func (r *securityChatRepository) InsertChatLog(ctx context.Context, input *service.SecurityChatLogInput) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, fmt.Errorf("nil security chat repository")
+	}
+	if input == nil {
+		return 0, fmt.Errorf("nil security chat input")
+	}
+	if strings.TrimSpace(input.SessionID) == "" {
+		return 0, fmt.Errorf("empty session_id")
+	}
+
+	messagesJSON, err := json.Marshal(input.Messages)
+	if err != nil {
+		return 0, err
+	}
+
+	query := `
+INSERT INTO security_chat_logs (
+    session_id,
+    request_id,
+    client_request_id,
+    user_id,
+    api_key_id,
+    account_id,
+    group_id,
+    platform,
+    model,
+    request_path,
+    stream,
+    status_code,
+    messages,
+    message_preview,
+    created_at,
+    expires_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+RETURNING id;
+`
+
+	var id int64
+	err = r.db.QueryRowContext(
+		ctx,
+		query,
+		strings.TrimSpace(input.SessionID),
+		opsNullString(input.RequestID),
+		opsNullString(input.ClientRequestID),
+		opsNullInt64(input.UserID),
+		opsNullInt64(input.APIKeyID),
+		opsNullInt64(input.AccountID),
+		opsNullInt64(input.GroupID),
+		opsNullString(input.Platform),
+		opsNullString(input.Model),
+		opsNullString(input.RequestPath),
+		input.Stream,
+		opsNullInt(input.StatusCode),
+		string(messagesJSON),
+		opsNullString(input.MessagePreview),
+		input.CreatedAt,
+		input.ExpiresAt,
+	).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+type securityChatSessionRow struct {
+	SessionID     string
+	UserID        sql.NullInt64
+	APIKeyID      sql.NullInt64
+	AccountID     sql.NullInt64
+	GroupID       sql.NullInt64
+	Platform      sql.NullString
+	Model         sql.NullString
+	MessagePreview sql.NullString
+	LastAt        time.Time
+	RequestCount  int64
+}
+
+func (r *securityChatRepository) ListSessions(ctx context.Context, filter *service.SecurityChatSessionFilter) ([]*service.SecurityChatSession, int64, error) {
+	if r == nil || r.db == nil {
+		return nil, 0, fmt.Errorf("nil security chat repository")
+	}
+
+	page, pageSize, startTime, endTime := filter.Normalize()
+	offset := (page - 1) * pageSize
+
+	conditions := make([]string, 0, 8)
+	args := make([]any, 0, 12)
+	args = append(args, startTime.UTC(), endTime.UTC())
+
+	addCondition := func(condition string, values ...any) {
+		conditions = append(conditions, condition)
+		args = append(args, values...)
+	}
+
+	if filter != nil {
+		if filter.UserID != nil && *filter.UserID > 0 {
+			addCondition(fmt.Sprintf("user_id = $%d", len(args)+1), *filter.UserID)
+		}
+		if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
+			addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
+		}
+		if s := strings.TrimSpace(filter.SessionID); s != "" {
+			addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), s)
+		}
+		if p := strings.TrimSpace(filter.Platform); p != "" {
+			addCondition(fmt.Sprintf("platform = $%d", len(args)+1), strings.ToLower(p))
+		}
+		if m := strings.TrimSpace(filter.Model); m != "" {
+			addCondition(fmt.Sprintf("model = $%d", len(args)+1), m)
+		}
+		if q := strings.TrimSpace(filter.Query); q != "" {
+			like := "%" + strings.ToLower(q) + "%"
+			startIdx := len(args) + 1
+			addCondition(
+				fmt.Sprintf("(LOWER(COALESCE(session_id,'')) LIKE $%d OR LOWER(COALESCE(message_preview,'')) LIKE $%d)", startIdx, startIdx+1),
+				like, like,
+			)
+		}
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "AND " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf(`
+SELECT COUNT(1)
+FROM (
+  SELECT DISTINCT session_id, user_id, api_key_id
+  FROM security_chat_logs
+  WHERE created_at >= $1 AND created_at < $2 %s
+) s;
+`, where)
+	var total int64
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		if err == sql.ErrNoRows {
+			total = 0
+		} else {
+			return nil, 0, err
+		}
+	}
+
+	listQuery := fmt.Sprintf(`
+SELECT DISTINCT ON (session_id, user_id, api_key_id)
+  session_id,
+  user_id,
+  api_key_id,
+  account_id,
+  group_id,
+  platform,
+  model,
+  message_preview,
+  created_at AS last_at,
+  (SELECT COUNT(1) FROM security_chat_logs s2 WHERE s2.session_id = s1.session_id AND s2.api_key_id IS NOT DISTINCT FROM s1.api_key_id AND s2.user_id IS NOT DISTINCT FROM s1.user_id) AS request_count
+FROM security_chat_logs s1
+WHERE created_at >= $1 AND created_at < $2 %s
+ORDER BY session_id, user_id, api_key_id, created_at DESC
+LIMIT $%d OFFSET $%d;
+`, where, len(args)+1, len(args)+2)
+
+	listArgs := append(append([]any{}, args...), pageSize, offset)
+	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]*service.SecurityChatSession, 0)
+	for rows.Next() {
+		var row securityChatSessionRow
+		if err := rows.Scan(
+			&row.SessionID,
+			&row.UserID,
+			&row.APIKeyID,
+			&row.AccountID,
+			&row.GroupID,
+			&row.Platform,
+			&row.Model,
+			&row.MessagePreview,
+			&row.LastAt,
+			&row.RequestCount,
+		); err != nil {
+			return nil, 0, err
+		}
+
+		items = append(items, service.SecurityChatSessionFromRow(
+			row.SessionID,
+			row.UserID,
+			row.APIKeyID,
+			row.AccountID,
+			row.GroupID,
+			row.Platform,
+			row.Model,
+			row.MessagePreview,
+			row.LastAt,
+			row.RequestCount,
+		))
+	}
+
+	return items, total, nil
+}
+
+func (r *securityChatRepository) ListMessages(ctx context.Context, filter *service.SecurityChatMessageFilter) ([]*service.SecurityChatLog, int64, error) {
+	if r == nil || r.db == nil {
+		return nil, 0, fmt.Errorf("nil security chat repository")
+	}
+	if filter == nil || (strings.TrimSpace(filter.SessionID) == "" && !filter.AllowEmptySession) {
+		return []*service.SecurityChatLog{}, 0, nil
+	}
+
+	page, pageSize, startTime, endTime := filter.Normalize()
+	offset := (page - 1) * pageSize
+
+	conditions := make([]string, 0, 8)
+	args := make([]any, 0, 10)
+	args = append(args, startTime.UTC(), endTime.UTC())
+
+	addCondition := func(condition string, values ...any) {
+		conditions = append(conditions, condition)
+		args = append(args, values...)
+	}
+
+	if strings.TrimSpace(filter.SessionID) != "" {
+		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), strings.TrimSpace(filter.SessionID))
+	}
+	if filter.UserID != nil && *filter.UserID > 0 {
+		addCondition(fmt.Sprintf("user_id = $%d", len(args)+1), *filter.UserID)
+	}
+	if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
+		addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := fmt.Sprintf(`SELECT COUNT(1) FROM security_chat_logs %s`, where)
+	var total int64
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		if err == sql.ErrNoRows {
+			total = 0
+		} else {
+			return nil, 0, err
+		}
+	}
+
+	listQuery := fmt.Sprintf(`
+SELECT
+  id,
+  session_id,
+  request_id,
+  client_request_id,
+  user_id,
+  api_key_id,
+  account_id,
+  group_id,
+  platform,
+  model,
+  request_path,
+  stream,
+  status_code,
+  messages::TEXT,
+  created_at
+FROM security_chat_logs
+%s
+ORDER BY created_at ASC
+LIMIT $%d OFFSET $%d;
+`, where, len(args)+1, len(args)+2)
+
+	listArgs := append(append([]any{}, args...), pageSize, offset)
+	rows, err := r.db.QueryContext(ctx, listQuery, listArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]*service.SecurityChatLog, 0)
+	for rows.Next() {
+		var (
+			row service.SecurityChatLog
+			messagesRaw string
+			userID sql.NullInt64
+			apiKeyID sql.NullInt64
+			accountID sql.NullInt64
+			groupID sql.NullInt64
+			platform sql.NullString
+			model sql.NullString
+			requestID sql.NullString
+			clientRequestID sql.NullString
+			requestPath sql.NullString
+			statusCode sql.NullInt64
+		)
+		if err := rows.Scan(
+			&row.ID,
+			&row.SessionID,
+			&requestID,
+			&clientRequestID,
+			&userID,
+			&apiKeyID,
+			&accountID,
+			&groupID,
+			&platform,
+			&model,
+			&requestPath,
+			&row.Stream,
+			&statusCode,
+			&messagesRaw,
+			&row.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+
+		if requestID.Valid {
+			row.RequestID = &requestID.String
+		}
+		if clientRequestID.Valid {
+			row.ClientRequestID = &clientRequestID.String
+		}
+		if userID.Valid {
+			v := userID.Int64
+			row.UserID = &v
+		}
+		if apiKeyID.Valid {
+			v := apiKeyID.Int64
+			row.APIKeyID = &v
+		}
+		if accountID.Valid {
+			v := accountID.Int64
+			row.AccountID = &v
+		}
+		if groupID.Valid {
+			v := groupID.Int64
+			row.GroupID = &v
+		}
+		if platform.Valid {
+			row.Platform = &platform.String
+		}
+		if model.Valid {
+			row.Model = &model.String
+		}
+		if requestPath.Valid {
+			row.RequestPath = &requestPath.String
+		}
+		if statusCode.Valid {
+			v := int(statusCode.Int64)
+			row.StatusCode = &v
+		}
+
+		var messages []service.SecurityChatMessage
+		if err := json.Unmarshal([]byte(messagesRaw), &messages); err == nil {
+			row.Messages = messages
+		}
+
+		items = append(items, &row)
+	}
+
+	return items, total, nil
+}
+
+func (r *securityChatRepository) DeleteExpired(ctx context.Context, cutoff time.Time) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, fmt.Errorf("nil security chat repository")
+	}
+	res, err := r.db.ExecContext(ctx, `DELETE FROM security_chat_logs WHERE expires_at < $1`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}

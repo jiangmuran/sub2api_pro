@@ -135,6 +135,12 @@ const (
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
 
+	// Security chat log retention (days)
+	SettingKeySecurityChatRetentionDays = "security_chat_retention_days"
+	SettingKeySecurityChatAIEnabled     = "security_chat_ai_enabled"
+	SettingKeySecurityChatAIBaseURL     = "security_chat_ai_base_url"
+	SettingKeySecurityChatAIModel       = "security_chat_ai_model"
+
 	// =========================
 	// Ops Monitoring (vNext)
 	// =========================

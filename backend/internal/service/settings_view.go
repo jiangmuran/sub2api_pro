@@ -59,6 +59,12 @@ type SystemSettings struct {
 	OpsRealtimeMonitoringEnabled bool
 	OpsQueryModeDefault          string
 	OpsMetricsIntervalSeconds    int
+
+	// Security chat logs
+	SecurityChatRetentionDays int
+	SecurityChatAIEnabled     bool
+	SecurityChatAIBaseURL     string
+	SecurityChatAIModel       string
 }
 
 type PublicSettings struct {

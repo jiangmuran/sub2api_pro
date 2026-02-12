@@ -203,6 +203,13 @@ func ProvideOpsScheduledReportService(
 	return svc
 }
 
+// ProvideSecurityChatCleanupService creates and starts SecurityChatCleanupService.
+func ProvideSecurityChatCleanupService(chatService *SecurityChatService, timingWheel *TimingWheelService) *SecurityChatCleanupService {
+	svc := NewSecurityChatCleanupService(chatService, timingWheel)
+	svc.Start()
+	return svc
+}
+
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
 	// Start Pub/Sub subscriber for L1 cache invalidation across instances
@@ -249,6 +256,8 @@ var ProviderSet = wire.NewSet(
 	NewAccountTestService,
 	NewSettingService,
 	NewOpsService,
+	NewSecurityChatService,
+	NewSecurityChatAIService,
 	ProvideOpsMetricsCollector,
 	ProvideOpsAggregationService,
 	ProvideOpsAlertEvaluatorService,
@@ -269,6 +278,7 @@ var ProviderSet = wire.NewSet(
 	ProvideTimingWheelService,
 	ProvideDashboardAggregationService,
 	ProvideUsageCleanupService,
+	ProvideSecurityChatCleanupService,
 	ProvideDeferredService,
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,

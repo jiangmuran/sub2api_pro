@@ -70,6 +70,9 @@ func RegisterAdminRoutes(
 
 		// 错误透传规则管理
 		registerErrorPassthroughRoutes(admin, h)
+
+		// 安全管理
+		registerSecurityRoutes(admin, h)
 	}
 }
 
@@ -151,6 +154,15 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/dashboard/latency-histogram", h.Admin.Ops.GetDashboardLatencyHistogram)
 		ops.GET("/dashboard/error-trend", h.Admin.Ops.GetDashboardErrorTrend)
 		ops.GET("/dashboard/error-distribution", h.Admin.Ops.GetDashboardErrorDistribution)
+	}
+}
+
+func registerSecurityRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	security := admin.Group("/security")
+	{
+		security.GET("/sessions", h.Admin.Security.ListChatSessions)
+		security.GET("/messages", h.Admin.Security.ListChatMessages)
+		security.POST("/summarize", h.Admin.Security.SummarizeChat)
 	}
 }
 
