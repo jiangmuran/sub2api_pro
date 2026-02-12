@@ -107,6 +107,7 @@ func (h *SecurityHandler) ListChatMessages(c *gin.Context) {
 		response.BadRequest(c, "session_id is required")
 		return
 	}
+	filter.IgnoreTimeRange = true
 
 	if v := strings.TrimSpace(c.Query("user_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
@@ -195,13 +196,27 @@ func (h *SecurityHandler) SummarizeChat(c *gin.Context) {
 		return
 	}
 	if len(logs.Items) == 0 {
-		response.Success(c, &service.SecurityChatSummaryResult{
-			Summary:           "No chat logs found",
-			SensitiveFindings: []string{},
-			RecommendedActions: []string{},
-			RiskLevel:         "low",
-		})
-		return
+		if req.SessionID != nil {
+			base := stripSessionSuffix(*req.SessionID)
+			if base != "" && base != strings.TrimSpace(*req.SessionID) {
+				filter.SessionID = base
+				filter.IgnoreTimeRange = true
+				logs, err = h.chatService.ListMessages(c.Request.Context(), filter)
+				if err != nil {
+					response.ErrorFrom(c, err)
+					return
+				}
+			}
+		}
+		if len(logs.Items) == 0 {
+			response.Success(c, &service.SecurityChatSummaryResult{
+				Summary:            "No chat logs found",
+				SensitiveFindings:  []string{},
+				RecommendedActions: []string{},
+				RiskLevel:          "low",
+			})
+			return
+		}
 	}
 	messages := make([]service.SecurityChatMessage, 0)
 	for _, log := range logs.Items {
@@ -358,4 +373,24 @@ func (h *SecurityHandler) ChatWithAI(c *gin.Context) {
 		return
 	}
 	response.Success(c, result)
+}
+
+func stripSessionSuffix(sessionID string) string {
+	value := strings.TrimSpace(sessionID)
+	if value == "" {
+		return ""
+	}
+	parts := strings.Split(value, ":")
+	if len(parts) < 3 {
+		return value
+	}
+	last := parts[len(parts)-1]
+	prev := parts[len(parts)-2]
+	if _, err := strconv.ParseInt(last, 10, 64); err != nil {
+		return value
+	}
+	if _, err := strconv.ParseInt(prev, 10, 64); err != nil {
+		return value
+	}
+	return strings.Join(parts[:len(parts)-2], ":")
 }
