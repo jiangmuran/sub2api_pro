@@ -3353,7 +3353,8 @@ export default {
       selectAll: '全选',
       bulkDelete: '批量删除',
       bulkDeleteConfirm: '确定删除选中会话及其记录吗？',
-      allResults: '全部结果'
+      allResults: '全部结果',
+      export: '导出'
     },
     settings: {
       title: '系统设置',

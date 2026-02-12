@@ -87,6 +87,14 @@ export async function listApiKeys(): Promise<SecurityApiKey[]> {
   return data
 }
 
+export async function exportSessions(params: Record<string, any>): Promise<Blob> {
+  const { data } = await apiClient.get('/admin/security/sessions/export', {
+    params,
+    responseType: 'blob'
+  })
+  return data
+}
+
 export async function deleteSession(sessionId: string, params?: Record<string, any>): Promise<any> {
   const { data } = await apiClient.delete(`/admin/security/sessions/${sessionId}`, { params })
   return data
@@ -107,6 +115,7 @@ export default {
   listMessages,
   summarize,
   listApiKeys,
+  exportSessions,
   deleteSession,
   bulkDeleteSessions,
   chatWithAI

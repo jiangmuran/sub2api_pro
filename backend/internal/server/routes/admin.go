@@ -161,6 +161,7 @@ func registerSecurityRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	security := admin.Group("/security")
 	{
 		security.GET("/sessions", h.Admin.Security.ListChatSessions)
+		security.GET("/sessions/export", h.Admin.Security.ExportSessions)
 		security.GET("/messages", h.Admin.Security.ListChatMessages)
 		security.POST("/summarize", h.Admin.Security.SummarizeChat)
 		security.GET("/api-keys", h.Admin.Security.ListAPIKeys)

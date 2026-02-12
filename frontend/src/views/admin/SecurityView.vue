@@ -17,6 +17,9 @@
             v-model:endDate="filters.endDate"
             @change="onDateRangeChange"
           />
+          <button class="btn btn-secondary btn-sm" @click="exportSessions">
+            {{ t('admin.security.export') }}
+          </button>
         </div>
       </div>
 
@@ -281,6 +284,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { saveAs } from 'file-saver'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
@@ -544,7 +548,8 @@ const summarize = async () => {
       end_time: selectedSession.value ? undefined : (filters.endDate ? toISO(filters.endDate, true) : undefined),
       user_id: filters.userId ? Number(filters.userId) : undefined,
       session_id: selectedSession.value?.session_id,
-      api_key_id: selectedSession.value?.api_key_id || selectedApiKeyId.value || undefined
+      api_key_id: selectedSession.value?.api_key_id || selectedApiKeyId.value || undefined,
+      ai_api_key_id: selectedApiKeyId.value || undefined
     }
     const data = await adminAPI.security.summarize(payload)
     aiSummary.value = data
@@ -567,7 +572,7 @@ const sendAiChat = async () => {
   aiChatMessages.value.push({ key: `user-${Date.now()}`, role: 'user', content: userMessage })
   try {
     const payload = {
-      api_key_id: selectedApiKeyId.value || undefined,
+      ai_api_key_id: selectedApiKeyId.value || undefined,
       context: buildAiContext(),
       messages: aiChatMessages.value.map((msg) => ({ role: msg.role, content: msg.content }))
     }
@@ -578,6 +583,22 @@ const sendAiChat = async () => {
   } finally {
     aiChatLoading.value = false
   }
+}
+
+const exportSessions = async () => {
+  const params: Record<string, any> = {
+    start_time: filters.startDate ? toISO(filters.startDate) : undefined,
+    end_time: filters.endDate ? toISO(filters.endDate, true) : undefined,
+    user_id: filters.userId ? Number(filters.userId) : undefined,
+    api_key_id: filters.apiKeyId ? Number(filters.apiKeyId) : undefined,
+    session_id: filters.sessionId || undefined,
+    platform: filters.platform || undefined,
+    model: filters.model || undefined,
+    q: filters.query || undefined
+  }
+  const blob = await adminAPI.security.exportSessions(params)
+  const name = `security_sessions_${new Date().toISOString().slice(0, 10)}.csv`
+  saveAs(blob, name)
 }
 
 const clearAiChat = () => {

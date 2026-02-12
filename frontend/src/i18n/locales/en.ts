@@ -3178,7 +3178,8 @@ export default {
       selectAll: 'Select all',
       bulkDelete: 'Bulk delete',
       bulkDeleteConfirm: 'Delete selected sessions and all their logs?',
-      allResults: 'all results'
+      allResults: 'all results',
+      export: 'Export'
     },
     settings: {
       title: 'System Settings',
