@@ -126,9 +126,12 @@
               <h2 class="text-base font-semibold text-gray-900 dark:text-white">
                 {{ t('admin.security.chat') }}
               </h2>
-              <span v-if="selectedSession" class="text-xs text-gray-500">
-                {{ selectedSession.session_id }}
-              </span>
+              <div v-if="selectedSession" class="flex items-center gap-2 text-xs text-gray-500">
+                <span>{{ selectedSession.session_id }}</span>
+                <button class="btn btn-ghost btn-xs" type="button" @click="deleteSession">
+                  {{ t('admin.security.deleteSession') }}
+                </button>
+              </div>
             </div>
           </div>
           <div class="space-y-4 p-6">
@@ -137,9 +140,17 @@
                 <span class="font-semibold text-gray-900 dark:text-gray-100">AI</span>
                 <span class="text-xs text-gray-500">{{ t('admin.security.aiHint') }}</span>
               </div>
-              <button class="btn btn-secondary btn-sm" :disabled="aiLoading" @click="summarize">
+              <div class="flex flex-wrap items-center gap-2">
+                <select v-model.number="selectedApiKeyId" class="input !h-8 !py-1 text-xs">
+                  <option :value="0">{{ t('admin.security.selectApiKey') }}</option>
+                  <option v-for="item in apiKeys" :key="item.id" :value="item.id">
+                    {{ item.name }} (#{{ item.id }})
+                  </option>
+                </select>
+                <button class="btn btn-secondary btn-sm" :disabled="aiLoading || !selectedApiKeyId" @click="summarize">
                 {{ aiLoading ? t('common.loading') : t('admin.security.aiSummarize') }}
-              </button>
+                </button>
+              </div>
             </div>
             <div v-if="aiError" class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {{ aiError }}
@@ -161,6 +172,32 @@
                 <ul class="mt-1 list-disc space-y-1 pl-5 text-xs text-gray-600">
                   <li v-for="item in aiSummary.recommended_actions" :key="item">{{ item }}</li>
                 </ul>
+              </div>
+            </div>
+            <div v-if="aiSummary" class="rounded-xl border border-gray-100 bg-white px-4 py-3 dark:border-dark-700 dark:bg-dark-900">
+              <div class="flex items-center justify-between">
+                <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ t('admin.security.aiChat') }}</div>
+                <button class="btn btn-ghost btn-xs" type="button" @click="clearAiChat">
+                  {{ t('admin.security.aiClear') }}
+                </button>
+              </div>
+              <div class="mt-3 space-y-3">
+                <div v-if="aiChatMessages.length === 0" class="text-xs text-gray-500">
+                  {{ t('admin.security.aiChatHint') }}
+                </div>
+                <div v-for="msg in aiChatMessages" :key="msg.key" class="flex" :class="msg.role === 'assistant' ? 'justify-start' : 'justify-end'">
+                  <div class="max-w-[80%] rounded-2xl px-4 py-2 text-xs" :class="msg.role === 'assistant'
+                    ? 'bg-gray-100 text-gray-800 dark:bg-dark-800 dark:text-gray-100'
+                    : 'bg-primary-600 text-white'">
+                    <div class="whitespace-pre-wrap break-words">{{ msg.content }}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-3 flex items-center gap-2">
+                <input v-model="aiChatInput" class="input flex-1" :placeholder="t('admin.security.aiChatInput')" @keydown.enter.prevent="sendAiChat" />
+                <button class="btn btn-primary btn-sm" :disabled="aiChatLoading || !aiChatInput || !selectedApiKeyId" @click="sendAiChat">
+                  {{ aiChatLoading ? t('common.loading') : t('admin.security.aiChatSend') }}
+                </button>
               </div>
             </div>
             <div v-if="!selectedSession" class="py-12 text-center text-sm text-gray-500">
@@ -201,8 +238,11 @@
                       {{ msg.role }} · {{ msg.source }}
                     </div>
                     <div class="mt-2 whitespace-pre-wrap break-words">
-                      {{ msg.content }}
-                    </div>
+                    {{ formatMessageContent(msg) }}
+                  </div>
+                  <button v-if="isMessageLong(msg)" class="mt-2 text-[11px] text-blue-500" type="button" @click="toggleMessage(msg.key)">
+                    {{ isMessageExpanded(msg.key) ? t('admin.security.collapse') : t('admin.security.expand') }}
+                  </button>
                   </div>
                 </div>
               </div>
@@ -221,7 +261,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import SearchInput from '@/components/common/SearchInput.vue'
 import { adminAPI } from '@/api'
-import type { SecurityChatSession, SecurityChatLog } from '@/api/admin/security'
+import type { SecurityChatSession, SecurityChatLog, SecurityApiKey } from '@/api/admin/security'
 
 const { t } = useI18n()
 
@@ -246,6 +286,9 @@ const messages = ref(
 const selectedSession = ref<SecurityChatSession | null>(null)
 const selectedSessionKey = computed(() => (selectedSession.value ? sessionKey(selectedSession.value) : ''))
 
+const apiKeys = ref<SecurityApiKey[]>([])
+const selectedApiKeyId = ref<number>(0)
+
 const aiLoading = ref(false)
 const aiError = ref('')
 const aiSummary = ref<null | {
@@ -254,6 +297,12 @@ const aiSummary = ref<null | {
   risk_level?: string
   recommended_actions?: string[]
 }>(null)
+
+const aiChatMessages = ref<Array<{ key: string; role: string; content: string }>>([])
+const aiChatInput = ref('')
+const aiChatLoading = ref(false)
+
+const expandedMessages = ref<Set<string>>(new Set())
 
 const filters = reactive({
   query: '',
@@ -401,11 +450,38 @@ const refresh = async () => {
   messages.value = []
   aiSummary.value = null
   aiError.value = ''
+  aiChatMessages.value = []
   await fetchSessions()
 }
 
 const onDateRangeChange = () => {
   refresh()
+}
+
+const fetchApiKeys = async () => {
+  try {
+    const list = await adminAPI.security.listApiKeys()
+    apiKeys.value = list
+    if (!selectedApiKeyId.value && list.length > 0) {
+      selectedApiKeyId.value = list[0].id
+    }
+  } catch (err) {
+    apiKeys.value = []
+  }
+}
+
+const buildAiContext = () => {
+  if (!selectedSession.value) return ''
+  const slices = messageBlocks.value.slice(0, 6)
+  const lines: string[] = []
+  slices.forEach((block) => {
+    lines.push(`[${block.created_at}] ${block.model || '-'} ${block.platform || '-'}`)
+    block.messages.slice(0, 6).forEach((msg) => {
+      const content = msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content
+      lines.push(`${msg.role}: ${content}`)
+    })
+  })
+  return lines.join('\n')
 }
 
 const summarize = async () => {
@@ -416,11 +492,14 @@ const summarize = async () => {
       start_time: filters.startDate ? toISO(filters.startDate) : undefined,
       end_time: filters.endDate ? toISO(filters.endDate, true) : undefined,
       user_id: filters.userId ? Number(filters.userId) : undefined,
-      api_key_id: filters.apiKeyId ? Number(filters.apiKeyId) : undefined,
-      session_id: selectedSession.value?.session_id
+      session_id: selectedSession.value?.session_id,
+      api_key_id: selectedApiKeyId.value || undefined
     }
     const data = await adminAPI.security.summarize(payload)
     aiSummary.value = data
+    aiChatMessages.value = data.summary
+      ? [{ key: `ai-${Date.now()}`, role: 'assistant', content: data.summary }]
+      : []
   } catch (err: any) {
     aiError.value = err?.message || t('common.unknownError')
   } finally {
@@ -428,7 +507,66 @@ const summarize = async () => {
   }
 }
 
+const sendAiChat = async () => {
+  if (!aiChatInput.value) return
+  aiChatLoading.value = true
+  aiError.value = ''
+  const userMessage = aiChatInput.value
+  aiChatInput.value = ''
+  aiChatMessages.value.push({ key: `user-${Date.now()}`, role: 'user', content: userMessage })
+  try {
+    const payload = {
+      api_key_id: selectedApiKeyId.value || undefined,
+      context: buildAiContext(),
+      messages: aiChatMessages.value.map((msg) => ({ role: msg.role, content: msg.content }))
+    }
+    const data = await adminAPI.security.chatWithAI(payload)
+    aiChatMessages.value.push({ key: `ai-${Date.now()}`, role: 'assistant', content: data.summary })
+  } catch (err: any) {
+    aiError.value = err?.message || t('common.unknownError')
+  } finally {
+    aiChatLoading.value = false
+  }
+}
+
+const clearAiChat = () => {
+  aiChatMessages.value = []
+}
+
+const isMessageLong = (msg: { content: string }) => {
+  return msg.content.split('\n').length > 10
+}
+
+const isMessageExpanded = (key: string) => expandedMessages.value.has(key)
+
+const toggleMessage = (key: string) => {
+  if (expandedMessages.value.has(key)) {
+    expandedMessages.value.delete(key)
+  } else {
+    expandedMessages.value.add(key)
+  }
+}
+
+const formatMessageContent = (msg: { key: string; content: string }) => {
+  if (!isMessageLong(msg) || isMessageExpanded(msg.key)) return msg.content
+  const lines = msg.content.split('\n')
+  const head = lines.slice(0, 5)
+  const tail = lines.slice(-5)
+  return [...head, '... ...', ...tail].join('\n')
+}
+
+const deleteSession = async () => {
+  if (!selectedSession.value) return
+  if (!confirm(t('admin.security.deleteConfirm'))) return
+  await adminAPI.security.deleteSession(selectedSession.value.session_id, {
+    user_id: selectedSession.value.user_id,
+    api_key_id: selectedSession.value.api_key_id
+  })
+  await refresh()
+}
+
 onMounted(() => {
   refresh()
+  fetchApiKeys()
 })
 </script>

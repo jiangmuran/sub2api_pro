@@ -3164,7 +3164,17 @@ export default {
       aiSummary: 'Summary',
       aiRisk: 'Risk',
       aiFindings: 'Sensitive Findings',
-      aiActions: 'Recommended Actions'
+      aiActions: 'Recommended Actions',
+      selectApiKey: 'Select API Key',
+      aiChat: 'Follow-up Chat',
+      aiClear: 'Clear',
+      aiChatHint: 'Ask follow-up questions based on the summary.',
+      aiChatInput: 'Ask a question...',
+      aiChatSend: 'Send',
+      expand: 'Expand',
+      collapse: 'Collapse',
+      deleteSession: 'Delete Session',
+      deleteConfirm: 'Delete this session and all its logs?'
     },
     settings: {
       title: 'System Settings',

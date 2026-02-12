@@ -3338,7 +3338,17 @@ export default {
       aiSummary: '摘要',
       aiRisk: '风险等级',
       aiFindings: '敏感信息',
-      aiActions: '建议操作'
+      aiActions: '建议操作',
+      selectApiKey: '选择 API Key',
+      aiChat: '继续审查',
+      aiClear: '清空',
+      aiChatHint: '基于摘要继续追问。',
+      aiChatInput: '输入问题...',
+      aiChatSend: '发送',
+      expand: '展开',
+      collapse: '收起',
+      deleteSession: '删除会话',
+      deleteConfirm: '确定删除该会话及其记录吗？'
     },
     settings: {
       title: '系统设置',

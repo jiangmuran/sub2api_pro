@@ -59,6 +59,13 @@ export interface SecurityChatSummary {
   recommended_actions?: string[]
 }
 
+export interface SecurityApiKey {
+  id: number
+  name: string
+  group_id?: number | null
+  status: string
+}
+
 export async function listSessions(params: Record<string, any>): Promise<SecurityChatSessionList> {
   const { data } = await apiClient.get<SecurityChatSessionList>('/admin/security/sessions', { params })
   return data
@@ -74,8 +81,26 @@ export async function summarize(payload: Record<string, any>): Promise<SecurityC
   return data
 }
 
+export async function listApiKeys(): Promise<SecurityApiKey[]> {
+  const { data } = await apiClient.get<SecurityApiKey[]>('/admin/security/api-keys')
+  return data
+}
+
+export async function deleteSession(sessionId: string, params?: Record<string, any>): Promise<any> {
+  const { data } = await apiClient.delete(`/admin/security/sessions/${sessionId}`, { params })
+  return data
+}
+
+export async function chatWithAI(payload: Record<string, any>): Promise<SecurityChatSummary> {
+  const { data } = await apiClient.post<SecurityChatSummary>('/admin/security/ai-chat', payload)
+  return data
+}
+
 export default {
   listSessions,
   listMessages,
-  summarize
+  summarize,
+  listApiKeys,
+  deleteSession,
+  chatWithAI
 }

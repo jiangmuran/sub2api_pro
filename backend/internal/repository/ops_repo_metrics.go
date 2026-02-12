@@ -68,9 +68,6 @@ INSERT INTO ops_system_metrics (
   disk_used_mb,
   disk_total_mb,
   disk_usage_percent,
-  disk_used_mb,
-  disk_total_mb,
-  disk_usage_percent,
 
   db_ok,
   redis_ok,

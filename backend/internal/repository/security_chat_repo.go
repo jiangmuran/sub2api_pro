@@ -472,3 +472,42 @@ func (r *securityChatRepository) DeleteExpiredSessions(ctx context.Context, cuto
 	n, _ := res.RowsAffected()
 	return n, nil
 }
+
+func (r *securityChatRepository) DeleteSession(ctx context.Context, sessionID string, userID *int64, apiKeyID *int64) (int64, int64, error) {
+	if r == nil || r.db == nil {
+		return 0, 0, fmt.Errorf("nil security chat repository")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return 0, 0, fmt.Errorf("session_id required")
+	}
+
+	conditions := []string{"session_id = $1"}
+	args := []any{sessionID}
+
+	if userID != nil && *userID > 0 {
+		conditions = append(conditions, fmt.Sprintf("user_id = $%d", len(args)+1))
+		args = append(args, *userID)
+	}
+	if apiKeyID != nil && *apiKeyID > 0 {
+		conditions = append(conditions, fmt.Sprintf("api_key_id = $%d", len(args)+1))
+		args = append(args, *apiKeyID)
+	}
+	where := strings.Join(conditions, " AND ")
+
+	deleteLogsQuery := fmt.Sprintf("DELETE FROM security_chat_logs WHERE %s", where)
+	resLogs, err := r.db.ExecContext(ctx, deleteLogsQuery, args...)
+	if err != nil {
+		return 0, 0, err
+	}
+	logsDeleted, _ := resLogs.RowsAffected()
+
+	deleteSessionsQuery := fmt.Sprintf("DELETE FROM security_chat_sessions WHERE %s", where)
+	resSessions, err := r.db.ExecContext(ctx, deleteSessionsQuery, args...)
+	if err != nil {
+		return logsDeleted, 0, err
+	}
+	sessionsDeleted, _ := resSessions.RowsAffected()
+
+	return logsDeleted, sessionsDeleted, nil
+}

@@ -10,21 +10,22 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
 type SecurityChatAIService struct {
-	settings            *SettingService
-	apiKeyService        *APIKeyService
-	userService          *UserService
-	openAIGatewayService *OpenAIGatewayService
+	settings     *SettingService
+	apiKeyService *APIKeyService
+	cfg          *config.Config
 }
 
-func NewSecurityChatAIService(settings *SettingService, apiKeyService *APIKeyService, userService *UserService, openAIGatewayService *OpenAIGatewayService) *SecurityChatAIService {
+func NewSecurityChatAIService(settings *SettingService, apiKeyService *APIKeyService, cfg *config.Config) *SecurityChatAIService {
 	return &SecurityChatAIService{
-		settings:            settings,
-		apiKeyService:        apiKeyService,
-		userService:          userService,
-		openAIGatewayService: openAIGatewayService,
+		settings:     settings,
+		apiKeyService: apiKeyService,
+		cfg:          cfg,
 	}
 }
 
@@ -49,8 +50,8 @@ type SecurityChatSummaryResult struct {
 	RecommendedActions []string `json:"recommended_actions"`
 }
 
-func (s *SecurityChatAIService) Summarize(ctx context.Context, input *SecurityChatSummaryInput, userID int64) (*SecurityChatSummaryResult, error) {
-	if s == nil || s.settings == nil || s.apiKeyService == nil || s.userService == nil || s.openAIGatewayService == nil {
+func (s *SecurityChatAIService) Summarize(ctx context.Context, input *SecurityChatSummaryInput, userID int64, apiKeyID *int64) (*SecurityChatSummaryResult, error) {
+	if s == nil || s.settings == nil || s.apiKeyService == nil {
 		return nil, errors.New("security ai service unavailable")
 	}
 	settings, err := s.settings.GetAllSettings(ctx)
@@ -68,11 +69,7 @@ func (s *SecurityChatAIService) Summarize(ctx context.Context, input *SecurityCh
 		return nil, errors.New("security chat AI config invalid")
 	}
 
-	user, err := s.userService.GetByID(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	apiKey, err := s.getOrCreateUserAPIKey(ctx, userID)
+	apiKey, err := s.getUserAPIKey(ctx, userID, apiKeyID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,28 +90,7 @@ func (s *SecurityChatAIService) Summarize(ctx context.Context, input *SecurityCh
 		return nil, err
 	}
 
-	account, release, err := s.selectOpenAIAccount(ctx, apiKey.GroupID, model)
-	if err != nil {
-		return nil, err
-	}
-	if release != nil {
-		defer release()
-	}
-
-	baseURL := strings.TrimRight(account.GetOpenAIBaseURL(), "/")
-	if baseURL == "" {
-		baseURL = strings.TrimRight(settings.SecurityChatAIBaseURL, "/")
-	}
-	if baseURL == "" {
-		baseURL = "https://api.openai.com"
-	}
-
-	endpoint := baseURL + "/v1/chat/completions"
-	if strings.HasSuffix(baseURL, "/v1") {
-		endpoint = baseURL + "/chat/completions"
-	}
-
-	token, _, err := s.openAIGatewayService.GetAccessToken(ctx, account)
+	endpoint, err := s.resolveGatewayEndpoint(settings)
 	if err != nil {
 		return nil, err
 	}
@@ -124,9 +100,8 @@ func (s *SecurityChatAIService) Summarize(ctx context.Context, input *SecurityCh
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey.Key))
 
-	startedAt := time.Now()
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -147,28 +122,103 @@ func (s *SecurityChatAIService) Summarize(ctx context.Context, input *SecurityCh
 		return nil, errors.New("ai response empty")
 	}
 
-	result := &OpenAIForwardResult{
-		RequestID: requestIDFromHeaders(resp.Header),
-		Usage:     usage,
-		Model:     model,
-		Stream:    false,
-		Duration:  time.Since(startedAt),
-	}
-	_ = s.openAIGatewayService.RecordUsage(ctx, &OpenAIRecordUsageInput{
-		Result:        result,
-		APIKey:        apiKey,
-		User:          user,
-		Account:       account,
-		Subscription:  nil,
-		UserAgent:     "security-ai",
-		APIKeyService: s.apiKeyService,
-	})
-
+	_ = usage
 	var out SecurityChatSummaryResult
 	if err := json.Unmarshal([]byte(content), &out); err == nil {
 		return &out, nil
 	}
 
+	return &SecurityChatSummaryResult{Summary: content}, nil
+}
+
+func (s *SecurityChatAIService) Chat(ctx context.Context, userID int64, apiKeyID *int64, contextText string, model string, messages []SecurityChatMessage) (*SecurityChatSummaryResult, error) {
+	if s == nil || s.settings == nil || s.apiKeyService == nil {
+		return nil, errors.New("security ai service unavailable")
+	}
+	settings, err := s.settings.GetAllSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !settings.SecurityChatAIEnabled {
+		return nil, errors.New("security chat AI disabled")
+	}
+	if userID <= 0 {
+		return nil, errors.New("invalid user")
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = strings.TrimSpace(settings.SecurityChatAIModel)
+	}
+	if model == "" {
+		return nil, errors.New("security chat AI config invalid")
+	}
+	apiKey, err := s.getUserAPIKey(ctx, userID, apiKeyID)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint, err := s.resolveGatewayEndpoint(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	chatMessages := make([]map[string]any, 0, len(messages)+2)
+	chatMessages = append(chatMessages, map[string]any{
+		"role":    "system",
+		"content": "You are a security audit assistant. Provide concise, practical answers.",
+	})
+	if strings.TrimSpace(contextText) != "" {
+		chatMessages = append(chatMessages, map[string]any{
+			"role":    "system",
+			"content": contextText,
+		})
+	}
+	for _, msg := range messages {
+		role := strings.TrimSpace(msg.Role)
+		if role == "" {
+			role = "user"
+		}
+		chatMessages = append(chatMessages, map[string]any{
+			"role":    role,
+			"content": msg.Content,
+		})
+	}
+
+	requestBody := map[string]any{
+		"model": model,
+		"messages": chatMessages,
+		"temperature": 0.2,
+	}
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey.Key))
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("ai request failed: %s", string(respBytes))
+	}
+
+	content, _ := extractChatCompletionResult(respBytes)
+	if strings.TrimSpace(content) == "" {
+		return nil, errors.New("ai response empty")
+	}
 	return &SecurityChatSummaryResult{Summary: content}, nil
 }
 
@@ -248,48 +298,47 @@ func extractChatCompletionResult(raw []byte) (string, OpenAIUsage) {
 	return content, usage
 }
 
-func (s *SecurityChatAIService) selectOpenAIAccount(ctx context.Context, groupID *int64, model string) (*Account, func(), error) {
-	if s.openAIGatewayService == nil {
-		return nil, nil, errors.New("openai gateway unavailable")
-	}
-	excluded := make(map[int64]struct{})
-	for i := 0; i < 6; i++ {
-		selection, err := s.openAIGatewayService.SelectAccountWithLoadAwareness(ctx, groupID, "", model, excluded)
+func (s *SecurityChatAIService) getUserAPIKey(ctx context.Context, userID int64, apiKeyID *int64) (*APIKey, error) {
+	if apiKeyID != nil && *apiKeyID > 0 {
+		key, err := s.apiKeyService.GetByID(ctx, *apiKeyID)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		if selection == nil || selection.Account == nil {
-			return nil, nil, errors.New("no available accounts")
+		if key.UserID != userID {
+			return nil, errors.New("api key does not belong to user")
 		}
-		if !selection.Acquired {
-			return nil, nil, errors.New("account busy")
-		}
-		if selection.Account.Type == AccountTypeAPIKey {
-			return selection.Account, selection.ReleaseFunc, nil
-		}
-		excluded[selection.Account.ID] = struct{}{}
-		if selection.ReleaseFunc != nil {
-			selection.ReleaseFunc()
-		}
+		return key, nil
 	}
-	return nil, nil, errors.New("no api key accounts available")
-}
-
-func (s *SecurityChatAIService) getOrCreateUserAPIKey(ctx context.Context, userID int64) (*APIKey, error) {
-	const name = "Security AI"
-	keys, err := s.apiKeyService.SearchAPIKeys(ctx, userID, name, 5)
-	if err == nil {
-		for i := range keys {
-			if strings.EqualFold(strings.TrimSpace(keys[i].Name), name) {
-				return s.apiKeyService.GetByID(ctx, keys[i].ID)
-			}
-		}
-	}
-	created, err := s.apiKeyService.Create(ctx, userID, CreateAPIKeyRequest{Name: name})
+	keys, _, err := s.apiKeyService.List(ctx, userID, pagination.PaginationParams{Page: 1, PageSize: 50})
 	if err != nil {
 		return nil, err
 	}
-	return s.apiKeyService.GetByID(ctx, created.ID)
+	for i := range keys {
+		if keys[i].Status == StatusActive {
+			return s.apiKeyService.GetByID(ctx, keys[i].ID)
+		}
+	}
+	return nil, errors.New("no available api keys")
+}
+
+func (s *SecurityChatAIService) resolveGatewayEndpoint(settings *SystemSettings) (string, error) {
+	baseURL := strings.TrimSpace(settings.APIBaseURL)
+	if baseURL == "" && s.cfg != nil {
+		port := s.cfg.Server.Port
+		if port == 0 {
+			port = 80
+		}
+		baseURL = fmt.Sprintf("http://127.0.0.1:%d", port)
+	}
+	if baseURL == "" {
+		return "", errors.New("api_base_url not configured")
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	endpoint := baseURL + "/v1/chat/completions"
+	if strings.HasSuffix(baseURL, "/v1") {
+		endpoint = baseURL + "/chat/completions"
+	}
+	return endpoint, nil
 }
 
 func requestIDFromHeaders(headers http.Header) string {

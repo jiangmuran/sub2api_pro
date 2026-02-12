@@ -163,6 +163,9 @@ func registerSecurityRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		security.GET("/sessions", h.Admin.Security.ListChatSessions)
 		security.GET("/messages", h.Admin.Security.ListChatMessages)
 		security.POST("/summarize", h.Admin.Security.SummarizeChat)
+		security.GET("/api-keys", h.Admin.Security.ListAPIKeys)
+		security.DELETE("/sessions/:session_id", h.Admin.Security.DeleteSession)
+		security.POST("/ai-chat", h.Admin.Security.ChatWithAI)
 	}
 }
 
