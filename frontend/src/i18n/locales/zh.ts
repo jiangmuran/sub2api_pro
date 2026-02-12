@@ -585,6 +585,7 @@ export default {
     tokenDetails: 'Token 明细',
     totalRequests: '总请求数',
     totalTokens: '总 Token',
+    cache: '缓存',
     totalCost: '总消费',
     standardCost: '标准',
     actualCost: '实际',

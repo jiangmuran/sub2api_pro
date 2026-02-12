@@ -19,6 +19,9 @@
           {{ t('usage.in') }}: {{ formatTokens(stats?.total_input_tokens || 0) }} /
           {{ t('usage.out') }}: {{ formatTokens(stats?.total_output_tokens || 0) }}
         </p>
+        <p class="text-xs text-gray-500">
+          {{ t('usage.cache') }}: {{ formatTokens(stats?.total_cache_tokens || 0) }}
+        </p>
       </div>
     </div>
     <div class="card p-4 flex items-center gap-3">
