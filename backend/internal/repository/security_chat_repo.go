@@ -307,7 +307,6 @@ func (r *securityChatRepository) ListMessages(ctx context.Context, filter *servi
 
 	conditions := make([]string, 0, 8)
 	args := make([]any, 0, 12)
-	args = append(args, startTime.UTC(), endTime.UTC())
 
 	addCondition := func(condition string, values ...any) {
 		conditions = append(conditions, condition)
