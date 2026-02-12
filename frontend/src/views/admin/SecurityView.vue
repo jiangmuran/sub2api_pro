@@ -477,6 +477,9 @@ const messageBlocks = computed(() => {
 
 const selectSession = async (session: SecurityChatSession) => {
   selectedSession.value = session
+  if (session.api_key_id) {
+    selectedApiKeyId.value = session.api_key_id
+  }
   messages.value = []
   await fetchMessages(session)
 }
@@ -530,7 +533,7 @@ const summarize = async () => {
       end_time: filters.endDate ? toISO(filters.endDate, true) : undefined,
       user_id: filters.userId ? Number(filters.userId) : undefined,
       session_id: selectedSession.value?.session_id,
-      api_key_id: selectedApiKeyId.value || undefined
+      api_key_id: selectedSession.value?.api_key_id || selectedApiKeyId.value || undefined
     }
     const data = await adminAPI.security.summarize(payload)
     aiSummary.value = data

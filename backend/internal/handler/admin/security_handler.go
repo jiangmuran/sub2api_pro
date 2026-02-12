@@ -176,15 +176,16 @@ func (h *SecurityHandler) SummarizeChat(c *gin.Context) {
 	}
 
 	filter := &service.SecurityChatMessageFilter{
-		StartTime: &startTime,
-		EndTime:   &endTime,
-		UserID:    req.UserID,
-		APIKeyID:  req.APIKeyID,
-		PageSize:  500,
+		StartTime:         &startTime,
+		EndTime:           &endTime,
+		PageSize:          500,
 		AllowEmptySession: true,
 	}
-	if req.SessionID != nil {
+	if req.SessionID != nil && strings.TrimSpace(*req.SessionID) != "" {
 		filter.SessionID = strings.TrimSpace(*req.SessionID)
+	} else {
+		filter.UserID = req.UserID
+		filter.APIKeyID = req.APIKeyID
 	}
 
 	logs, err := h.chatService.ListMessages(c.Request.Context(), filter)
