@@ -24,7 +24,29 @@ const (
 	// OpsSkipPassthroughKey 由 applyErrorPassthroughRule 在命中 skip_monitoring=true 的规则时设置。
 	// ops_error_logger 中间件检查此 key，为 true 时跳过错误记录。
 	OpsSkipPassthroughKey = "ops_skip_passthrough"
+
+	// Optional stage latencies (milliseconds) for troubleshooting and alerting.
+	OpsAuthLatencyMsKey      = "ops_auth_latency_ms"
+	OpsRoutingLatencyMsKey   = "ops_routing_latency_ms"
+	OpsUpstreamLatencyMsKey  = "ops_upstream_latency_ms"
+	OpsResponseLatencyMsKey  = "ops_response_latency_ms"
+	OpsTimeToFirstTokenMsKey = "ops_time_to_first_token_ms"
 )
+
+func setOpsUpstreamRequestBody(c *gin.Context, body []byte) {
+	if c == nil || len(body) == 0 {
+		return
+	}
+	// 热路径避免 string(body) 额外分配，按需在落库前再转换。
+	c.Set(OpsUpstreamRequestBodyKey, body)
+}
+
+func SetOpsLatencyMs(c *gin.Context, key string, value int64) {
+	if c == nil || strings.TrimSpace(key) == "" || value < 0 {
+		return
+	}
+	c.Set(key, value)
+}
 
 func setOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage, upstreamDetail string) {
 	if c == nil {
@@ -91,8 +113,11 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 	// stored it on the context, attach it so ops can retry this specific attempt.
 	if ev.UpstreamRequestBody == "" {
 		if v, ok := c.Get(OpsUpstreamRequestBodyKey); ok {
-			if s, ok := v.(string); ok {
-				ev.UpstreamRequestBody = strings.TrimSpace(s)
+			switch raw := v.(type) {
+			case string:
+				ev.UpstreamRequestBody = strings.TrimSpace(raw)
+			case []byte:
+				ev.UpstreamRequestBody = strings.TrimSpace(string(raw))
 			}
 		}
 	}

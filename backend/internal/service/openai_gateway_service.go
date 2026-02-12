@@ -44,6 +44,13 @@ const (
 // Some upstream APIs return non-standard "data:" without space (should be "data: ").
 var openaiSSEDataRe = regexp.MustCompile(`^data:\s*`)
 
+func extractOpenAISSEDataLine(line string) (string, bool) {
+	if !openaiSSEDataRe.MatchString(line) {
+		return "", false
+	}
+	return openaiSSEDataRe.ReplaceAllString(line, ""), true
+}
+
 // OpenAI allowed headers whitelist (for non-OAuth accounts)
 var openaiAllowedHeaders = map[string]bool{
 	"accept-language": true,
@@ -901,9 +908,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	// Capture upstream request body for ops retry of this attempt.
-	if c != nil {
-		c.Set(OpsUpstreamRequestBodyKey, string(body))
-	}
+	setOpsUpstreamRequestBody(c, body)
 
 	// Send request
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
@@ -1088,9 +1093,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		proxyURL = account.Proxy.URL()
 	}
 
-	if c != nil {
-		c.Set(OpsUpstreamRequestBodyKey, string(body))
-	}
+	setOpsUpstreamRequestBody(c, body)
 	if c != nil {
 		c.Set("openai_passthrough", true)
 	}
