@@ -731,6 +731,79 @@ const handleBulkToggleSchedulable = async (schedulable: boolean) => {
 }
 const handleBulkUpdated = () => { showBulkEdit.value = false; selIds.value = []; reload() }
 const handleDataImported = () => { showImportData.value = false; reload() }
+const accountMatchesCurrentFilters = (account: Account) => {
+  if (params.platform && account.platform !== params.platform) return false
+  if (params.type && account.type !== params.type) return false
+  if (params.status) {
+    if (params.status === 'rate_limited') {
+      if (!account.rate_limit_reset_at) return false
+      const resetAt = new Date(account.rate_limit_reset_at).getTime()
+      if (!Number.isFinite(resetAt) || resetAt <= Date.now()) return false
+    } else if (account.status !== params.status) {
+      return false
+    }
+  }
+  const search = String(params.search || '').trim().toLowerCase()
+  if (search && !account.name.toLowerCase().includes(search)) return false
+  return true
+}
+const mergeRuntimeFields = (oldAccount: Account, updatedAccount: Account): Account => ({
+  ...updatedAccount,
+  current_concurrency: updatedAccount.current_concurrency ?? oldAccount.current_concurrency,
+  current_window_cost: updatedAccount.current_window_cost ?? oldAccount.current_window_cost,
+  active_sessions: updatedAccount.active_sessions ?? oldAccount.active_sessions
+})
+
+const syncPaginationAfterLocalRemoval = () => {
+  const nextTotal = Math.max(0, pagination.total - 1)
+  pagination.total = nextTotal
+  pagination.pages = nextTotal > 0 ? Math.ceil(nextTotal / pagination.page_size) : 0
+
+  const maxPage = Math.max(1, pagination.pages || 1)
+  let shouldReload = false
+
+  if (pagination.page > maxPage) {
+    pagination.page = maxPage
+    shouldReload = nextTotal > 0
+  } else if (nextTotal > 0) {
+    const displayedEnd = (pagination.page - 1) * pagination.page_size + accounts.value.length
+    // 当前页条目变少时，若后续还有数据则补齐，避免空页/少一条直到手动刷新。
+    shouldReload = displayedEnd < nextTotal
+  }
+
+  if (shouldReload) {
+    load().catch((error) => {
+      console.error('Failed to refresh accounts after local removal:', error)
+    })
+  }
+}
+
+const patchAccountInList = (updatedAccount: Account) => {
+  const index = accounts.value.findIndex(account => account.id === updatedAccount.id)
+  if (index === -1) return
+  const mergedAccount = mergeRuntimeFields(accounts.value[index], updatedAccount)
+  if (!accountMatchesCurrentFilters(mergedAccount)) {
+    accounts.value = accounts.value.filter(account => account.id !== mergedAccount.id)
+    syncPaginationAfterLocalRemoval()
+    selIds.value = selIds.value.filter(id => id !== mergedAccount.id)
+    if (menu.acc?.id === mergedAccount.id) {
+      menu.show = false
+      menu.acc = null
+    }
+    return
+  }
+  const nextAccounts = [...accounts.value]
+  nextAccounts[index] = mergedAccount
+  accounts.value = nextAccounts
+  if (edAcc.value?.id === mergedAccount.id) edAcc.value = mergedAccount
+  if (reAuthAcc.value?.id === mergedAccount.id) reAuthAcc.value = mergedAccount
+  if (tempUnschedAcc.value?.id === mergedAccount.id) tempUnschedAcc.value = mergedAccount
+  if (deletingAcc.value?.id === mergedAccount.id) deletingAcc.value = mergedAccount
+  if (menu.acc?.id === mergedAccount.id) menu.acc = mergedAccount
+}
+const handleAccountUpdated = (updatedAccount: Account) => {
+  patchAccountInList(updatedAccount)
+}
 const formatExportTimestamp = () => {
   const now = new Date()
   const pad2 = (value: number) => String(value).padStart(2, '0')
