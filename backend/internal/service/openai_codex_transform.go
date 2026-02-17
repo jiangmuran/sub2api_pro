@@ -310,12 +310,12 @@ func GetCodexCLIInstructions() string {
 
 // applyInstructions 处理 instructions 字段
 // isCodexCLI=true: 仅补充缺失的 instructions（使用 opencode 指令）
-// isCodexCLI=false: 优先使用 opencode 指令覆盖
+// isCodexCLI=false: 不注入 instructions
 func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
-	if isCodexCLI {
-		return applyCodexCLIInstructions(reqBody)
+	if !isCodexCLI {
+		return false
 	}
-	return applyOpenCodeInstructions(reqBody)
+	return applyCodexCLIInstructions(reqBody)
 }
 
 // applyCodexCLIInstructions 为 Codex CLI 请求补充缺失的 instructions

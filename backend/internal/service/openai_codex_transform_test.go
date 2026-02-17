@@ -226,8 +226,8 @@ func TestApplyCodexOAuthTransform_CodexCLI_AddsInstructionsWhenEmpty(t *testing.
 	require.True(t, result.Modified)
 }
 
-func TestApplyCodexOAuthTransform_NonCodexCLI_UsesOpenCodeInstructions(t *testing.T) {
-	// 非 Codex CLI 场景：使用 opencode 指令（缓存中有 header）
+func TestApplyCodexOAuthTransform_NonCodexCLI_DoesNotInjectInstructions(t *testing.T) {
+	// 非 Codex CLI 场景：不注入 instructions
 	setupCodexCache(t)
 
 	reqBody := map[string]any{
@@ -237,9 +237,8 @@ func TestApplyCodexOAuthTransform_NonCodexCLI_UsesOpenCodeInstructions(t *testin
 
 	result := applyCodexOAuthTransform(reqBody, false)
 
-	instructions, ok := reqBody["instructions"].(string)
-	require.True(t, ok)
-	require.Equal(t, "header", instructions) // setupCodexCache 设置的缓存内容
+	_, ok := reqBody["instructions"]
+	require.False(t, ok)
 	require.True(t, result.Modified)
 }
 
@@ -284,7 +283,7 @@ func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T
 }
 
 func TestApplyCodexOAuthTransform_NonCodexCLI_OverridesInstructions(t *testing.T) {
-	// 非 Codex CLI 场景：使用 opencode 指令覆盖
+	// 非 Codex CLI 场景：保留用户 instructions
 	setupCodexCache(t)
 
 	reqBody := map[string]any{
@@ -296,7 +295,7 @@ func TestApplyCodexOAuthTransform_NonCodexCLI_OverridesInstructions(t *testing.T
 
 	instructions, ok := reqBody["instructions"].(string)
 	require.True(t, ok)
-	require.NotEqual(t, "old instructions", instructions)
+	require.Equal(t, "old instructions", instructions)
 	require.True(t, result.Modified)
 }
 

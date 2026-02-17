@@ -13,7 +13,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -106,22 +105,6 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	if reqModel == "" {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
-	}
-
-	userAgent := c.GetHeader("User-Agent")
-	if !openai.IsCodexCLIRequest(userAgent) {
-		existingInstructions, _ := reqBody["instructions"].(string)
-		if strings.TrimSpace(existingInstructions) == "" {
-			if instructions := strings.TrimSpace(service.GetOpenCodeInstructions()); instructions != "" {
-				reqBody["instructions"] = instructions
-				// Re-serialize body
-				body, err = json.Marshal(reqBody)
-				if err != nil {
-					h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to process request")
-					return
-				}
-			}
-		}
 	}
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
