@@ -107,6 +107,48 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
+	// 补全 instructions 字段（OpenAI Responses API 必填）
+	// 优先使用用户已有的 instructions，否则从第一条 system input 提取，都没有则留空
+	existingInstructions, _ := reqBody["instructions"].(string)
+	if strings.TrimSpace(existingInstructions) == "" {
+		if input, ok := reqBody["input"].([]any); ok && len(input) > 0 {
+			if firstMsg, ok := input[0].(map[string]any); ok {
+				if role, _ := firstMsg["role"].(string); role == "system" {
+					if content, ok := firstMsg["content"].([]any); ok && len(content) > 0 {
+						if firstBlock, ok := content[0].(map[string]any); ok {
+							if text, ok := firstBlock["text"].(string); ok && strings.TrimSpace(text) != "" {
+								reqBody["instructions"] = text
+								// Re-serialize body
+								body, err = json.Marshal(reqBody)
+								if err != nil {
+									h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to process request")
+									return
+								}
+							}
+						}
+					} else if contentStr, ok := firstMsg["content"].(string); ok && strings.TrimSpace(contentStr) != "" {
+						reqBody["instructions"] = contentStr
+						// Re-serialize body
+						body, err = json.Marshal(reqBody)
+						if err != nil {
+							h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to process request")
+							return
+						}
+					}
+				}
+			}
+		}
+		// 如果仍然没有 instructions，设为空字符串（满足必填要求）
+		if _, exists := reqBody["instructions"]; !exists {
+			reqBody["instructions"] = ""
+			body, err = json.Marshal(reqBody)
+			if err != nil {
+				h.errorResponse(c, http.StatusInternalServerError, "api_error", "Failed to process request")
+				return
+			}
+		}
+	}
+
 	setOpsRequestContext(c, reqModel, reqStream, body)
 
 	// 提前校验 function_call_output 是否具备可关联上下文，避免上游 400。
