@@ -3173,6 +3173,8 @@ export default {
       applyFilters: 'Apply filters',
       actions: 'Actions',
       exportTxt: 'Download TXT archive',
+      exportProgress: 'Processed {current}/{total} logs',
+      exportEmpty: 'No logs available for the current filter range.',
       deleteLogs: 'Delete filtered data',
       deleteConfirm: 'Delete security logs in the current filter range? This cannot be undone.',
       deleteHint: 'This removes logs in the current filter range and cleans up empty sessions.',

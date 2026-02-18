@@ -490,6 +490,36 @@ func (h *SecurityHandler) ExportChatLogs(c *gin.Context) {
 	}
 }
 
+// GET /api/v1/admin/security/logs
+func (h *SecurityHandler) ListChatLogs(c *gin.Context) {
+	if h.chatService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Security service not available")
+		return
+	}
+
+	page, pageSize := response.ParsePagination(c)
+	if pageSize > 500 {
+		pageSize = 500
+	}
+
+	filter, startTime, endTime, err := parseSecurityChatLogFilterFromQuery(c, "24h")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	filter.Page = page
+	filter.PageSize = pageSize
+	filter.StartTime = &startTime
+	filter.EndTime = &endTime
+
+	list, err := h.chatService.ListMessages(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, list)
+}
+
 func stringOrEmpty(v *string) string {
 	if v == nil {
 		return ""

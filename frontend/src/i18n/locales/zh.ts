@@ -3348,6 +3348,8 @@ export default {
       applyFilters: '应用筛选',
       actions: '操作',
       exportTxt: '下载 TXT 压缩包',
+      exportProgress: '已处理 {current}/{total} 条',
+      exportEmpty: '当前筛选范围内没有可导出的日志。',
       deleteLogs: '删除筛选数据',
       deleteConfirm: '确定删除当前筛选范围内的安全日志吗？此操作不可恢复。',
       deleteHint: '删除会清空当前筛选范围内的安全日志，并同步清理空会话。',

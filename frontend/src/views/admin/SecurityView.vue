@@ -177,6 +177,12 @@
             >
               {{ exportLoading ? t('common.loading') : t('admin.security.exportTxt') }}
             </button>
+            <p v-if="exportLoading && exportProgress.total" class="text-xs text-gray-500">
+              {{ t('admin.security.exportProgress', {
+                current: formatNumber(exportProgress.current),
+                total: formatNumber(exportProgress.total)
+              }) }}
+            </p>
             <button
               class="btn btn-danger btn-sm w-full"
               type="button"
@@ -211,11 +217,12 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
+import JSZip from 'jszip'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import { adminAPI } from '@/api'
 import { formatBytes } from '@/utils/format'
-import type { SecurityChatDeleteResult, SecurityChatStats } from '@/api/admin/security'
+import type { SecurityChatDeleteResult, SecurityChatLog, SecurityChatStats } from '@/api/admin/security'
 
 const { t } = useI18n()
 
@@ -228,6 +235,7 @@ const actionError = ref('')
 
 const stats = ref<SecurityChatStats | null>(null)
 const deleteResult = ref<SecurityChatDeleteResult | null>(null)
+const exportProgress = reactive({ current: 0, total: 0 })
 
 const filters = reactive({
   startDate: '',
@@ -331,19 +339,128 @@ const resetFilters = async () => {
   await refresh()
 }
 
+const sanitizeZipSegment = (value: string, fallback: string) => {
+  const trimmed = value.trim()
+  if (!trimmed) return fallback
+  return trimmed
+    .replace(/[\\/]/g, '_')
+    .replace(/\.\./g, '_')
+    .replace(/[:*?"<>|]/g, '_')
+    .replace(/[\u0000-\u001F]/g, '_')
+}
+
+const resolveExportFolder = (log: SecurityChatLog) => {
+  if (log.user_email?.trim()) {
+    return sanitizeZipSegment(log.user_email, 'unknown')
+  }
+  if (log.user_id) {
+    return `user_${log.user_id}`
+  }
+  return 'unknown'
+}
+
+const formatFileTimestamp = (value: string) => {
+  const date = new Date(value)
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date
+  const yyyy = safeDate.getUTCFullYear()
+  const mm = String(safeDate.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(safeDate.getUTCDate()).padStart(2, '0')
+  const hh = String(safeDate.getUTCHours()).padStart(2, '0')
+  const min = String(safeDate.getUTCMinutes()).padStart(2, '0')
+  const ss = String(safeDate.getUTCSeconds()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}_${hh}${min}${ss}`
+}
+
+const buildExportFileName = (log: SecurityChatLog) => {
+  const ts = formatFileTimestamp(log.created_at)
+  return `${ts}_${log.id}.txt`
+}
+
+const formatLogTimestamp = (value: string) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toISOString()
+}
+
+const buildLogText = (log: SecurityChatLog) => {
+  const lines: string[] = []
+  lines.push('----')
+  lines.push(`id: ${log.id}`)
+  lines.push(`created_at: ${formatLogTimestamp(log.created_at)}`)
+  lines.push(`session_id: ${log.session_id || ''}`)
+  lines.push(`request_id: ${log.request_id || ''}`)
+  lines.push(`client_request_id: ${log.client_request_id || ''}`)
+  lines.push(`user_id: ${log.user_id ?? ''}`)
+  lines.push(`user_email: ${log.user_email || ''}`)
+  lines.push(`api_key_id: ${log.api_key_id ?? ''}`)
+  lines.push(`account_id: ${log.account_id ?? ''}`)
+  lines.push(`group_id: ${log.group_id ?? ''}`)
+  lines.push(`platform: ${log.platform || ''}`)
+  lines.push(`model: ${log.model || ''}`)
+  lines.push(`request_path: ${log.request_path || ''}`)
+  lines.push(`status_code: ${log.status_code ?? ''}`)
+  lines.push(`stream: ${log.stream ? 'true' : 'false'}`)
+  lines.push('messages:')
+  const messages = Array.isArray(log.messages) ? log.messages : []
+  messages.forEach((msg, index) => {
+    const labelIndex = Number.isFinite(msg.index) ? msg.index : index
+    lines.push(`[${labelIndex}][${msg.source || ''}][${msg.role || ''}]`)
+    if (msg.content) {
+      lines.push(msg.content)
+    }
+    lines.push('')
+  })
+  lines.push('')
+  return lines.join('\n')
+}
+
 const exportLogs = async () => {
   actionError.value = ''
   exportLoading.value = true
+  exportProgress.current = 0
+  exportProgress.total = 0
   try {
-    const blob = await adminAPI.security.exportLogs(buildParams())
+    const zip = new JSZip()
+    const baseParams = buildParams()
+    const pageSize = 200
+    const maxRows = 200000
+    let page = 1
+    let total = 0
+    while (true) {
+      const res = await adminAPI.security.listLogs({ ...baseParams, page, page_size: pageSize })
+      if (page === 1) {
+        total = res.total || 0
+        exportProgress.total = total
+      }
+      if (!res.items?.length) break
+      for (const log of res.items) {
+        if (exportProgress.current >= maxRows) break
+        const folder = resolveExportFolder(log)
+        const fileName = buildExportFileName(log)
+        zip.file(`${folder}/${fileName}`, buildLogText(log))
+        exportProgress.current += 1
+      }
+      if (exportProgress.current >= maxRows || res.items.length < pageSize) break
+      page += 1
+    }
+
+    if (exportProgress.current === 0) {
+      actionError.value = t('admin.security.exportEmpty')
+      return
+    }
+
     const start = filters.startDate ? filters.startDate.replace(/-/g, '') : new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const end = filters.endDate ? filters.endDate.replace(/-/g, '') : start
-    const name = `security_logs_${start}_${end}.txt.zip`
+    const name = `security_logs_${start}_${end}.zip`
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } })
     saveAs(blob, name)
   } catch (err: any) {
     actionError.value = err?.message || t('common.unknownError')
   } finally {
     exportLoading.value = false
+    exportProgress.current = 0
+    exportProgress.total = 0
   }
 }
 
