@@ -17,11 +17,13 @@ type SecurityChatRepository interface {
 	UpsertSession(ctx context.Context, input *SecurityChatSessionUpsertInput) error
 	ListSessions(ctx context.Context, filter *SecurityChatSessionFilter) ([]*SecurityChatSession, int64, error)
 	ListMessages(ctx context.Context, filter *SecurityChatMessageFilter) ([]*SecurityChatLog, int64, error)
+	GetStats(ctx context.Context, filter *SecurityChatMessageFilter) (*SecurityChatStats, error)
 	DeleteExpired(ctx context.Context, cutoff time.Time) (int64, error)
 	DeleteExpiredSessions(ctx context.Context, cutoff time.Time) (int64, error)
 	DeleteSession(ctx context.Context, sessionID string, userID *int64, apiKeyID *int64) (int64, int64, error)
 	DeleteSessions(ctx context.Context, sessionIDs []string, userID *int64, apiKeyID *int64) (int64, int64, error)
 	DeleteSessionsByFilter(ctx context.Context, filter *SecurityChatSessionFilter) (int64, int64, error)
+	DeleteLogsByFilter(ctx context.Context, filter *SecurityChatMessageFilter) (int64, int64, error)
 }
 
 type SecurityChatService struct {
@@ -162,6 +164,16 @@ func (s *SecurityChatService) ListMessages(ctx context.Context, filter *Security
 	}, nil
 }
 
+func (s *SecurityChatService) GetStats(ctx context.Context, filter *SecurityChatMessageFilter) (*SecurityChatStats, error) {
+	if s == nil || s.repo == nil {
+		return &SecurityChatStats{PlatformBuckets: []SecurityChatPlatformBucket{}}, nil
+	}
+	if filter == nil {
+		filter = &SecurityChatMessageFilter{}
+	}
+	return s.repo.GetStats(ctx, filter)
+}
+
 func (s *SecurityChatService) CleanupExpired(ctx context.Context) (int64, error) {
 	if s == nil || s.repo == nil {
 		return 0, nil
@@ -211,6 +223,16 @@ func (s *SecurityChatService) DeleteSessionsByFilter(ctx context.Context, filter
 		return 0, 0, fmt.Errorf("filter required")
 	}
 	return s.repo.DeleteSessionsByFilter(ctx, filter)
+}
+
+func (s *SecurityChatService) DeleteLogsByFilter(ctx context.Context, filter *SecurityChatMessageFilter) (int64, int64, error) {
+	if s == nil || s.repo == nil {
+		return 0, 0, nil
+	}
+	if filter == nil {
+		return 0, 0, fmt.Errorf("filter required")
+	}
+	return s.repo.DeleteLogsByFilter(ctx, filter)
 }
 
 func (s *SecurityChatService) ShouldCapture(ctx context.Context, userID *int64, userEmail string) bool {
@@ -329,35 +351,35 @@ type SecurityChatSessionUpsertInput struct {
 }
 
 type SecurityChatLog struct {
-	ID              int64                `json:"id"`
-	SessionID       string               `json:"session_id"`
-	RequestID       *string              `json:"request_id,omitempty"`
-	ClientRequestID *string              `json:"client_request_id,omitempty"`
-	UserID          *int64               `json:"user_id,omitempty"`
-	APIKeyID        *int64               `json:"api_key_id,omitempty"`
-	AccountID       *int64               `json:"account_id,omitempty"`
-	GroupID         *int64               `json:"group_id,omitempty"`
-	Platform        *string              `json:"platform,omitempty"`
-	Model           *string              `json:"model,omitempty"`
-	RequestPath     *string              `json:"request_path,omitempty"`
-	Stream          bool                 `json:"stream"`
-	StatusCode      *int                 `json:"status_code,omitempty"`
+	ID              int64                 `json:"id"`
+	SessionID       string                `json:"session_id"`
+	RequestID       *string               `json:"request_id,omitempty"`
+	ClientRequestID *string               `json:"client_request_id,omitempty"`
+	UserID          *int64                `json:"user_id,omitempty"`
+	APIKeyID        *int64                `json:"api_key_id,omitempty"`
+	AccountID       *int64                `json:"account_id,omitempty"`
+	GroupID         *int64                `json:"group_id,omitempty"`
+	Platform        *string               `json:"platform,omitempty"`
+	Model           *string               `json:"model,omitempty"`
+	RequestPath     *string               `json:"request_path,omitempty"`
+	Stream          bool                  `json:"stream"`
+	StatusCode      *int                  `json:"status_code,omitempty"`
 	Messages        []SecurityChatMessage `json:"messages"`
-	CreatedAt       time.Time            `json:"created_at"`
+	CreatedAt       time.Time             `json:"created_at"`
 }
 
 type SecurityChatSession struct {
-	SessionID     string    `json:"session_id"`
-	UserID        *int64    `json:"user_id,omitempty"`
-	UserEmail     *string   `json:"user_email,omitempty"`
-	APIKeyID      *int64    `json:"api_key_id,omitempty"`
-	AccountID     *int64    `json:"account_id,omitempty"`
-	GroupID       *int64    `json:"group_id,omitempty"`
-	Platform      *string   `json:"platform,omitempty"`
-	Model         *string   `json:"model,omitempty"`
+	SessionID      string    `json:"session_id"`
+	UserID         *int64    `json:"user_id,omitempty"`
+	UserEmail      *string   `json:"user_email,omitempty"`
+	APIKeyID       *int64    `json:"api_key_id,omitempty"`
+	AccountID      *int64    `json:"account_id,omitempty"`
+	GroupID        *int64    `json:"group_id,omitempty"`
+	Platform       *string   `json:"platform,omitempty"`
+	Model          *string   `json:"model,omitempty"`
 	MessagePreview *string   `json:"message_preview,omitempty"`
-	LastAt        time.Time `json:"last_at"`
-	RequestCount  int64     `json:"request_count"`
+	LastAt         time.Time `json:"last_at"`
+	RequestCount   int64     `json:"request_count"`
 }
 
 type SecurityChatSessionList struct {
@@ -381,6 +403,8 @@ type SecurityChatSessionFilter struct {
 	SessionID string
 	UserID    *int64
 	APIKeyID  *int64
+	AccountID *int64
+	GroupID   *int64
 	Query     string
 	Platform  string
 	Model     string
@@ -425,11 +449,16 @@ type SecurityChatMessageFilter struct {
 	StartTime *time.Time
 	EndTime   *time.Time
 
-	SessionID string
-	UserID    *int64
-	APIKeyID  *int64
+	SessionID         string
+	UserID            *int64
+	APIKeyID          *int64
+	AccountID         *int64
+	GroupID           *int64
+	Platform          string
+	Model             string
+	RequestPath       string
 	AllowEmptySession bool
-	IgnoreTimeRange  bool
+	IgnoreTimeRange   bool
 
 	Page     int
 	PageSize int
@@ -465,6 +494,19 @@ func (f *SecurityChatMessageFilter) Normalize() (page, pageSize int, startTime, 
 		startTime, endTime = endTime, startTime
 	}
 	return page, pageSize, startTime, endTime
+}
+
+type SecurityChatPlatformBucket struct {
+	Key   string `json:"key"`
+	Count int64  `json:"count"`
+}
+
+type SecurityChatStats struct {
+	RequestCount    int64                        `json:"request_count"`
+	SessionCount    int64                        `json:"session_count"`
+	EstimatedBytes  int64                        `json:"estimated_bytes"`
+	TableBytes      int64                        `json:"table_bytes"`
+	PlatformBuckets []SecurityChatPlatformBucket `json:"platform_buckets"`
 }
 
 func SecurityChatSessionFromRow(sessionID string, userID, apiKeyID, accountID, groupID sql.NullInt64, userEmail, platform, model, preview sql.NullString, lastAt time.Time, requestCount int64) *SecurityChatSession {

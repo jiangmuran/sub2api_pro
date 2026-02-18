@@ -1,7 +1,11 @@
 package admin
 
 import (
+	"archive/zip"
+	"bufio"
 	"encoding/csv"
+	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -361,6 +365,130 @@ func (h *SecurityHandler) ExportSessions(c *gin.Context) {
 	}
 }
 
+// GET /api/v1/admin/security/stats
+func (h *SecurityHandler) GetChatStats(c *gin.Context) {
+	if h.chatService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Security service not available")
+		return
+	}
+
+	filter, startTime, endTime, err := parseSecurityChatLogFilterFromQuery(c, "24h")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	stats, err := h.chatService.GetStats(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	days := math.Ceil(endTime.Sub(startTime).Hours() / 24)
+	if days < 1 {
+		days = 1
+	}
+
+	platformShare := map[string]map[string]any{
+		"opencode": {"count": int64(0), "ratio": 0.0},
+		"codex":    {"count": int64(0), "ratio": 0.0},
+		"other":    {"count": int64(0), "ratio": 0.0},
+	}
+	for _, bucket := range stats.PlatformBuckets {
+		if _, ok := platformShare[bucket.Key]; ok {
+			platformShare[bucket.Key]["count"] = bucket.Count
+		}
+	}
+	if stats.RequestCount > 0 {
+		for key, item := range platformShare {
+			count, _ := item["count"].(int64)
+			platformShare[key]["ratio"] = float64(count) / float64(stats.RequestCount)
+		}
+	}
+
+	response.Success(c, gin.H{
+		"start_time":           startTime,
+		"end_time":             endTime,
+		"request_count":        stats.RequestCount,
+		"session_count":        stats.SessionCount,
+		"avg_requests_per_day": float64(stats.RequestCount) / days,
+		"avg_sessions_per_day": float64(stats.SessionCount) / days,
+		"estimated_bytes":      stats.EstimatedBytes,
+		"table_bytes":          stats.TableBytes,
+		"platform_share":       platformShare,
+		"platform_share_basis": "request",
+	})
+}
+
+// GET /api/v1/admin/security/logs/export
+func (h *SecurityHandler) ExportChatLogs(c *gin.Context) {
+	if h.chatService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Security service not available")
+		return
+	}
+
+	filter, startTime, endTime, err := parseSecurityChatLogFilterFromQuery(c, "24h")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	filter.Page = 1
+	filter.PageSize = 500
+	filter.AllowEmptySession = true
+
+	firstPage, err := h.chatService.ListMessages(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	startLabel := startTime.UTC().Format("20060102")
+	endLabel := endTime.UTC().Format("20060102")
+	baseName := fmt.Sprintf("security_logs_%s_%s.txt", startLabel, endLabel)
+	archiveName := baseName + ".zip"
+
+	c.Header("Content-Type", "application/zip")
+	c.Header("Content-Disposition", "attachment; filename="+archiveName)
+
+	zipWriter := zip.NewWriter(c.Writer)
+	defer func() { _ = zipWriter.Close() }()
+
+	fileWriter, err := zipWriter.Create(baseName)
+	if err != nil {
+		return
+	}
+	bufWriter := bufio.NewWriter(fileWriter)
+	defer func() { _ = bufWriter.Flush() }()
+
+	const maxRows = 200000
+	rowsWritten := 0
+
+	writeLogs := func(items []*service.SecurityChatLog) {
+		for _, item := range items {
+			if rowsWritten >= maxRows {
+				return
+			}
+			writeSecurityChatLogText(bufWriter, item)
+			rowsWritten++
+		}
+	}
+
+	writeLogs(firstPage.Items)
+	for rowsWritten < maxRows && len(firstPage.Items) == filter.PageSize {
+		filter.Page++
+		page, err := h.chatService.ListMessages(c.Request.Context(), filter)
+		if err != nil {
+			return
+		}
+		writeLogs(page.Items)
+		firstPage = page
+	}
+
+	if rowsWritten >= maxRows {
+		c.Header("X-Export-Truncated", "true")
+	}
+}
+
 func stringOrEmpty(v *string) string {
 	if v == nil {
 		return ""
@@ -427,6 +555,8 @@ func (h *SecurityHandler) BulkDeleteSessions(c *gin.Context) {
 		SessionIDs []string `json:"session_ids"`
 		UserID     *int64   `json:"user_id"`
 		APIKeyID   *int64   `json:"api_key_id"`
+		AccountID  *int64   `json:"account_id"`
+		GroupID    *int64   `json:"group_id"`
 		SelectAll  bool     `json:"select_all"`
 		StartTime  string   `json:"start_time"`
 		EndTime    string   `json:"end_time"`
@@ -460,6 +590,8 @@ func (h *SecurityHandler) BulkDeleteSessions(c *gin.Context) {
 			EndTime:   &endTime,
 			UserID:    req.UserID,
 			APIKeyID:  req.APIKeyID,
+			AccountID: req.AccountID,
+			GroupID:   req.GroupID,
 			Query:     strings.TrimSpace(req.Query),
 			Platform:  strings.TrimSpace(req.Platform),
 			Model:     strings.TrimSpace(req.Model),
@@ -476,6 +608,41 @@ func (h *SecurityHandler) BulkDeleteSessions(c *gin.Context) {
 		return
 	}
 	logsDeleted, sessionsDeleted, err := h.chatService.DeleteSessions(c.Request.Context(), req.SessionIDs, req.UserID, req.APIKeyID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, map[string]any{
+		"logs_deleted":     logsDeleted,
+		"sessions_deleted": sessionsDeleted,
+	})
+}
+
+// POST /api/v1/admin/security/logs/delete
+func (h *SecurityHandler) DeleteChatLogs(c *gin.Context) {
+	if h.chatService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Security service not available")
+		return
+	}
+
+	var req securityChatLogFilterPayload
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := validateSecurityChatLogFilter(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	applySecurityChatLogTimeRange(c, req.StartTime, req.EndTime)
+	startTime, endTime, err := parseOpsTimeRange(c, "24h")
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	filter := buildSecurityChatLogFilter(req, startTime, endTime)
+	logsDeleted, sessionsDeleted, err := h.chatService.DeleteLogsByFilter(c.Request.Context(), filter)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -539,4 +706,161 @@ func stripSessionSuffix(sessionID string) string {
 		return value
 	}
 	return strings.Join(parts[:len(parts)-2], ":")
+}
+
+type securityChatLogFilterPayload struct {
+	StartTime   string `json:"start_time"`
+	EndTime     string `json:"end_time"`
+	UserID      *int64 `json:"user_id"`
+	APIKeyID    *int64 `json:"api_key_id"`
+	AccountID   *int64 `json:"account_id"`
+	GroupID     *int64 `json:"group_id"`
+	SessionID   string `json:"session_id"`
+	Platform    string `json:"platform"`
+	Model       string `json:"model"`
+	RequestPath string `json:"request_path"`
+}
+
+func parseSecurityChatLogFilterFromQuery(c *gin.Context, defaultRange string) (*service.SecurityChatMessageFilter, time.Time, time.Time, error) {
+	startTime, endTime, err := parseOpsTimeRange(c, defaultRange)
+	if err != nil {
+		return nil, time.Time{}, time.Time{}, err
+	}
+
+	filter := &service.SecurityChatMessageFilter{
+		StartTime:         &startTime,
+		EndTime:           &endTime,
+		AllowEmptySession: true,
+		SessionID:         strings.TrimSpace(c.Query("session_id")),
+		Platform:          strings.TrimSpace(c.Query("platform")),
+		Model:             strings.TrimSpace(c.Query("model")),
+		RequestPath:       strings.TrimSpace(c.Query("request_path")),
+	}
+
+	if v := strings.TrimSpace(c.Query("user_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, time.Time{}, time.Time{}, fmt.Errorf("Invalid user_id")
+		}
+		filter.UserID = &id
+	}
+	if v := strings.TrimSpace(c.Query("api_key_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, time.Time{}, time.Time{}, fmt.Errorf("Invalid api_key_id")
+		}
+		filter.APIKeyID = &id
+	}
+	if v := strings.TrimSpace(c.Query("account_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, time.Time{}, time.Time{}, fmt.Errorf("Invalid account_id")
+		}
+		filter.AccountID = &id
+	}
+	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, time.Time{}, time.Time{}, fmt.Errorf("Invalid group_id")
+		}
+		filter.GroupID = &id
+	}
+
+	return filter, startTime, endTime, nil
+}
+
+func validateSecurityChatLogFilter(req *securityChatLogFilterPayload) error {
+	if req == nil {
+		return fmt.Errorf("Invalid request")
+	}
+	for label, value := range map[string]*int64{
+		"user_id":    req.UserID,
+		"api_key_id": req.APIKeyID,
+		"account_id": req.AccountID,
+		"group_id":   req.GroupID,
+	} {
+		if value != nil && *value <= 0 {
+			return fmt.Errorf("Invalid %s", label)
+		}
+	}
+	return nil
+}
+
+func applySecurityChatLogTimeRange(c *gin.Context, startTime, endTime string) {
+	values := c.Request.URL.Query()
+	if strings.TrimSpace(startTime) != "" {
+		values.Set("start_time", strings.TrimSpace(startTime))
+	}
+	if strings.TrimSpace(endTime) != "" {
+		values.Set("end_time", strings.TrimSpace(endTime))
+	}
+	c.Request.URL.RawQuery = values.Encode()
+}
+
+func buildSecurityChatLogFilter(req securityChatLogFilterPayload, startTime, endTime time.Time) *service.SecurityChatMessageFilter {
+	filter := &service.SecurityChatMessageFilter{
+		StartTime:         &startTime,
+		EndTime:           &endTime,
+		AllowEmptySession: true,
+		SessionID:         strings.TrimSpace(req.SessionID),
+		UserID:            req.UserID,
+		APIKeyID:          req.APIKeyID,
+		AccountID:         req.AccountID,
+		GroupID:           req.GroupID,
+		Platform:          strings.TrimSpace(req.Platform),
+		Model:             strings.TrimSpace(req.Model),
+		RequestPath:       strings.TrimSpace(req.RequestPath),
+	}
+	return filter
+}
+
+func writeSecurityChatLogText(w *bufio.Writer, log *service.SecurityChatLog) {
+	if log == nil {
+		return
+	}
+	_, _ = fmt.Fprintln(w, "----")
+	_, _ = fmt.Fprintf(w, "id: %d\n", log.ID)
+	_, _ = fmt.Fprintf(w, "created_at: %s\n", log.CreatedAt.UTC().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(w, "session_id: %s\n", log.SessionID)
+	_, _ = fmt.Fprintf(w, "request_id: %s\n", stringOrBlank(log.RequestID))
+	_, _ = fmt.Fprintf(w, "client_request_id: %s\n", stringOrBlank(log.ClientRequestID))
+	_, _ = fmt.Fprintf(w, "user_id: %s\n", int64OrBlank(log.UserID))
+	_, _ = fmt.Fprintf(w, "api_key_id: %s\n", int64OrBlank(log.APIKeyID))
+	_, _ = fmt.Fprintf(w, "account_id: %s\n", int64OrBlank(log.AccountID))
+	_, _ = fmt.Fprintf(w, "group_id: %s\n", int64OrBlank(log.GroupID))
+	_, _ = fmt.Fprintf(w, "platform: %s\n", stringOrBlank(log.Platform))
+	_, _ = fmt.Fprintf(w, "model: %s\n", stringOrBlank(log.Model))
+	_, _ = fmt.Fprintf(w, "request_path: %s\n", stringOrBlank(log.RequestPath))
+	_, _ = fmt.Fprintf(w, "status_code: %s\n", intOrBlank(log.StatusCode))
+	_, _ = fmt.Fprintf(w, "stream: %v\n", log.Stream)
+	_, _ = fmt.Fprintln(w, "messages:")
+	for _, msg := range log.Messages {
+		_, _ = fmt.Fprintf(w, "[%d][%s][%s]\n", msg.Index, msg.Source, msg.Role)
+		if msg.Content != "" {
+			_, _ = fmt.Fprintln(w, msg.Content)
+		}
+		_, _ = fmt.Fprintln(w)
+	}
+	_, _ = fmt.Fprintln(w)
+}
+
+func stringOrBlank(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func int64OrBlank(v *int64) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.FormatInt(*v, 10)
+}
+
+func intOrBlank(v *int) string {
+	if v == nil {
+		return ""
+	}
+	return strconv.Itoa(*v)
 }

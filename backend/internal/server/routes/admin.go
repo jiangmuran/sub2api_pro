@@ -160,6 +160,9 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerSecurityRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	security := admin.Group("/security")
 	{
+		security.GET("/stats", h.Admin.Security.GetChatStats)
+		security.GET("/logs/export", h.Admin.Security.ExportChatLogs)
+		security.POST("/logs/delete", h.Admin.Security.DeleteChatLogs)
 		security.GET("/sessions", h.Admin.Security.ListChatSessions)
 		security.GET("/sessions/export", h.Admin.Security.ExportSessions)
 		security.GET("/messages", h.Admin.Security.ListChatMessages)

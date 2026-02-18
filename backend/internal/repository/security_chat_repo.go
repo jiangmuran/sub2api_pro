@@ -188,6 +188,12 @@ func (r *securityChatRepository) ListSessions(ctx context.Context, filter *servi
 		if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
 			addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
 		}
+		if filter.AccountID != nil && *filter.AccountID > 0 {
+			addCondition(fmt.Sprintf("account_id = $%d", len(args)+1), *filter.AccountID)
+		}
+		if filter.GroupID != nil && *filter.GroupID > 0 {
+			addCondition(fmt.Sprintf("group_id = $%d", len(args)+1), *filter.GroupID)
+		}
 		if s := strings.TrimSpace(filter.SessionID); s != "" {
 			addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), s)
 		}
@@ -294,6 +300,56 @@ LIMIT $%d OFFSET $%d;
 	return items, total, nil
 }
 
+func buildSecurityChatLogConditions(filter *service.SecurityChatMessageFilter, startTime, endTime time.Time) (string, []any) {
+	if filter == nil {
+		filter = &service.SecurityChatMessageFilter{}
+	}
+
+	conditions := make([]string, 0, 12)
+	args := make([]any, 0, 12)
+
+	addCondition := func(condition string, values ...any) {
+		conditions = append(conditions, condition)
+		args = append(args, values...)
+	}
+
+	if !filter.IgnoreTimeRange {
+		args = append(args, startTime.UTC(), endTime.UTC())
+		conditions = append(conditions, "created_at >= $1", "created_at < $2")
+	}
+
+	if s := strings.TrimSpace(filter.SessionID); s != "" {
+		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), s)
+	}
+	if filter.UserID != nil && *filter.UserID > 0 {
+		addCondition(fmt.Sprintf("user_id = $%d", len(args)+1), *filter.UserID)
+	}
+	if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
+		addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
+	}
+	if filter.AccountID != nil && *filter.AccountID > 0 {
+		addCondition(fmt.Sprintf("account_id = $%d", len(args)+1), *filter.AccountID)
+	}
+	if filter.GroupID != nil && *filter.GroupID > 0 {
+		addCondition(fmt.Sprintf("group_id = $%d", len(args)+1), *filter.GroupID)
+	}
+	if p := strings.TrimSpace(filter.Platform); p != "" {
+		addCondition(fmt.Sprintf("LOWER(COALESCE(platform,'')) = $%d", len(args)+1), strings.ToLower(p))
+	}
+	if m := strings.TrimSpace(filter.Model); m != "" {
+		addCondition(fmt.Sprintf("model = $%d", len(args)+1), m)
+	}
+	if rp := strings.TrimSpace(filter.RequestPath); rp != "" {
+		addCondition(fmt.Sprintf("request_path = $%d", len(args)+1), rp)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+	return where, args
+}
+
 func (r *securityChatRepository) ListMessages(ctx context.Context, filter *service.SecurityChatMessageFilter) ([]*service.SecurityChatLog, int64, error) {
 	if r == nil || r.db == nil {
 		return nil, 0, fmt.Errorf("nil security chat repository")
@@ -305,34 +361,7 @@ func (r *securityChatRepository) ListMessages(ctx context.Context, filter *servi
 	page, pageSize, startTime, endTime := filter.Normalize()
 	offset := (page - 1) * pageSize
 
-	conditions := make([]string, 0, 8)
-	args := make([]any, 0, 12)
-
-	addCondition := func(condition string, values ...any) {
-		conditions = append(conditions, condition)
-		args = append(args, values...)
-	}
-
-	// time range is applied unless explicitly ignored
-	if !filter.IgnoreTimeRange {
-		args = append(args, startTime.UTC(), endTime.UTC())
-		conditions = append(conditions, "created_at >= $1", "created_at < $2")
-	}
-
-	if strings.TrimSpace(filter.SessionID) != "" {
-		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), strings.TrimSpace(filter.SessionID))
-	}
-	if filter.UserID != nil && *filter.UserID > 0 {
-		addCondition(fmt.Sprintf("user_id = $%d", len(args)+1), *filter.UserID)
-	}
-	if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
-		addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
-	}
-
-	where := ""
-	if len(conditions) > 0 {
-		where = "WHERE " + strings.Join(conditions, " AND ")
-	}
+	where, args := buildSecurityChatLogConditions(filter, startTime, endTime)
 
 	countQuery := fmt.Sprintf(`SELECT COUNT(1) FROM security_chat_logs %s`, where)
 	var total int64
@@ -455,6 +484,79 @@ LIMIT $%d OFFSET $%d;
 	}
 
 	return items, total, nil
+}
+
+func (r *securityChatRepository) GetStats(ctx context.Context, filter *service.SecurityChatMessageFilter) (*service.SecurityChatStats, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("nil security chat repository")
+	}
+	if filter == nil {
+		filter = &service.SecurityChatMessageFilter{}
+	}
+
+	_, _, startTime, endTime := filter.Normalize()
+	where, args := buildSecurityChatLogConditions(filter, startTime, endTime)
+
+	var requestCount int64
+	var sessionCount int64
+	var estimatedBytes int64
+	countQuery := fmt.Sprintf(`
+SELECT
+  COUNT(1),
+  COUNT(DISTINCT session_id),
+  COALESCE(SUM(pg_column_size(messages)), 0)
+FROM security_chat_logs
+%s;
+`, where)
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&requestCount, &sessionCount, &estimatedBytes); err != nil {
+		if err == sql.ErrNoRows {
+			requestCount = 0
+			sessionCount = 0
+			estimatedBytes = 0
+		} else {
+			return nil, err
+		}
+	}
+
+	var tableBytes int64
+	if err := r.db.QueryRowContext(ctx, `SELECT pg_total_relation_size('security_chat_logs')`).Scan(&tableBytes); err != nil {
+		return nil, err
+	}
+
+	platformBuckets := make([]service.SecurityChatPlatformBucket, 0, 3)
+	platformQuery := fmt.Sprintf(`
+SELECT
+  CASE
+    WHEN LOWER(COALESCE(platform,'')) LIKE '%%opencode%%' THEN 'opencode'
+    WHEN LOWER(COALESCE(platform,'')) LIKE '%%codex%%' THEN 'codex'
+    ELSE 'other'
+  END AS bucket,
+  COUNT(1) AS count
+FROM security_chat_logs
+%s
+GROUP BY bucket;
+`, where)
+	rows, err := r.db.QueryContext(ctx, platformQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var bucket string
+		var count int64
+		if err := rows.Scan(&bucket, &count); err != nil {
+			return nil, err
+		}
+		platformBuckets = append(platformBuckets, service.SecurityChatPlatformBucket{Key: bucket, Count: count})
+	}
+
+	return &service.SecurityChatStats{
+		RequestCount:    requestCount,
+		SessionCount:    sessionCount,
+		EstimatedBytes:  estimatedBytes,
+		TableBytes:      tableBytes,
+		PlatformBuckets: platformBuckets,
+	}, nil
 }
 
 func (r *securityChatRepository) DeleteExpired(ctx context.Context, cutoff time.Time) (int64, error) {
@@ -583,6 +685,12 @@ func (r *securityChatRepository) DeleteSessionsByFilter(ctx context.Context, fil
 	if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
 		addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
 	}
+	if filter.AccountID != nil && *filter.AccountID > 0 {
+		addCondition(fmt.Sprintf("account_id = $%d", len(args)+1), *filter.AccountID)
+	}
+	if filter.GroupID != nil && *filter.GroupID > 0 {
+		addCondition(fmt.Sprintf("group_id = $%d", len(args)+1), *filter.GroupID)
+	}
 	if s := strings.TrimSpace(filter.SessionID); s != "" {
 		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), s)
 	}
@@ -615,6 +723,42 @@ func (r *securityChatRepository) DeleteSessionsByFilter(ctx context.Context, fil
 
 	deleteSessionsQuery := fmt.Sprintf("DELETE FROM security_chat_sessions %s", where)
 	resSessions, err := r.db.ExecContext(ctx, deleteSessionsQuery, args...)
+	if err != nil {
+		return logsDeleted, 0, err
+	}
+	sessionsDeleted, _ := resSessions.RowsAffected()
+
+	return logsDeleted, sessionsDeleted, nil
+}
+
+func (r *securityChatRepository) DeleteLogsByFilter(ctx context.Context, filter *service.SecurityChatMessageFilter) (int64, int64, error) {
+	if r == nil || r.db == nil {
+		return 0, 0, fmt.Errorf("nil security chat repository")
+	}
+	if filter == nil {
+		return 0, 0, fmt.Errorf("filter required")
+	}
+
+	_, _, startTime, endTime := filter.Normalize()
+	where, args := buildSecurityChatLogConditions(filter, startTime, endTime)
+
+	deleteLogsQuery := fmt.Sprintf("DELETE FROM security_chat_logs %s", where)
+	resLogs, err := r.db.ExecContext(ctx, deleteLogsQuery, args...)
+	if err != nil {
+		return 0, 0, err
+	}
+	logsDeleted, _ := resLogs.RowsAffected()
+
+	if logsDeleted == 0 {
+		return 0, 0, nil
+	}
+
+	resSessions, err := r.db.ExecContext(ctx, `
+DELETE FROM security_chat_sessions s
+WHERE NOT EXISTS (
+  SELECT 1 FROM security_chat_logs l WHERE l.session_id = s.session_id
+);
+`)
 	if err != nil {
 		return logsDeleted, 0, err
 	}
