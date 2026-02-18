@@ -356,6 +356,7 @@ type SecurityChatLog struct {
 	RequestID       *string               `json:"request_id,omitempty"`
 	ClientRequestID *string               `json:"client_request_id,omitempty"`
 	UserID          *int64                `json:"user_id,omitempty"`
+	UserEmail       *string               `json:"user_email,omitempty"`
 	APIKeyID        *int64                `json:"api_key_id,omitempty"`
 	AccountID       *int64                `json:"account_id,omitempty"`
 	GroupID         *int64                `json:"group_id,omitempty"`

@@ -444,21 +444,13 @@ func (h *SecurityHandler) ExportChatLogs(c *gin.Context) {
 
 	startLabel := startTime.UTC().Format("20060102")
 	endLabel := endTime.UTC().Format("20060102")
-	baseName := fmt.Sprintf("security_logs_%s_%s.txt", startLabel, endLabel)
-	archiveName := baseName + ".zip"
+	archiveName := fmt.Sprintf("security_logs_%s_%s.zip", startLabel, endLabel)
 
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", "attachment; filename="+archiveName)
 
 	zipWriter := zip.NewWriter(c.Writer)
 	defer func() { _ = zipWriter.Close() }()
-
-	fileWriter, err := zipWriter.Create(baseName)
-	if err != nil {
-		return
-	}
-	bufWriter := bufio.NewWriter(fileWriter)
-	defer func() { _ = bufWriter.Flush() }()
 
 	const maxRows = 200000
 	rowsWritten := 0
@@ -468,7 +460,16 @@ func (h *SecurityHandler) ExportChatLogs(c *gin.Context) {
 			if rowsWritten >= maxRows {
 				return
 			}
+			folder := resolveSecurityChatExportFolder(item)
+			fileName := buildSecurityChatExportFileName(item)
+			path := folder + "/" + fileName
+			fileWriter, err := zipWriter.Create(path)
+			if err != nil {
+				continue
+			}
+			bufWriter := bufio.NewWriter(fileWriter)
 			writeSecurityChatLogText(bufWriter, item)
+			_ = bufWriter.Flush()
 			rowsWritten++
 		}
 	}
@@ -825,6 +826,7 @@ func writeSecurityChatLogText(w *bufio.Writer, log *service.SecurityChatLog) {
 	_, _ = fmt.Fprintf(w, "request_id: %s\n", stringOrBlank(log.RequestID))
 	_, _ = fmt.Fprintf(w, "client_request_id: %s\n", stringOrBlank(log.ClientRequestID))
 	_, _ = fmt.Fprintf(w, "user_id: %s\n", int64OrBlank(log.UserID))
+	_, _ = fmt.Fprintf(w, "user_email: %s\n", stringOrBlank(log.UserEmail))
 	_, _ = fmt.Fprintf(w, "api_key_id: %s\n", int64OrBlank(log.APIKeyID))
 	_, _ = fmt.Fprintf(w, "account_id: %s\n", int64OrBlank(log.AccountID))
 	_, _ = fmt.Fprintf(w, "group_id: %s\n", int64OrBlank(log.GroupID))
@@ -842,6 +844,59 @@ func writeSecurityChatLogText(w *bufio.Writer, log *service.SecurityChatLog) {
 		_, _ = fmt.Fprintln(w)
 	}
 	_, _ = fmt.Fprintln(w)
+}
+
+func resolveSecurityChatExportFolder(log *service.SecurityChatLog) string {
+	if log == nil {
+		return "unknown"
+	}
+	if log.UserEmail != nil {
+		email := strings.TrimSpace(*log.UserEmail)
+		if email != "" {
+			return sanitizeZipPathSegment(email, "unknown")
+		}
+	}
+	if log.UserID != nil && *log.UserID > 0 {
+		return fmt.Sprintf("user_%d", *log.UserID)
+	}
+	return "unknown"
+}
+
+func buildSecurityChatExportFileName(log *service.SecurityChatLog) string {
+	if log == nil {
+		return "unknown.txt"
+	}
+	createdAt := log.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+	ts := createdAt.UTC().Format("20060102_150405")
+	return fmt.Sprintf("%s_%d.txt", ts, log.ID)
+}
+
+func sanitizeZipPathSegment(value string, fallback string) string {
+	clean := strings.TrimSpace(value)
+	if clean == "" {
+		return fallback
+	}
+	clean = strings.ReplaceAll(clean, "/", "_")
+	clean = strings.ReplaceAll(clean, "\\", "_")
+	clean = strings.ReplaceAll(clean, "..", "_")
+	clean = strings.Map(func(r rune) rune {
+		switch r {
+		case ':', '*', '?', '"', '<', '>', '|':
+			return '_'
+		default:
+			if r < 32 {
+				return '_'
+			}
+			return r
+		}
+	}, clean)
+	if clean == "" {
+		return fallback
+	}
+	return clean
 }
 
 func stringOrBlank(v *string) string {

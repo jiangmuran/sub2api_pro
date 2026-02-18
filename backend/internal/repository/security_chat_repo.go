@@ -300,9 +300,14 @@ LIMIT $%d OFFSET $%d;
 	return items, total, nil
 }
 
-func buildSecurityChatLogConditions(filter *service.SecurityChatMessageFilter, startTime, endTime time.Time) (string, []any) {
+func buildSecurityChatLogConditions(filter *service.SecurityChatMessageFilter, startTime, endTime time.Time, tableAlias string) (string, []any) {
 	if filter == nil {
 		filter = &service.SecurityChatMessageFilter{}
+	}
+
+	prefix := ""
+	if strings.TrimSpace(tableAlias) != "" {
+		prefix = strings.TrimSpace(tableAlias) + "."
 	}
 
 	conditions := make([]string, 0, 12)
@@ -315,32 +320,32 @@ func buildSecurityChatLogConditions(filter *service.SecurityChatMessageFilter, s
 
 	if !filter.IgnoreTimeRange {
 		args = append(args, startTime.UTC(), endTime.UTC())
-		conditions = append(conditions, "created_at >= $1", "created_at < $2")
+		conditions = append(conditions, prefix+"created_at >= $1", prefix+"created_at < $2")
 	}
 
 	if s := strings.TrimSpace(filter.SessionID); s != "" {
-		addCondition(fmt.Sprintf("session_id = $%d", len(args)+1), s)
+		addCondition(fmt.Sprintf("%ssession_id = $%d", prefix, len(args)+1), s)
 	}
 	if filter.UserID != nil && *filter.UserID > 0 {
-		addCondition(fmt.Sprintf("user_id = $%d", len(args)+1), *filter.UserID)
+		addCondition(fmt.Sprintf("%suser_id = $%d", prefix, len(args)+1), *filter.UserID)
 	}
 	if filter.APIKeyID != nil && *filter.APIKeyID > 0 {
-		addCondition(fmt.Sprintf("api_key_id = $%d", len(args)+1), *filter.APIKeyID)
+		addCondition(fmt.Sprintf("%sapi_key_id = $%d", prefix, len(args)+1), *filter.APIKeyID)
 	}
 	if filter.AccountID != nil && *filter.AccountID > 0 {
-		addCondition(fmt.Sprintf("account_id = $%d", len(args)+1), *filter.AccountID)
+		addCondition(fmt.Sprintf("%saccount_id = $%d", prefix, len(args)+1), *filter.AccountID)
 	}
 	if filter.GroupID != nil && *filter.GroupID > 0 {
-		addCondition(fmt.Sprintf("group_id = $%d", len(args)+1), *filter.GroupID)
+		addCondition(fmt.Sprintf("%sgroup_id = $%d", prefix, len(args)+1), *filter.GroupID)
 	}
 	if p := strings.TrimSpace(filter.Platform); p != "" {
-		addCondition(fmt.Sprintf("LOWER(COALESCE(platform,'')) = $%d", len(args)+1), strings.ToLower(p))
+		addCondition(fmt.Sprintf("LOWER(COALESCE(%splatform,'')) = $%d", prefix, len(args)+1), strings.ToLower(p))
 	}
 	if m := strings.TrimSpace(filter.Model); m != "" {
-		addCondition(fmt.Sprintf("model = $%d", len(args)+1), m)
+		addCondition(fmt.Sprintf("%smodel = $%d", prefix, len(args)+1), m)
 	}
 	if rp := strings.TrimSpace(filter.RequestPath); rp != "" {
-		addCondition(fmt.Sprintf("request_path = $%d", len(args)+1), rp)
+		addCondition(fmt.Sprintf("%srequest_path = $%d", prefix, len(args)+1), rp)
 	}
 
 	where := ""
@@ -361,9 +366,9 @@ func (r *securityChatRepository) ListMessages(ctx context.Context, filter *servi
 	page, pageSize, startTime, endTime := filter.Normalize()
 	offset := (page - 1) * pageSize
 
-	where, args := buildSecurityChatLogConditions(filter, startTime, endTime)
+	where, args := buildSecurityChatLogConditions(filter, startTime, endTime, "l")
 
-	countQuery := fmt.Sprintf(`SELECT COUNT(1) FROM security_chat_logs %s`, where)
+	countQuery := fmt.Sprintf(`SELECT COUNT(1) FROM security_chat_logs l %s`, where)
 	var total int64
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		if err == sql.ErrNoRows {
@@ -374,25 +379,27 @@ func (r *securityChatRepository) ListMessages(ctx context.Context, filter *servi
 	}
 
 	listQuery := fmt.Sprintf(`
-SELECT
-  id,
-  session_id,
-  request_id,
-  client_request_id,
-  user_id,
-  api_key_id,
-  account_id,
-  group_id,
-  platform,
-  model,
-  request_path,
-  stream,
-  status_code,
-  messages::TEXT,
-  created_at
-FROM security_chat_logs
+ SELECT
+  l.id,
+  l.session_id,
+  l.request_id,
+  l.client_request_id,
+  l.user_id,
+  u.email,
+  l.api_key_id,
+  l.account_id,
+  l.group_id,
+  l.platform,
+  l.model,
+  l.request_path,
+  l.stream,
+  l.status_code,
+  l.messages::TEXT,
+  l.created_at
+FROM security_chat_logs l
+LEFT JOIN users u ON u.id = l.user_id
 %s
-ORDER BY created_at ASC
+ORDER BY l.created_at ASC
 LIMIT $%d OFFSET $%d;
 `, where, len(args)+1, len(args)+2)
 
@@ -409,6 +416,7 @@ LIMIT $%d OFFSET $%d;
 			row             service.SecurityChatLog
 			messagesRaw     string
 			userID          sql.NullInt64
+			userEmail       sql.NullString
 			apiKeyID        sql.NullInt64
 			accountID       sql.NullInt64
 			groupID         sql.NullInt64
@@ -425,6 +433,7 @@ LIMIT $%d OFFSET $%d;
 			&requestID,
 			&clientRequestID,
 			&userID,
+			&userEmail,
 			&apiKeyID,
 			&accountID,
 			&groupID,
@@ -448,6 +457,9 @@ LIMIT $%d OFFSET $%d;
 		if userID.Valid {
 			v := userID.Int64
 			row.UserID = &v
+		}
+		if userEmail.Valid {
+			row.UserEmail = &userEmail.String
 		}
 		if apiKeyID.Valid {
 			v := apiKeyID.Int64
@@ -495,7 +507,7 @@ func (r *securityChatRepository) GetStats(ctx context.Context, filter *service.S
 	}
 
 	_, _, startTime, endTime := filter.Normalize()
-	where, args := buildSecurityChatLogConditions(filter, startTime, endTime)
+	where, args := buildSecurityChatLogConditions(filter, startTime, endTime, "l")
 
 	var requestCount int64
 	var sessionCount int64
@@ -505,7 +517,7 @@ SELECT
   COUNT(1),
   COUNT(DISTINCT session_id),
   COALESCE(SUM(pg_column_size(messages)), 0)
-FROM security_chat_logs
+FROM security_chat_logs l
 %s;
 `, where)
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&requestCount, &sessionCount, &estimatedBytes); err != nil {
@@ -527,12 +539,12 @@ FROM security_chat_logs
 	platformQuery := fmt.Sprintf(`
 SELECT
   CASE
-    WHEN LOWER(COALESCE(platform,'')) LIKE '%%opencode%%' THEN 'opencode'
-    WHEN LOWER(COALESCE(platform,'')) LIKE '%%codex%%' THEN 'codex'
+    WHEN LOWER(COALESCE(l.platform,'')) LIKE '%%opencode%%' THEN 'opencode'
+    WHEN LOWER(COALESCE(l.platform,'')) LIKE '%%codex%%' THEN 'codex'
     ELSE 'other'
   END AS bucket,
   COUNT(1) AS count
-FROM security_chat_logs
+FROM security_chat_logs l
 %s
 GROUP BY bucket;
 `, where)
@@ -740,7 +752,7 @@ func (r *securityChatRepository) DeleteLogsByFilter(ctx context.Context, filter 
 	}
 
 	_, _, startTime, endTime := filter.Normalize()
-	where, args := buildSecurityChatLogConditions(filter, startTime, endTime)
+	where, args := buildSecurityChatLogConditions(filter, startTime, endTime, "")
 
 	deleteLogsQuery := fmt.Sprintf("DELETE FROM security_chat_logs %s", where)
 	resLogs, err := r.db.ExecContext(ctx, deleteLogsQuery, args...)
