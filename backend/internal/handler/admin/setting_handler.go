@@ -94,6 +94,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SecurityChatAIBaseURL:                settings.SecurityChatAIBaseURL,
 		SecurityChatAIModel:                  settings.SecurityChatAIModel,
 		SecurityChatExcludedUsers:            settings.SecurityChatExcludedUsers,
+		SecurityChatWhitelistEnabled:         settings.SecurityChatWhitelistEnabled,
 	})
 }
 
@@ -161,11 +162,12 @@ type UpdateSettingsRequest struct {
 	OpsMetricsIntervalSeconds    *int    `json:"ops_metrics_interval_seconds"`
 
 	// Security chat logs
-	SecurityChatRetentionDays *int `json:"security_chat_retention_days"`
-	SecurityChatAIEnabled     *bool   `json:"security_chat_ai_enabled"`
-	SecurityChatAIBaseURL     *string `json:"security_chat_ai_base_url"`
-	SecurityChatAIModel       *string `json:"security_chat_ai_model"`
-	SecurityChatExcludedUsers *string `json:"security_chat_excluded_users"`
+	SecurityChatRetentionDays    *int    `json:"security_chat_retention_days"`
+	SecurityChatAIEnabled        *bool   `json:"security_chat_ai_enabled"`
+	SecurityChatAIBaseURL        *string `json:"security_chat_ai_base_url"`
+	SecurityChatAIModel          *string `json:"security_chat_ai_model"`
+	SecurityChatExcludedUsers    *string `json:"security_chat_excluded_users"`
+	SecurityChatWhitelistEnabled *bool   `json:"security_chat_whitelist_enabled"`
 }
 
 // UpdateSettings 更新系统设置
@@ -320,6 +322,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			req.SecurityChatAIModel = &v
 		}
 	}
+	if req.SecurityChatExcludedUsers != nil {
+		v := strings.TrimSpace(*req.SecurityChatExcludedUsers)
+		req.SecurityChatExcludedUsers = &v
+	}
 
 	settings := &service.SystemSettings{
 		RegistrationEnabled:         req.RegistrationEnabled,
@@ -409,6 +415,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.SecurityChatAIModel
 		}(),
+		SecurityChatExcludedUsers: func() string {
+			if req.SecurityChatExcludedUsers != nil {
+				return *req.SecurityChatExcludedUsers
+			}
+			return previousSettings.SecurityChatExcludedUsers
+		}(),
+		SecurityChatWhitelistEnabled: func() bool {
+			if req.SecurityChatWhitelistEnabled != nil {
+				return *req.SecurityChatWhitelistEnabled
+			}
+			return previousSettings.SecurityChatWhitelistEnabled
+		}(),
 	}
 
 	if err := h.settingService.UpdateSettings(c.Request.Context(), settings); err != nil {
@@ -474,6 +492,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SecurityChatAIEnabled:                updatedSettings.SecurityChatAIEnabled,
 		SecurityChatAIBaseURL:                updatedSettings.SecurityChatAIBaseURL,
 		SecurityChatAIModel:                  updatedSettings.SecurityChatAIModel,
+		SecurityChatExcludedUsers:            updatedSettings.SecurityChatExcludedUsers,
+		SecurityChatWhitelistEnabled:         updatedSettings.SecurityChatWhitelistEnabled,
 	})
 }
 
@@ -630,6 +650,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SecurityChatExcludedUsers != after.SecurityChatExcludedUsers {
 		changed = append(changed, "security_chat_excluded_users")
+	}
+	if before.SecurityChatWhitelistEnabled != after.SecurityChatWhitelistEnabled {
+		changed = append(changed, "security_chat_whitelist_enabled")
 	}
 	return changed
 }

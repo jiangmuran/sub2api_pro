@@ -666,17 +666,40 @@
                 </label>
                 <input v-model="form.security_chat_ai_model" type="text" class="input" />
               </div>
+              <div class="flex items-center gap-3">
+                <Toggle v-model="form.security_chat_whitelist_enabled" />
+                <div>
+                  <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.security.whitelistEnabled') }}
+                  </div>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.security.whitelistEnabledHint') }}
+                  </div>
+                </div>
+              </div>
               <div class="md:col-span-2">
                 <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('admin.settings.security.excludedUsers') }}
+                  {{
+                    form.security_chat_whitelist_enabled
+                      ? t('admin.settings.security.whitelistUsers')
+                      : t('admin.settings.security.excludedUsers')
+                  }}
                 </label>
                 <textarea
                   v-model="form.security_chat_excluded_users"
                   class="input min-h-[90px]"
-                  :placeholder="t('admin.settings.security.excludedUsersHint')"
+                  :placeholder="
+                    form.security_chat_whitelist_enabled
+                      ? t('admin.settings.security.whitelistUsersHint')
+                      : t('admin.settings.security.excludedUsersHint')
+                  "
                 />
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.security.excludedUsersNote') }}
+                  {{
+                    form.security_chat_whitelist_enabled
+                      ? t('admin.settings.security.whitelistUsersNote')
+                      : t('admin.settings.security.excludedUsersNote')
+                  }}
                 </p>
               </div>
             </div>
@@ -1249,7 +1272,8 @@ const form = reactive<SettingsForm>({
   security_chat_ai_enabled: false,
   security_chat_ai_base_url: 'https://api.openai.com/v1',
   security_chat_ai_model: 'gpt-4o-mini',
-  security_chat_excluded_users: ''
+  security_chat_excluded_users: '',
+  security_chat_whitelist_enabled: false
 })
 
 // LinuxDo OAuth redirect URL suggestion
@@ -1370,7 +1394,8 @@ async function saveSettings() {
       security_chat_ai_enabled: form.security_chat_ai_enabled,
       security_chat_ai_base_url: form.security_chat_ai_base_url,
       security_chat_ai_model: form.security_chat_ai_model,
-      security_chat_excluded_users: form.security_chat_excluded_users
+      security_chat_excluded_users: form.security_chat_excluded_users,
+      security_chat_whitelist_enabled: form.security_chat_whitelist_enabled
     }
     const updated = await adminAPI.settings.updateSettings(payload)
     Object.assign(form, updated)

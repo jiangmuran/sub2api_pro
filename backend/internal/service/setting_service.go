@@ -264,6 +264,7 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeySecurityChatAIBaseURL] = strings.TrimSpace(settings.SecurityChatAIBaseURL)
 	updates[SettingKeySecurityChatAIModel] = strings.TrimSpace(settings.SecurityChatAIModel)
 	updates[SettingKeySecurityChatExcludedUsers] = strings.TrimSpace(settings.SecurityChatExcludedUsers)
+	updates[SettingKeySecurityChatWhitelistEnabled] = strconv.FormatBool(settings.SecurityChatWhitelistEnabled)
 
 	err := s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil && s.onUpdate != nil {
@@ -413,11 +414,12 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpsMetricsIntervalSeconds:    "60",
 
 		// Security chat logs
-		SettingKeySecurityChatRetentionDays: "7",
-		SettingKeySecurityChatAIEnabled:     "false",
-		SettingKeySecurityChatAIBaseURL:     "https://api.openai.com/v1",
-		SettingKeySecurityChatAIModel:       "gpt-4o-mini",
-		SettingKeySecurityChatExcludedUsers: "",
+		SettingKeySecurityChatRetentionDays:    "7",
+		SettingKeySecurityChatAIEnabled:        "false",
+		SettingKeySecurityChatAIBaseURL:        "https://api.openai.com/v1",
+		SettingKeySecurityChatAIModel:          "gpt-4o-mini",
+		SettingKeySecurityChatExcludedUsers:    "",
+		SettingKeySecurityChatWhitelistEnabled: "false",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
@@ -559,6 +561,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.SecurityChatAIBaseURL = s.getStringOrDefault(settings, SettingKeySecurityChatAIBaseURL, "https://api.openai.com/v1")
 	result.SecurityChatAIModel = s.getStringOrDefault(settings, SettingKeySecurityChatAIModel, "gpt-4o-mini")
 	result.SecurityChatExcludedUsers = strings.TrimSpace(settings[SettingKeySecurityChatExcludedUsers])
+	result.SecurityChatWhitelistEnabled = settings[SettingKeySecurityChatWhitelistEnabled] == "true"
 
 	return result
 }

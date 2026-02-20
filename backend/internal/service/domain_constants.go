@@ -136,11 +136,12 @@ const (
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
 
 	// Security chat log retention (days)
-	SettingKeySecurityChatRetentionDays = "security_chat_retention_days"
-	SettingKeySecurityChatAIEnabled     = "security_chat_ai_enabled"
-	SettingKeySecurityChatAIBaseURL     = "security_chat_ai_base_url"
-	SettingKeySecurityChatAIModel       = "security_chat_ai_model"
-	SettingKeySecurityChatExcludedUsers = "security_chat_excluded_users"
+	SettingKeySecurityChatRetentionDays    = "security_chat_retention_days"
+	SettingKeySecurityChatAIEnabled        = "security_chat_ai_enabled"
+	SettingKeySecurityChatAIBaseURL        = "security_chat_ai_base_url"
+	SettingKeySecurityChatAIModel          = "security_chat_ai_model"
+	SettingKeySecurityChatExcludedUsers    = "security_chat_excluded_users"
+	SettingKeySecurityChatWhitelistEnabled = "security_chat_whitelist_enabled"
 
 	// =========================
 	// Ops Monitoring (vNext)

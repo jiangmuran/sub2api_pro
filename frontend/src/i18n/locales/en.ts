@@ -3253,9 +3253,14 @@ export default {
         aiKeyPlaceholder: 'Paste API key',
         aiKeyConfigured: 'Configured (leave blank to keep)',
         aiKeyHint: 'Stored in settings; leave empty to keep existing key.',
+        whitelistEnabled: 'Whitelist mode',
+        whitelistEnabledHint: 'Only record logs for users listed below.',
         excludedUsers: 'Exclude users (no logging)',
         excludedUsersHint: 'user_id or email, separated by comma/space/newline',
-        excludedUsersNote: 'These users will not have chat logs recorded.'
+        excludedUsersNote: 'These users will not have chat logs recorded.',
+        whitelistUsers: 'Allowlist users (only logging)',
+        whitelistUsersHint: 'user_id or email, separated by comma/space/newline',
+        whitelistUsersNote: 'Only these users will have chat logs recorded.'
       },
       site: {
         title: 'Site Settings',

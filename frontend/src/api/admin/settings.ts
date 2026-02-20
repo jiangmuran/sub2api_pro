@@ -73,6 +73,7 @@ export interface SystemSettings {
   security_chat_ai_base_url: string
   security_chat_ai_model: string
   security_chat_excluded_users: string
+  security_chat_whitelist_enabled: boolean
 }
 
 export interface UpdateSettingsRequest {
@@ -124,6 +125,7 @@ export interface UpdateSettingsRequest {
   security_chat_ai_base_url?: string
   security_chat_ai_model?: string
   security_chat_excluded_users?: string
+  security_chat_whitelist_enabled?: boolean
 }
 
 /**

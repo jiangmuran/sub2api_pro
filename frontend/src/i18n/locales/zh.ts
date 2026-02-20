@@ -3428,9 +3428,14 @@ export default {
         aiKeyPlaceholder: '粘贴 API Key',
         aiKeyConfigured: '已配置（留空保留）',
         aiKeyHint: '保存在系统设置中，留空将保持当前值。',
+        whitelistEnabled: '白名单模式',
+        whitelistEnabledHint: '仅记录下方名单中的用户。',
         excludedUsers: '排除用户（不记录）',
         excludedUsersHint: 'user_id 或邮箱，逗号/空格/换行分隔',
-        excludedUsersNote: '这些用户的聊天记录将不会被保存。'
+        excludedUsersNote: '这些用户的聊天记录将不会被保存。',
+        whitelistUsers: '白名单用户（仅记录）',
+        whitelistUsersHint: 'user_id 或邮箱，逗号/空格/换行分隔',
+        whitelistUsersNote: '仅这些用户的聊天记录会被保存。'
       },
       site: {
         title: '站点设置',

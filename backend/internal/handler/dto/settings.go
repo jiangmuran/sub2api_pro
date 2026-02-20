@@ -59,11 +59,12 @@ type SystemSettings struct {
 	OpsMetricsIntervalSeconds    int    `json:"ops_metrics_interval_seconds"`
 
 	// Security chat logs
-	SecurityChatRetentionDays int `json:"security_chat_retention_days"`
-	SecurityChatAIEnabled     bool   `json:"security_chat_ai_enabled"`
-	SecurityChatAIBaseURL     string `json:"security_chat_ai_base_url"`
-	SecurityChatAIModel       string `json:"security_chat_ai_model"`
-	SecurityChatExcludedUsers string `json:"security_chat_excluded_users"`
+	SecurityChatRetentionDays    int    `json:"security_chat_retention_days"`
+	SecurityChatAIEnabled        bool   `json:"security_chat_ai_enabled"`
+	SecurityChatAIBaseURL        string `json:"security_chat_ai_base_url"`
+	SecurityChatAIModel          string `json:"security_chat_ai_model"`
+	SecurityChatExcludedUsers    string `json:"security_chat_excluded_users"`
+	SecurityChatWhitelistEnabled bool   `json:"security_chat_whitelist_enabled"`
 }
 
 type PublicSettings struct {

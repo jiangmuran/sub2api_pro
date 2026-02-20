@@ -61,11 +61,12 @@ type SystemSettings struct {
 	OpsMetricsIntervalSeconds    int
 
 	// Security chat logs
-	SecurityChatRetentionDays int
-	SecurityChatAIEnabled     bool
-	SecurityChatAIBaseURL     string
-	SecurityChatAIModel       string
-	SecurityChatExcludedUsers string
+	SecurityChatRetentionDays    int
+	SecurityChatAIEnabled        bool
+	SecurityChatAIBaseURL        string
+	SecurityChatAIModel          string
+	SecurityChatExcludedUsers    string
+	SecurityChatWhitelistEnabled bool
 }
 
 type PublicSettings struct {

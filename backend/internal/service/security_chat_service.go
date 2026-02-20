@@ -239,11 +239,31 @@ func (s *SecurityChatService) ShouldCapture(ctx context.Context, userID *int64, 
 	if s == nil || s.settingRepo == nil {
 		return true
 	}
+	whitelistEnabled := false
+	if raw, err := s.settingRepo.GetValue(ctx, SettingKeySecurityChatWhitelistEnabled); err == nil {
+		whitelistEnabled = strings.TrimSpace(raw) == "true"
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySecurityChatExcludedUsers)
 	if err != nil {
-		return true
+		return !whitelistEnabled
 	}
 	list := parseExcludedUsers(value)
+	if whitelistEnabled {
+		if len(list.ids) == 0 && len(list.emails) == 0 {
+			return false
+		}
+		if userID != nil {
+			if _, ok := list.ids[*userID]; ok {
+				return true
+			}
+		}
+		if userEmail != "" {
+			if _, ok := list.emails[strings.ToLower(strings.TrimSpace(userEmail))]; ok {
+				return true
+			}
+		}
+		return false
+	}
 	if len(list.ids) == 0 && len(list.emails) == 0 {
 		return true
 	}
@@ -558,6 +578,7 @@ func buildSecurityChatMessages(platform string, requestBody []byte, responseBody
 	msgs := make([]SecurityChatMessage, 0, 12)
 
 	appendMsg := func(role, content, source string) {
+		content = sanitizeSecurityChatContent(content)
 		content = strings.TrimSpace(content)
 		if content == "" {
 			return
@@ -672,6 +693,30 @@ func normalizeMessage(msg any) (role string, content string) {
 	return role, content
 }
 
+func sanitizeSecurityChatContent(content string) string {
+	const startTag = "<system-reminder>"
+	const endTag = "</system-reminder>"
+	if content == "" {
+		return content
+	}
+	for {
+		lower := strings.ToLower(content)
+		start := strings.Index(lower, startTag)
+		if start == -1 {
+			break
+		}
+		rest := lower[start+len(startTag):]
+		end := strings.Index(rest, endTag)
+		if end == -1 {
+			content = content[:start]
+			break
+		}
+		end = start + len(startTag) + end + len(endTag)
+		content = content[:start] + content[end:]
+	}
+	return strings.TrimSpace(content)
+}
+
 func stringifyChatContent(v any) string {
 	switch t := v.(type) {
 	case string:
@@ -711,6 +756,7 @@ func extractResponseMessages(platform string, responseBody []byte) []SecurityCha
 
 	msgs := make([]SecurityChatMessage, 0, 4)
 	appendMsg := func(role, content string) {
+		content = sanitizeSecurityChatContent(content)
 		content = strings.TrimSpace(content)
 		if content == "" {
 			return
