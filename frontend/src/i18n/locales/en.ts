@@ -505,6 +505,7 @@ export default {
     today: 'Today',
     total: 'Total',
     quota: 'Quota',
+    lastUsedAt: 'Last Used',
     useKey: 'Use Key',
     useKeyModal: {
       title: 'Use API Key',
