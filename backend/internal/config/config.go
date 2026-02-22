@@ -479,8 +479,9 @@ type OpsMetricsCollectorCacheConfig struct {
 type JWTConfig struct {
 	Secret     string `mapstructure:"secret"`
 	ExpireHour int    `mapstructure:"expire_hour"`
-	// AccessTokenExpireMinutes: Access Token有效期（分钟），默认15分钟
-	// 短有效期减少被盗用风险，配合Refresh Token实现无感续期
+	// AccessTokenExpireMinutes: Access Token有效期（分钟）
+	// - >0: 使用分钟配置（优先级高于 ExpireHour）
+	// - =0: 回退使用 ExpireHour（向后兼容旧配置）
 	AccessTokenExpireMinutes int `mapstructure:"access_token_expire_minutes"`
 	// RefreshTokenExpireDays: Refresh Token有效期（天），默认30天
 	RefreshTokenExpireDays int `mapstructure:"refresh_token_expire_days"`
@@ -810,9 +811,9 @@ func setDefaults() {
 	// JWT
 	viper.SetDefault("jwt.secret", "")
 	viper.SetDefault("jwt.expire_hour", 24)
-	viper.SetDefault("jwt.access_token_expire_minutes", 360) // 6小时Access Token有效期
-	viper.SetDefault("jwt.refresh_token_expire_days", 30)    // 30天Refresh Token有效期
-	viper.SetDefault("jwt.refresh_window_minutes", 2)        // 过期前2分钟开始允许刷新
+	viper.SetDefault("jwt.access_token_expire_minutes", 0) // 0 表示回退到 expire_hour
+	viper.SetDefault("jwt.refresh_token_expire_days", 30)  // 30天Refresh Token有效期
+	viper.SetDefault("jwt.refresh_window_minutes", 2)      // 过期前2分钟开始允许刷新
 
 	// TOTP
 	viper.SetDefault("totp.encryption_key", "")
@@ -943,8 +944,8 @@ func (c *Config) Validate() error {
 		log.Printf("Warning: jwt.expire_hour is %d hours (> 24). Consider shorter expiration for security.", c.JWT.ExpireHour)
 	}
 	// JWT Refresh Token配置验证
-	if c.JWT.AccessTokenExpireMinutes <= 0 {
-		return fmt.Errorf("jwt.access_token_expire_minutes must be positive")
+	if c.JWT.AccessTokenExpireMinutes < 0 {
+		return fmt.Errorf("jwt.access_token_expire_minutes must be non-negative")
 	}
 	if c.JWT.AccessTokenExpireMinutes > 720 {
 		log.Printf("Warning: jwt.access_token_expire_minutes is %d (> 720). Consider shorter expiration for security.", c.JWT.AccessTokenExpireMinutes)
