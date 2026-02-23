@@ -1584,7 +1584,7 @@
           <input
             v-model.number="form.priority"
             type="number"
-            min="1"
+            step="1"
             class="input"
             data-tour="account-form-priority"
           />
@@ -2857,6 +2857,13 @@ const handleValidateRefreshToken = (rt: string) => {
 const formatDateTimeLocal = formatDateTimeLocalInput
 const parseDateTimeLocal = parseDateTimeLocalInput
 
+const normalizePriorityInput = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 1
+  }
+  return Math.trunc(value)
+}
+
 // Create account and handle success/failure
 const createAccountAndFinish = async (
   platform: AccountPlatform,
@@ -2876,7 +2883,7 @@ const createAccountAndFinish = async (
     extra,
     proxy_id: form.proxy_id,
     concurrency: form.concurrency,
-    priority: form.priority,
+    priority: normalizePriorityInput(form.priority),
     rate_multiplier: form.rate_multiplier,
     group_ids: form.group_ids,
     expires_at: form.expires_at,

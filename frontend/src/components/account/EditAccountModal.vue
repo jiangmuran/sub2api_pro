@@ -677,7 +677,7 @@
           <input
             v-model.number="form.priority"
             type="number"
-            min="1"
+            step="1"
             class="input"
             data-tour="account-form-priority"
           />
@@ -1598,6 +1598,13 @@ function toPositiveNumber(value: unknown) {
   return Math.trunc(num)
 }
 
+const normalizePriorityInput = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 1
+  }
+  return Math.trunc(value)
+}
+
 const formatDateTimeLocal = formatDateTimeLocalInput
 const parseDateTimeLocal = parseDateTimeLocalInput
 
@@ -1619,6 +1626,7 @@ const handleSubmit = async () => {
     if (form.expires_at === null) {
       updatePayload.expires_at = 0
     }
+    updatePayload.priority = normalizePriorityInput(form.priority)
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
 
     // For apikey type, handle credentials update

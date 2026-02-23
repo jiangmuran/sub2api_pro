@@ -509,7 +509,7 @@
             v-model.number="priority"
             id="bulk-edit-priority"
             type="number"
-            min="1"
+            step="1"
             :disabled="!enablePriority"
             class="input"
             :class="!enablePriority && 'cursor-not-allowed opacity-50'"
@@ -799,6 +799,13 @@ const commonErrorCodes = [
   { value: 529, label: 'Overloaded' }
 ]
 
+const normalizePriorityInput = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 1
+  }
+  return Math.trunc(value)
+}
+
 const statusOptions = computed(() => [
   { value: 'active', label: t('common.active') },
   { value: 'inactive', label: t('common.inactive') }
@@ -908,7 +915,7 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
   }
 
   if (enablePriority.value) {
-    updates.priority = priority.value
+    updates.priority = normalizePriorityInput(priority.value)
   }
 
   if (enableRateMultiplier.value) {
