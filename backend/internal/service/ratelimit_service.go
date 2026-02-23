@@ -441,11 +441,23 @@ func (s *RateLimitService) getInvalidBearerAlertRuleID(ctx context.Context) int6
 		return s.invalidBearerRuleID
 	}
 
-	const ruleName = "OpenAI Invalid Bearer Auto Recovery"
+	const ruleNameCN = "OpenAI 失效令牌自动恢复"
+	const ruleNameEN = "OpenAI Invalid Bearer Auto Recovery"
 	rules, err := s.opsRepo.ListAlertRules(ctx)
 	if err == nil {
 		for _, rule := range rules {
-			if rule != nil && strings.EqualFold(rule.Name, ruleName) {
+			if rule == nil {
+				continue
+			}
+			if strings.EqualFold(rule.Name, ruleNameCN) {
+				s.invalidBearerRuleID = rule.ID
+				return rule.ID
+			}
+			if strings.EqualFold(rule.Name, ruleNameEN) {
+				if s.updateInvalidBearerRuleLocalization(ctx, rule, ruleNameCN) {
+					s.invalidBearerRuleID = rule.ID
+					return rule.ID
+				}
 				s.invalidBearerRuleID = rule.ID
 				return rule.ID
 			}
@@ -455,8 +467,8 @@ func (s *RateLimitService) getInvalidBearerAlertRuleID(ctx context.Context) int6
 	}
 
 	newRule := &OpsAlertRule{
-		Name:             ruleName,
-		Description:      "Auto recovery for OpenAI invalid bearer token surge (>=90% accounts).",
+		Name:             ruleNameCN,
+		Description:      "OpenAI 失效令牌占比>=90%时触发自动恢复并记录结果。",
 		Enabled:          true,
 		Severity:         "P0",
 		MetricType:       "custom_event",
@@ -476,7 +488,10 @@ func (s *RateLimitService) getInvalidBearerAlertRuleID(ctx context.Context) int6
 		slog.Warn("openai_invalid_bearer_rule_create_failed", "error", err)
 		if rules, listErr := s.opsRepo.ListAlertRules(ctx); listErr == nil {
 			for _, rule := range rules {
-				if rule != nil && strings.EqualFold(rule.Name, ruleName) {
+				if rule == nil {
+					continue
+				}
+				if strings.EqualFold(rule.Name, ruleNameCN) || strings.EqualFold(rule.Name, ruleNameEN) {
 					s.invalidBearerRuleID = rule.ID
 					return rule.ID
 				}
@@ -487,6 +502,35 @@ func (s *RateLimitService) getInvalidBearerAlertRuleID(ctx context.Context) int6
 
 	s.invalidBearerRuleID = created.ID
 	return created.ID
+}
+
+func (s *RateLimitService) updateInvalidBearerRuleLocalization(ctx context.Context, rule *OpsAlertRule, newName string) bool {
+	if s.opsRepo == nil || rule == nil {
+		return false
+	}
+	updated := &OpsAlertRule{
+		ID:               rule.ID,
+		Name:             newName,
+		Description:      rule.Description,
+		Enabled:          rule.Enabled,
+		Severity:         rule.Severity,
+		MetricType:       rule.MetricType,
+		Operator:         rule.Operator,
+		Threshold:        rule.Threshold,
+		WindowMinutes:    rule.WindowMinutes,
+		SustainedMinutes: rule.SustainedMinutes,
+		CooldownMinutes:  rule.CooldownMinutes,
+		NotifyEmail:      rule.NotifyEmail,
+		Filters:          rule.Filters,
+	}
+	if strings.TrimSpace(updated.Description) == "" {
+		updated.Description = "OpenAI 失效令牌占比>=90%时触发自动恢复并记录结果。"
+	}
+	if _, err := s.opsRepo.UpdateAlertRule(ctx, updated); err != nil {
+		slog.Warn("openai_invalid_bearer_rule_update_failed", "error", err)
+		return false
+	}
+	return true
 }
 
 func (s *RateLimitService) getOpenAIInvalidBearerAutoRecoverConfig() (bool, time.Duration) {
