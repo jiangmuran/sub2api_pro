@@ -25,10 +25,12 @@ type RateLimitService struct {
 	settingService        *SettingService
 	tokenCacheInvalidator TokenCacheInvalidator
 	openaiOAuthService    *OpenAIOAuthService
+	opsService            *OpsService
 	usageCacheMu          sync.RWMutex
 	usageCache            map[int64]*geminiUsageCacheEntry
 	autoRecoverMu         sync.Mutex
 	autoRecoverBlockedTil time.Time
+	autoRecoverRunning    bool
 }
 
 type geminiUsageCacheEntry struct {
@@ -69,6 +71,10 @@ func (s *RateLimitService) SetTokenCacheInvalidator(invalidator TokenCacheInvali
 // SetOpenAIOAuthService sets OpenAI OAuth service for pool auto-recovery (optional dependency).
 func (s *RateLimitService) SetOpenAIOAuthService(openaiOAuthService *OpenAIOAuthService) {
 	s.openaiOAuthService = openaiOAuthService
+}
+
+func (s *RateLimitService) SetOpsService(opsService *OpsService) {
+	s.opsService = opsService
 }
 
 // ErrorPolicyResult 表示错误策略检查的结果
@@ -217,18 +223,22 @@ func (s *RateLimitService) tryTriggerOpenAIInvalidBearerAutoRecover() {
 	if s.openaiOAuthService == nil {
 		return
 	}
-	enabled, cooldown := s.getOpenAIInvalidBearerAutoRecoverConfig()
+	enabled, _ := s.getOpenAIInvalidBearerAutoRecoverConfig()
 	if !enabled {
 		return
 	}
 
 	now := time.Now()
 	s.autoRecoverMu.Lock()
+	if s.autoRecoverRunning {
+		s.autoRecoverMu.Unlock()
+		return
+	}
 	if now.Before(s.autoRecoverBlockedTil) {
 		s.autoRecoverMu.Unlock()
 		return
 	}
-	s.autoRecoverBlockedTil = now.Add(cooldown)
+	s.autoRecoverRunning = true
 	s.autoRecoverMu.Unlock()
 
 	go s.runOpenAIInvalidBearerAutoRecover()
@@ -236,6 +246,13 @@ func (s *RateLimitService) tryTriggerOpenAIInvalidBearerAutoRecover() {
 
 func (s *RateLimitService) runOpenAIInvalidBearerAutoRecover() {
 	ctx := context.Background()
+	start := time.Now()
+	defer func() {
+		s.autoRecoverMu.Lock()
+		s.autoRecoverRunning = false
+		s.autoRecoverMu.Unlock()
+	}()
+
 	accounts, err := s.listOpenAIOAuthAccounts(ctx)
 	if err != nil {
 		slog.Warn("openai_invalid_bearer_auto_recover_list_failed", "error", err)
@@ -245,14 +262,39 @@ func (s *RateLimitService) runOpenAIInvalidBearerAutoRecover() {
 		return
 	}
 
+	invalidCount := 0
 	for i := range accounts {
 		acc := &accounts[i]
-		if acc.Status != StatusError || !isInvalidBearerTokenErrorMessage(acc.ErrorMessage) {
-			return
+		if acc.Status == StatusError && isInvalidBearerTokenErrorMessage(acc.ErrorMessage) {
+			invalidCount++
 		}
 	}
+	if !shouldTriggerInvalidBearerRecover(invalidCount, len(accounts)) {
+		return
+	}
 
-	slog.Warn("openai_invalid_bearer_auto_recover_started", "accounts", len(accounts))
+	_, cooldown := s.getOpenAIInvalidBearerAutoRecoverConfig()
+	s.autoRecoverMu.Lock()
+	s.autoRecoverBlockedTil = time.Now().Add(cooldown)
+	s.autoRecoverMu.Unlock()
+
+	severityRatio := calcInvalidBearerRatio(invalidCount, len(accounts))
+	s.emitOpenAIInvalidBearerAlert(
+		ctx,
+		"P0",
+		"OpenAI invalid bearer token surge",
+		buildInvalidBearerAlertDescription(invalidCount, len(accounts), severityRatio, 0, 0, 0),
+		map[string]any{
+			"platform":        PlatformOpenAI,
+			"invalid_count":   invalidCount,
+			"total_count":     len(accounts),
+			"invalid_ratio":   severityRatio,
+			"event":           "auto_recover_start",
+			"error_signature": "invalid_bearer_token",
+		},
+	)
+
+	slog.Warn("openai_invalid_bearer_auto_recover_started", "accounts", len(accounts), "invalid", invalidCount)
 	refreshed := 0
 	failed := 0
 	for i := range accounts {
@@ -269,12 +311,101 @@ func (s *RateLimitService) runOpenAIInvalidBearerAutoRecover() {
 		refreshed++
 	}
 
+	duration := time.Since(start)
+	if failed == 0 {
+		s.emitOpenAIInvalidBearerAlert(
+			ctx,
+			"P1",
+			"OpenAI invalid bearer recovered",
+			buildInvalidBearerAlertDescription(invalidCount, len(accounts), severityRatio, refreshed, failed, duration),
+			map[string]any{
+				"platform":        PlatformOpenAI,
+				"invalid_count":   invalidCount,
+				"total_count":     len(accounts),
+				"invalid_ratio":   severityRatio,
+				"refreshed":       refreshed,
+				"failed":          failed,
+				"duration_ms":     duration.Milliseconds(),
+				"event":           "auto_recover_success",
+				"error_signature": "invalid_bearer_token",
+			},
+		)
+	} else {
+		s.emitOpenAIInvalidBearerAlert(
+			ctx,
+			"P0",
+			"OpenAI invalid bearer recovery failed",
+			buildInvalidBearerAlertDescription(invalidCount, len(accounts), severityRatio, refreshed, failed, duration),
+			map[string]any{
+				"platform":        PlatformOpenAI,
+				"invalid_count":   invalidCount,
+				"total_count":     len(accounts),
+				"invalid_ratio":   severityRatio,
+				"refreshed":       refreshed,
+				"failed":          failed,
+				"duration_ms":     duration.Milliseconds(),
+				"event":           "auto_recover_failed",
+				"error_signature": "invalid_bearer_token",
+			},
+		)
+	}
+
 	slog.Warn(
 		"openai_invalid_bearer_auto_recover_finished",
 		"total", len(accounts),
 		"refreshed", refreshed,
 		"failed", failed,
 	)
+}
+
+func shouldTriggerInvalidBearerRecover(invalidCount, totalCount int) bool {
+	if totalCount == 0 {
+		return false
+	}
+	if invalidCount == 0 {
+		return false
+	}
+	return calcInvalidBearerRatio(invalidCount, totalCount) >= 0.9
+}
+
+func calcInvalidBearerRatio(invalidCount, totalCount int) float64 {
+	if totalCount == 0 {
+		return 0
+	}
+	return float64(invalidCount) / float64(totalCount)
+}
+
+func buildInvalidBearerAlertDescription(invalidCount, totalCount int, ratio float64, refreshed, failed int, duration time.Duration) string {
+	if totalCount == 0 {
+		return "No OpenAI OAuth accounts found"
+	}
+	if refreshed == 0 && failed == 0 {
+		return "Invalid bearer token detected on " + strconv.Itoa(invalidCount) + "/" + strconv.Itoa(totalCount) +
+			" accounts (ratio: " + strconv.FormatFloat(ratio*100, 'f', 1, 64) + "%)"
+	}
+	return "Invalid bearer token recovery: " +
+		"invalid=" + strconv.Itoa(invalidCount) + "/" + strconv.Itoa(totalCount) +
+		", refreshed=" + strconv.Itoa(refreshed) +
+		", failed=" + strconv.Itoa(failed) +
+		", duration=" + duration.Truncate(time.Millisecond).String()
+}
+
+func (s *RateLimitService) emitOpenAIInvalidBearerAlert(ctx context.Context, severity, title, description string, dimensions map[string]any) {
+	if s.opsService == nil {
+		return
+	}
+	event := &OpsAlertEvent{
+		RuleID:      0,
+		Severity:    severity,
+		Status:      OpsAlertStatusFiring,
+		Title:       title,
+		Description: description,
+		Dimensions:  dimensions,
+		FiredAt:     time.Now(),
+	}
+	if _, err := s.opsService.CreateAlertEvent(ctx, event); err != nil {
+		slog.Warn("openai_invalid_bearer_alert_create_failed", "error", err)
+	}
 }
 
 func (s *RateLimitService) getOpenAIInvalidBearerAutoRecoverConfig() (bool, time.Duration) {
