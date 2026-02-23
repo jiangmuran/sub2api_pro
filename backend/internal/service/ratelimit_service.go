@@ -25,7 +25,7 @@ type RateLimitService struct {
 	settingService        *SettingService
 	tokenCacheInvalidator TokenCacheInvalidator
 	openaiOAuthService    *OpenAIOAuthService
-	opsService            *OpsService
+	opsRepo               OpsRepository
 	usageCacheMu          sync.RWMutex
 	usageCache            map[int64]*geminiUsageCacheEntry
 	autoRecoverMu         sync.Mutex
@@ -73,8 +73,8 @@ func (s *RateLimitService) SetOpenAIOAuthService(openaiOAuthService *OpenAIOAuth
 	s.openaiOAuthService = openaiOAuthService
 }
 
-func (s *RateLimitService) SetOpsService(opsService *OpsService) {
-	s.opsService = opsService
+func (s *RateLimitService) SetOpsRepository(opsRepo OpsRepository) {
+	s.opsRepo = opsRepo
 }
 
 // ErrorPolicyResult 表示错误策略检查的结果
@@ -391,7 +391,10 @@ func buildInvalidBearerAlertDescription(invalidCount, totalCount int, ratio floa
 }
 
 func (s *RateLimitService) emitOpenAIInvalidBearerAlert(ctx context.Context, severity, title, description string, dimensions map[string]any) {
-	if s.opsService == nil {
+	if s.opsRepo == nil {
+		return
+	}
+	if !s.isOpsMonitoringEnabled(ctx) {
 		return
 	}
 	event := &OpsAlertEvent{
@@ -403,9 +406,23 @@ func (s *RateLimitService) emitOpenAIInvalidBearerAlert(ctx context.Context, sev
 		Dimensions:  dimensions,
 		FiredAt:     time.Now(),
 	}
-	if _, err := s.opsService.CreateAlertEvent(ctx, event); err != nil {
+	if _, err := s.opsRepo.CreateAlertEvent(ctx, event); err != nil {
 		slog.Warn("openai_invalid_bearer_alert_create_failed", "error", err)
 	}
+}
+
+func (s *RateLimitService) isOpsMonitoringEnabled(ctx context.Context) bool {
+	if s.cfg != nil && !s.cfg.Ops.Enabled {
+		return false
+	}
+	if s.settingService == nil {
+		return true
+	}
+	settings, err := s.settingService.GetAllSettings(ctx)
+	if err != nil || settings == nil {
+		return true
+	}
+	return settings.OpsMonitoringEnabled
 }
 
 func (s *RateLimitService) getOpenAIInvalidBearerAutoRecoverConfig() (bool, time.Duration) {
