@@ -31,6 +31,8 @@ type RateLimitService struct {
 	autoRecoverMu         sync.Mutex
 	autoRecoverBlockedTil time.Time
 	autoRecoverRunning    bool
+	invalidBearerRuleMu   sync.Mutex
+	invalidBearerRuleID   int64
 }
 
 type geminiUsageCacheEntry struct {
@@ -397,8 +399,12 @@ func (s *RateLimitService) emitOpenAIInvalidBearerAlert(ctx context.Context, sev
 	if !s.isOpsMonitoringEnabled(ctx) {
 		return
 	}
+	ruleID := s.getInvalidBearerAlertRuleID(ctx)
+	if ruleID == 0 {
+		return
+	}
 	event := &OpsAlertEvent{
-		RuleID:      0,
+		RuleID:      ruleID,
 		Severity:    severity,
 		Status:      OpsAlertStatusFiring,
 		Title:       title,
@@ -423,6 +429,64 @@ func (s *RateLimitService) isOpsMonitoringEnabled(ctx context.Context) bool {
 		return true
 	}
 	return settings.OpsMonitoringEnabled
+}
+
+func (s *RateLimitService) getInvalidBearerAlertRuleID(ctx context.Context) int64 {
+	if s.opsRepo == nil {
+		return 0
+	}
+	s.invalidBearerRuleMu.Lock()
+	defer s.invalidBearerRuleMu.Unlock()
+	if s.invalidBearerRuleID > 0 {
+		return s.invalidBearerRuleID
+	}
+
+	const ruleName = "OpenAI Invalid Bearer Auto Recovery"
+	rules, err := s.opsRepo.ListAlertRules(ctx)
+	if err == nil {
+		for _, rule := range rules {
+			if rule != nil && strings.EqualFold(rule.Name, ruleName) {
+				s.invalidBearerRuleID = rule.ID
+				return rule.ID
+			}
+		}
+	} else {
+		slog.Warn("openai_invalid_bearer_rule_list_failed", "error", err)
+	}
+
+	newRule := &OpsAlertRule{
+		Name:             ruleName,
+		Description:      "Auto recovery for OpenAI invalid bearer token surge (>=90% accounts).",
+		Enabled:          true,
+		Severity:         "P0",
+		MetricType:       "custom_event",
+		Operator:         "gte",
+		Threshold:        1,
+		WindowMinutes:    1,
+		SustainedMinutes: 1,
+		CooldownMinutes:  1,
+		NotifyEmail:      true,
+		Filters: map[string]any{
+			"platform":        PlatformOpenAI,
+			"error_signature": "invalid_bearer_token",
+		},
+	}
+	created, err := s.opsRepo.CreateAlertRule(ctx, newRule)
+	if err != nil {
+		slog.Warn("openai_invalid_bearer_rule_create_failed", "error", err)
+		if rules, listErr := s.opsRepo.ListAlertRules(ctx); listErr == nil {
+			for _, rule := range rules {
+				if rule != nil && strings.EqualFold(rule.Name, ruleName) {
+					s.invalidBearerRuleID = rule.ID
+					return rule.ID
+				}
+			}
+		}
+		return 0
+	}
+
+	s.invalidBearerRuleID = created.ID
+	return created.ID
 }
 
 func (s *RateLimitService) getOpenAIInvalidBearerAutoRecoverConfig() (bool, time.Duration) {
