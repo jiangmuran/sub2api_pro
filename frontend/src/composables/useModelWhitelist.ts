@@ -398,3 +398,13 @@ export function buildModelMappingObject(
 
   return Object.keys(mapping).length > 0 ? mapping : null
 }
+
+export function buildModelWhitelist(allowedModels: string[]): string[] | null {
+  const whitelist = allowedModels
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0)
+  if (whitelist.length === 0) {
+    return null
+  }
+  return Array.from(new Set(whitelist))
+}

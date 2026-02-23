@@ -69,75 +69,101 @@
         <div v-if="account.platform !== 'gemini' && account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
-          <!-- Mode Toggle -->
-          <div class="mb-4 flex gap-2">
-            <button
-              type="button"
-              @click="modelRestrictionMode = 'whitelist'"
-              :class="[
-                'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                modelRestrictionMode === 'whitelist'
-                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-              ]"
-            >
-              <svg
-                class="mr-1.5 inline h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              {{ t('admin.accounts.modelWhitelist') }}
-            </button>
-            <button
-              type="button"
-              @click="modelRestrictionMode = 'mapping'"
-              :class="[
-                'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                modelRestrictionMode === 'mapping'
-                  ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
-              ]"
-            >
-              <svg
-                class="mr-1.5 inline h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                />
-              </svg>
-              {{ t('admin.accounts.modelMapping') }}
-            </button>
-          </div>
+          <div class="space-y-5">
+            <div>
+              <div class="mb-2 flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.accounts.modelWhitelist') }}
+                </span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
+                </span>
+              </div>
+              <ModelWhitelistSelector v-model="allowedModels" :platform="account?.platform || 'anthropic'" />
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                <span v-if="allowedModels.length === 0">{{ t('admin.accounts.supportsAllModels') }}</span>
+              </p>
+            </div>
 
-          <!-- Whitelist Mode -->
-          <div v-if="modelRestrictionMode === 'whitelist'">
-            <ModelWhitelistSelector v-model="allowedModels" :platform="account?.platform || 'anthropic'" />
-            <p class="text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
-              <span v-if="allowedModels.length === 0">{{
-                t('admin.accounts.supportsAllModels')
-              }}</span>
-            </p>
-          </div>
+            <div>
+              <div class="mb-2 flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.accounts.modelMapping') }}
+                </span>
+              </div>
 
-          <!-- Mapping Mode -->
-          <div v-else>
-            <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-              <p class="text-xs text-purple-700 dark:text-purple-400">
+              <div class="mb-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
+                <p class="text-xs text-purple-700 dark:text-purple-400">
+                  <svg
+                    class="mr-1 inline h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  {{ t('admin.accounts.mapRequestModels') }}
+                </p>
+              </div>
+
+              <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
+                <div
+                  v-for="(mapping, index) in modelMappings"
+                  :key="index"
+                  class="flex items-center gap-2"
+                >
+                  <input
+                    v-model="mapping.from"
+                    type="text"
+                    class="input flex-1"
+                    :placeholder="t('admin.accounts.requestModel')"
+                  />
+                  <svg
+                    class="h-4 w-4 flex-shrink-0 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M14 5l7 7m0 0l-7 7m7-7H3"
+                    />
+                  </svg>
+                  <input
+                    v-model="mapping.to"
+                    type="text"
+                    class="input flex-1"
+                    :placeholder="t('admin.accounts.actualModel')"
+                  />
+                  <button
+                    type="button"
+                    @click="removeModelMapping(index)"
+                    class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                  >
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                @click="addModelMapping"
+                class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
+              >
                 <svg
                   class="mr-1 inline h-4 w-4"
                   fill="none"
@@ -148,94 +174,23 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    d="M12 4v16m8-8H4"
                   />
                 </svg>
-                {{ t('admin.accounts.mapRequestModels') }}
-              </p>
-            </div>
+                {{ t('admin.accounts.addMapping') }}
+              </button>
 
-            <!-- Model Mapping List -->
-            <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
-              <div
-                v-for="(mapping, index) in modelMappings"
-                :key="index"
-                class="flex items-center gap-2"
-              >
-                <input
-                  v-model="mapping.from"
-                  type="text"
-                  class="input flex-1"
-                  :placeholder="t('admin.accounts.requestModel')"
-                />
-                <svg
-                  class="h-4 w-4 flex-shrink-0 text-gray-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
-                </svg>
-                <input
-                  v-model="mapping.to"
-                  type="text"
-                  class="input flex-1"
-                  :placeholder="t('admin.accounts.actualModel')"
-                />
+              <div class="flex flex-wrap gap-2">
                 <button
+                  v-for="preset in presetMappings"
+                  :key="preset.label"
                   type="button"
-                  @click="removeModelMapping(index)"
-                  class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                  @click="addPresetMapping(preset.from, preset.to)"
+                  :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
                 >
-                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
+                  + {{ preset.label }}
                 </button>
               </div>
-            </div>
-
-            <button
-              type="button"
-              @click="addModelMapping"
-              class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
-            >
-              <svg
-                class="mr-1 inline h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              {{ t('admin.accounts.addMapping') }}
-            </button>
-
-            <!-- Quick Add Buttons -->
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="preset in presetMappings"
-                :key="preset.label"
-                type="button"
-                @click="addPresetMapping(preset.from, preset.to)"
-                :class="['rounded-lg px-3 py-1 text-xs transition-colors', preset.color]"
-              >
-                + {{ preset.label }}
-              </button>
             </div>
           </div>
         </div>
@@ -1066,6 +1021,7 @@ import {
   getPresetMappingsByPlatform,
   commonErrorCodes,
   buildModelMappingObject,
+  buildModelWhitelist,
   isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
 
@@ -1114,7 +1070,6 @@ const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
 const modelMappings = ref<ModelMapping[]>([])
-const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
 const customErrorCodesEnabled = ref(false)
 const selectedErrorCodes = ref<number[]>([])
@@ -1280,31 +1235,34 @@ watch(
               : 'https://api.anthropic.com'
         editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
 
-        // Load model mappings and detect mode
+        // Load model whitelist and mappings (allow coexist)
+        const rawWhitelist = credentials.model_whitelist as string[] | undefined
+        const whitelistValues = Array.isArray(rawWhitelist)
+          ? rawWhitelist.map((item) => String(item).trim()).filter((item) => item.length > 0)
+          : []
+
         const existingMappings = credentials.model_mapping as Record<string, string> | undefined
-        if (existingMappings && typeof existingMappings === 'object') {
-          const entries = Object.entries(existingMappings)
+        const mappingEntries =
+          existingMappings && typeof existingMappings === 'object'
+            ? Object.entries(existingMappings)
+            : []
 
-          // Detect if this is whitelist mode (all from === to) or mapping mode
-          const isWhitelistMode = entries.length > 0 && entries.every(([from, to]) => from === to)
+        const isLegacyWhitelist =
+          whitelistValues.length === 0 &&
+          mappingEntries.length > 0 &&
+          mappingEntries.every(([from, to]) => from === to)
 
-          if (isWhitelistMode) {
-            // Whitelist mode: populate allowedModels
-            modelRestrictionMode.value = 'whitelist'
-            allowedModels.value = entries.map(([from]) => from)
-            modelMappings.value = []
-          } else {
-            // Mapping mode: populate modelMappings
-            modelRestrictionMode.value = 'mapping'
-            modelMappings.value = entries.map(([from, to]) => ({ from, to }))
-            allowedModels.value = []
-          }
+        if (whitelistValues.length > 0) {
+          allowedModels.value = whitelistValues
+        } else if (isLegacyWhitelist) {
+          allowedModels.value = mappingEntries.map(([from]) => from)
         } else {
-          // No mappings: default to whitelist mode with empty selection (allow all)
-          modelRestrictionMode.value = 'whitelist'
-          modelMappings.value = []
           allowedModels.value = []
         }
+
+        modelMappings.value = mappingEntries
+          .filter(([from, to]) => from !== to)
+          .map(([from, to]) => ({ from, to }))
 
         // Load custom error codes
         customErrorCodesEnabled.value = credentials.custom_error_codes_enabled === true
@@ -1325,7 +1283,6 @@ watch(
               ? 'https://generativelanguage.googleapis.com'
               : 'https://api.anthropic.com'
         editBaseUrl.value = platformDefaultUrl
-        modelRestrictionMode.value = 'whitelist'
         modelMappings.value = []
         allowedModels.value = []
         customErrorCodesEnabled.value = false
@@ -1633,7 +1590,7 @@ const handleSubmit = async () => {
     if (props.account.type === 'apikey') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
       const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
-      const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
+      const modelMapping = buildModelMappingObject('mapping', [], modelMappings.value)
 
       // Always update credentials for apikey type to handle model mapping changes
       const newCredentials: Record<string, unknown> = {
@@ -1656,6 +1613,15 @@ const handleSubmit = async () => {
       // Add model mapping if configured
       if (modelMapping) {
         newCredentials.model_mapping = modelMapping
+      } else {
+        delete newCredentials.model_mapping
+      }
+
+      const modelWhitelist = buildModelWhitelist(allowedModels.value)
+      if (modelWhitelist) {
+        newCredentials.model_whitelist = modelWhitelist
+      } else {
+        delete newCredentials.model_whitelist
       }
 
       // Add custom error codes if enabled

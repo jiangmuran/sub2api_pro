@@ -382,24 +382,45 @@ func (a *Account) GetModelMapping() map[string]string {
 	return nil
 }
 
-// IsModelSupported 检查模型是否在 model_mapping 中（支持通配符）
-// 如果未配置 mapping，返回 true（允许所有模型）
-func (a *Account) IsModelSupported(requestedModel string) bool {
-	mapping := a.GetModelMapping()
-	if len(mapping) == 0 {
-		return true // 无映射 = 允许所有
+func (a *Account) GetModelWhitelist() []string {
+	if a.Credentials == nil {
+		return nil
 	}
-	// 精确匹配
-	if _, exists := mapping[requestedModel]; exists {
-		return true
+	raw, ok := a.Credentials["model_whitelist"]
+	if !ok || raw == nil {
+		return nil
 	}
-	// 通配符匹配
-	for pattern := range mapping {
-		if matchWildcard(pattern, requestedModel) {
-			return true
+
+	whitelist := make([]string, 0)
+	switch v := raw.(type) {
+	case []string:
+		for _, item := range v {
+			value := strings.TrimSpace(item)
+			if value != "" {
+				whitelist = append(whitelist, value)
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				value := strings.TrimSpace(s)
+				if value != "" {
+					whitelist = append(whitelist, value)
+				}
+			}
 		}
 	}
-	return false
+
+	if len(whitelist) == 0 {
+		return nil
+	}
+	return whitelist
+}
+
+// IsModelSupported checks whether the requested model is supported after applying mapping.
+func (a *Account) IsModelSupported(requestedModel string) bool {
+	mapped := a.GetMappedModel(requestedModel)
+	return a.IsMappedModelWhitelisted(mapped)
 }
 
 // GetMappedModel 获取映射后的模型名（支持通配符，最长优先匹配）
@@ -415,6 +436,48 @@ func (a *Account) GetMappedModel(requestedModel string) string {
 	}
 	// 通配符匹配（最长优先）
 	return matchWildcardMapping(mapping, requestedModel)
+}
+
+// IsMappedModelWhitelisted checks whitelist against a mapped model name.
+func (a *Account) IsMappedModelWhitelisted(mappedModel string) bool {
+	whitelist := a.GetModelWhitelist()
+	if len(whitelist) == 0 {
+		mapping := a.GetModelMapping()
+		if isLegacyWhitelistMapping(mapping) {
+			whitelist = make([]string, 0, len(mapping))
+			for model := range mapping {
+				whitelist = append(whitelist, model)
+			}
+		}
+	}
+	if len(whitelist) == 0 {
+		return true
+	}
+	for _, model := range whitelist {
+		if model == mappedModel || matchWildcard(model, mappedModel) {
+			return true
+		}
+	}
+	return false
+}
+
+// ResolveModelForRouting returns the mapped model and whether it is allowed by whitelist.
+// Mapping happens before whitelist check, so mapping into an allowed model will pass.
+func (a *Account) ResolveModelForRouting(requestedModel string) (string, bool) {
+	mapped := a.GetMappedModel(requestedModel)
+	return mapped, a.IsMappedModelWhitelisted(mapped)
+}
+
+func isLegacyWhitelistMapping(mapping map[string]string) bool {
+	if len(mapping) == 0 {
+		return false
+	}
+	for from, to := range mapping {
+		if from != to {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *Account) GetBaseURL() string {

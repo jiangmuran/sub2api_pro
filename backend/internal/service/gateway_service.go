@@ -2530,7 +2530,7 @@ func (s *GatewayService) isModelSupportedByAccountWithContext(ctx context.Contex
 			if finalModel == mapped {
 				return true // thinking 后缀未改变模型名，映射已通过
 			}
-			return account.IsModelSupported(finalModel)
+			return account.IsMappedModelWhitelisted(finalModel)
 		}
 		return true
 	}
@@ -2543,7 +2543,11 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 		if strings.TrimSpace(requestedModel) == "" {
 			return true
 		}
-		return mapAntigravityModel(account, requestedModel) != ""
+		mapped := mapAntigravityModel(account, requestedModel)
+		if mapped == "" {
+			return false
+		}
+		return account.IsMappedModelWhitelisted(mapped)
 	}
 	// OAuth/SetupToken 账号使用 Anthropic 标准映射（短ID → 长ID）
 	if account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
