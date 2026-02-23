@@ -174,6 +174,17 @@ const (
 
 	// SettingKeyStreamTimeoutSettings stores JSON config for stream timeout handling.
 	SettingKeyStreamTimeoutSettings = "stream_timeout_settings"
+
+	// =========================
+	// OpenAI Invalid Bearer Auto Recover
+	// =========================
+
+	// SettingKeyOpenAIInvalidBearerAutoRecoverEnabled controls automatic pool recovery when all OpenAI OAuth
+	// accounts fail with "Invalid bearer token".
+	SettingKeyOpenAIInvalidBearerAutoRecoverEnabled = "openai_invalid_bearer_auto_recover_enabled"
+
+	// SettingKeyOpenAIInvalidBearerAutoRecoverCooldownMinutes controls cooldown after one automatic recovery run.
+	SettingKeyOpenAIInvalidBearerAutoRecoverCooldownMinutes = "openai_invalid_bearer_auto_recover_cooldown_minutes"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

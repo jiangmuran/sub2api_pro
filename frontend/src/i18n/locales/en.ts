@@ -1468,6 +1468,14 @@ export default {
       tokenRefreshed: 'Token refreshed successfully',
       accountDeleted: 'Account deleted successfully',
       rateLimitCleared: 'Rate limit cleared successfully',
+      bulkRefreshTokens: 'Bulk Refresh Token',
+      bulkRefreshDialogTitle: 'Bulk Refresh Token',
+      bulkRefreshProgress: 'Processed {current}/{total} accounts',
+      bulkRefreshPreparing: 'Preparing batch refresh...',
+      bulkRefreshCurrentSuccess: 'Account #{id} refreshed',
+      bulkRefreshCurrentFailed: 'Account #{id} failed',
+      bulkRefreshSuccess: 'Successfully refreshed and reset {count} account(s)',
+      bulkRefreshPartial: 'Bulk refresh partial: {success} succeeded, {failed} failed',
       bulkSchedulableEnabled: 'Successfully enabled scheduling for {count} account(s)',
       bulkSchedulableDisabled: 'Successfully disabled scheduling for {count} account(s)',
       bulkSchedulablePartial: 'Scheduling updated partially: {success} succeeded, {failed} failed',
@@ -3407,6 +3415,16 @@ export default {
         thresholdWindowMinutesHint: 'Time window for counting timeouts (1-60 minutes)',
         saved: 'Stream timeout settings saved',
         saveFailed: 'Failed to save stream timeout settings'
+      },
+      openaiInvalidBearerAutoRecover: {
+        title: 'OpenAI Invalid Bearer Auto Recover',
+        description:
+          'When all OpenAI OAuth accounts fail with "Invalid bearer token", automatically refresh tokens and reset status in bulk.',
+        enabled: 'Enable Auto Recover',
+        enabledHint: 'Only triggers when the OpenAI OAuth pool enters the same invalid bearer token error state.',
+        cooldownMinutes: 'Cooldown (minutes)',
+        cooldownMinutesHint:
+          'After one auto-recover run, repeated invalid bearer token errors are ignored during this cooldown window (1-1440).'
       },
       saveSettings: 'Save Settings',
       saving: 'Saving...',

@@ -1143,6 +1143,47 @@
           </div>
         </div>
 
+        <!-- OpenAI Invalid Bearer Auto Recover -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.openaiInvalidBearerAutoRecover.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.openaiInvalidBearerAutoRecover.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="font-medium text-gray-900 dark:text-white">{{
+                  t('admin.settings.openaiInvalidBearerAutoRecover.enabled')
+                }}</label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.openaiInvalidBearerAutoRecover.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.openai_invalid_bearer_auto_recover_enabled" />
+            </div>
+
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.openaiInvalidBearerAutoRecover.cooldownMinutes') }}
+              </label>
+              <input
+                v-model.number="form.openai_invalid_bearer_auto_recover_cooldown_minutes"
+                type="number"
+                min="1"
+                max="1440"
+                class="input w-40"
+              />
+              <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.openaiInvalidBearerAutoRecover.cooldownMinutesHint') }}
+              </p>
+            </div>
+          </div>
+        </div>
+
         <!-- Save Button -->
         <div class="flex justify-end">
           <button type="submit" :disabled="saving" class="btn btn-primary">
@@ -1273,7 +1314,9 @@ const form = reactive<SettingsForm>({
   security_chat_ai_base_url: 'https://api.openai.com/v1',
   security_chat_ai_model: 'gpt-4o-mini',
   security_chat_excluded_users: '',
-  security_chat_whitelist_enabled: false
+  security_chat_whitelist_enabled: false,
+  openai_invalid_bearer_auto_recover_enabled: true,
+  openai_invalid_bearer_auto_recover_cooldown_minutes: 5
 })
 
 // LinuxDo OAuth redirect URL suggestion
@@ -1395,7 +1438,11 @@ async function saveSettings() {
       security_chat_ai_base_url: form.security_chat_ai_base_url,
       security_chat_ai_model: form.security_chat_ai_model,
       security_chat_excluded_users: form.security_chat_excluded_users,
-      security_chat_whitelist_enabled: form.security_chat_whitelist_enabled
+      security_chat_whitelist_enabled: form.security_chat_whitelist_enabled,
+      openai_invalid_bearer_auto_recover_enabled:
+        form.openai_invalid_bearer_auto_recover_enabled,
+      openai_invalid_bearer_auto_recover_cooldown_minutes:
+        form.openai_invalid_bearer_auto_recover_cooldown_minutes
     }
     const updated = await adminAPI.settings.updateSettings(payload)
     Object.assign(form, updated)

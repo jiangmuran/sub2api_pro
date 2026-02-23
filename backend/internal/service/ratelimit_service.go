@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
 // RateLimitService 处理限流和过载状态管理
@@ -23,8 +24,11 @@ type RateLimitService struct {
 	timeoutCounterCache   TimeoutCounterCache
 	settingService        *SettingService
 	tokenCacheInvalidator TokenCacheInvalidator
+	openaiOAuthService    *OpenAIOAuthService
 	usageCacheMu          sync.RWMutex
 	usageCache            map[int64]*geminiUsageCacheEntry
+	autoRecoverMu         sync.Mutex
+	autoRecoverBlockedTil time.Time
 }
 
 type geminiUsageCacheEntry struct {
@@ -60,6 +64,11 @@ func (s *RateLimitService) SetSettingService(settingService *SettingService) {
 // SetTokenCacheInvalidator 设置 token 缓存清理器（可选依赖）
 func (s *RateLimitService) SetTokenCacheInvalidator(invalidator TokenCacheInvalidator) {
 	s.tokenCacheInvalidator = invalidator
+}
+
+// SetOpenAIOAuthService sets OpenAI OAuth service for pool auto-recovery (optional dependency).
+func (s *RateLimitService) SetOpenAIOAuthService(openaiOAuthService *OpenAIOAuthService) {
+	s.openaiOAuthService = openaiOAuthService
 }
 
 // ErrorPolicyResult 表示错误策略检查的结果
@@ -157,6 +166,9 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		}
 		s.handleAuthError(ctx, account, msg)
 		shouldDisable = true
+		if account.IsOpenAIOAuth() && strings.Contains(strings.ToLower(msg), "invalid bearer token") {
+			s.tryTriggerOpenAIInvalidBearerAutoRecover()
+		}
 	case 402:
 		// 支付要求：余额不足或计费问题，停止调度
 		msg := "Payment required (402): insufficient balance or billing issue"
@@ -196,6 +208,145 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 	}
 
 	return shouldDisable
+}
+
+func (s *RateLimitService) tryTriggerOpenAIInvalidBearerAutoRecover() {
+	if s == nil {
+		return
+	}
+	if s.openaiOAuthService == nil {
+		return
+	}
+	enabled, cooldown := s.getOpenAIInvalidBearerAutoRecoverConfig()
+	if !enabled {
+		return
+	}
+
+	now := time.Now()
+	s.autoRecoverMu.Lock()
+	if now.Before(s.autoRecoverBlockedTil) {
+		s.autoRecoverMu.Unlock()
+		return
+	}
+	s.autoRecoverBlockedTil = now.Add(cooldown)
+	s.autoRecoverMu.Unlock()
+
+	go s.runOpenAIInvalidBearerAutoRecover()
+}
+
+func (s *RateLimitService) runOpenAIInvalidBearerAutoRecover() {
+	ctx := context.Background()
+	accounts, err := s.listOpenAIOAuthAccounts(ctx)
+	if err != nil {
+		slog.Warn("openai_invalid_bearer_auto_recover_list_failed", "error", err)
+		return
+	}
+	if len(accounts) == 0 {
+		return
+	}
+
+	for i := range accounts {
+		acc := &accounts[i]
+		if acc.Status != StatusError || !isInvalidBearerTokenErrorMessage(acc.ErrorMessage) {
+			return
+		}
+	}
+
+	slog.Warn("openai_invalid_bearer_auto_recover_started", "accounts", len(accounts))
+	refreshed := 0
+	failed := 0
+	for i := range accounts {
+		if err := s.refreshAndResetOpenAIOAuthAccount(ctx, &accounts[i]); err != nil {
+			failed++
+			slog.Warn(
+				"openai_invalid_bearer_auto_recover_account_failed",
+				"account_id", accounts[i].ID,
+				"account_name", accounts[i].Name,
+				"error", err,
+			)
+			continue
+		}
+		refreshed++
+	}
+
+	slog.Warn(
+		"openai_invalid_bearer_auto_recover_finished",
+		"total", len(accounts),
+		"refreshed", refreshed,
+		"failed", failed,
+	)
+}
+
+func (s *RateLimitService) getOpenAIInvalidBearerAutoRecoverConfig() (bool, time.Duration) {
+	enabled := true
+	cooldownMinutes := 5
+	if s.settingService != nil {
+		settings, err := s.settingService.GetAllSettings(context.Background())
+		if err == nil && settings != nil {
+			enabled = settings.OpenAIInvalidBearerAutoRecoverEnabled
+			cooldownMinutes = settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes
+		}
+	}
+	if cooldownMinutes < 1 {
+		cooldownMinutes = 1
+	}
+	if cooldownMinutes > 1440 {
+		cooldownMinutes = 1440
+	}
+	return enabled, time.Duration(cooldownMinutes) * time.Minute
+}
+
+func (s *RateLimitService) listOpenAIOAuthAccounts(ctx context.Context) ([]Account, error) {
+	params := pagination.PaginationParams{Page: 1, PageSize: 100}
+	all := make([]Account, 0, 32)
+	for {
+		accounts, pg, err := s.accountRepo.ListWithFilters(ctx, params, PlatformOpenAI, AccountTypeOAuth, "", "", 0)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, accounts...)
+		if pg == nil || params.Page >= pg.Pages || len(accounts) == 0 {
+			break
+		}
+		params.Page++
+	}
+	return all, nil
+}
+
+func (s *RateLimitService) refreshAndResetOpenAIOAuthAccount(ctx context.Context, account *Account) error {
+	if account == nil {
+		return nil
+	}
+	tokenInfo, err := s.openaiOAuthService.RefreshAccountToken(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	newCredentials := s.openaiOAuthService.BuildAccountCredentials(tokenInfo)
+	for k, v := range account.Credentials {
+		if _, exists := newCredentials[k]; !exists {
+			newCredentials[k] = v
+		}
+	}
+	account.Credentials = newCredentials
+	if err := s.accountRepo.Update(ctx, account); err != nil {
+		return err
+	}
+	if err := s.accountRepo.ClearError(ctx, account.ID); err != nil {
+		return err
+	}
+	if s.tokenCacheInvalidator != nil {
+		_ = s.tokenCacheInvalidator.InvalidateToken(ctx, account)
+	}
+	return nil
+}
+
+func isInvalidBearerTokenErrorMessage(msg string) bool {
+	if strings.TrimSpace(msg) == "" {
+		return false
+	}
+	norm := strings.ToLower(msg)
+	return strings.Contains(norm, "invalid bearer token")
 }
 
 // PreCheckUsage proactively checks local quota before dispatching a request.

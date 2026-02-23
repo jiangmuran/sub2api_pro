@@ -65,6 +65,10 @@ type SystemSettings struct {
 	SecurityChatAIModel          string `json:"security_chat_ai_model"`
 	SecurityChatExcludedUsers    string `json:"security_chat_excluded_users"`
 	SecurityChatWhitelistEnabled bool   `json:"security_chat_whitelist_enabled"`
+
+	// OpenAI invalid bearer auto recover
+	OpenAIInvalidBearerAutoRecoverEnabled         bool `json:"openai_invalid_bearer_auto_recover_enabled"`
+	OpenAIInvalidBearerAutoRecoverCooldownMinutes int  `json:"openai_invalid_bearer_auto_recover_cooldown_minutes"`
 }
 
 type PublicSettings struct {

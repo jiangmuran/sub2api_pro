@@ -45,56 +45,58 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 	opsEnabled := h.opsService != nil && h.opsService.IsMonitoringEnabled(c.Request.Context())
 
 	response.Success(c, dto.SystemSettings{
-		RegistrationEnabled:                  settings.RegistrationEnabled,
-		EmailVerifyEnabled:                   settings.EmailVerifyEnabled,
-		PromoCodeEnabled:                     settings.PromoCodeEnabled,
-		PasswordResetEnabled:                 settings.PasswordResetEnabled,
-		InvitationCodeEnabled:                settings.InvitationCodeEnabled,
-		TotpEnabled:                          settings.TotpEnabled,
-		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
-		SMTPHost:                             settings.SMTPHost,
-		SMTPPort:                             settings.SMTPPort,
-		SMTPUsername:                         settings.SMTPUsername,
-		SMTPPasswordConfigured:               settings.SMTPPasswordConfigured,
-		SMTPFrom:                             settings.SMTPFrom,
-		SMTPFromName:                         settings.SMTPFromName,
-		SMTPUseTLS:                           settings.SMTPUseTLS,
-		TurnstileEnabled:                     settings.TurnstileEnabled,
-		TurnstileSiteKey:                     settings.TurnstileSiteKey,
-		TurnstileSecretKeyConfigured:         settings.TurnstileSecretKeyConfigured,
-		LinuxDoConnectEnabled:                settings.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID:               settings.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecretConfigured: settings.LinuxDoConnectClientSecretConfigured,
-		LinuxDoConnectRedirectURL:            settings.LinuxDoConnectRedirectURL,
-		SiteName:                             settings.SiteName,
-		SiteLogo:                             settings.SiteLogo,
-		SiteSubtitle:                         settings.SiteSubtitle,
-		APIBaseURL:                           settings.APIBaseURL,
-		ContactInfo:                          settings.ContactInfo,
-		DocURL:                               settings.DocURL,
-		HomeContent:                          settings.HomeContent,
-		HideCcsImportButton:                  settings.HideCcsImportButton,
-		PurchaseSubscriptionEnabled:          settings.PurchaseSubscriptionEnabled,
-		PurchaseSubscriptionURL:              settings.PurchaseSubscriptionURL,
-		DefaultConcurrency:                   settings.DefaultConcurrency,
-		DefaultBalance:                       settings.DefaultBalance,
-		EnableModelFallback:                  settings.EnableModelFallback,
-		FallbackModelAnthropic:               settings.FallbackModelAnthropic,
-		FallbackModelOpenAI:                  settings.FallbackModelOpenAI,
-		FallbackModelGemini:                  settings.FallbackModelGemini,
-		FallbackModelAntigravity:             settings.FallbackModelAntigravity,
-		EnableIdentityPatch:                  settings.EnableIdentityPatch,
-		IdentityPatchPrompt:                  settings.IdentityPatchPrompt,
-		OpsMonitoringEnabled:                 opsEnabled && settings.OpsMonitoringEnabled,
-		OpsRealtimeMonitoringEnabled:         settings.OpsRealtimeMonitoringEnabled,
-		OpsQueryModeDefault:                  settings.OpsQueryModeDefault,
-		OpsMetricsIntervalSeconds:            settings.OpsMetricsIntervalSeconds,
-		SecurityChatRetentionDays:            settings.SecurityChatRetentionDays,
-		SecurityChatAIEnabled:                settings.SecurityChatAIEnabled,
-		SecurityChatAIBaseURL:                settings.SecurityChatAIBaseURL,
-		SecurityChatAIModel:                  settings.SecurityChatAIModel,
-		SecurityChatExcludedUsers:            settings.SecurityChatExcludedUsers,
-		SecurityChatWhitelistEnabled:         settings.SecurityChatWhitelistEnabled,
+		RegistrationEnabled:                   settings.RegistrationEnabled,
+		EmailVerifyEnabled:                    settings.EmailVerifyEnabled,
+		PromoCodeEnabled:                      settings.PromoCodeEnabled,
+		PasswordResetEnabled:                  settings.PasswordResetEnabled,
+		InvitationCodeEnabled:                 settings.InvitationCodeEnabled,
+		TotpEnabled:                           settings.TotpEnabled,
+		TotpEncryptionKeyConfigured:           h.settingService.IsTotpEncryptionKeyConfigured(),
+		SMTPHost:                              settings.SMTPHost,
+		SMTPPort:                              settings.SMTPPort,
+		SMTPUsername:                          settings.SMTPUsername,
+		SMTPPasswordConfigured:                settings.SMTPPasswordConfigured,
+		SMTPFrom:                              settings.SMTPFrom,
+		SMTPFromName:                          settings.SMTPFromName,
+		SMTPUseTLS:                            settings.SMTPUseTLS,
+		TurnstileEnabled:                      settings.TurnstileEnabled,
+		TurnstileSiteKey:                      settings.TurnstileSiteKey,
+		TurnstileSecretKeyConfigured:          settings.TurnstileSecretKeyConfigured,
+		LinuxDoConnectEnabled:                 settings.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID:                settings.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecretConfigured:  settings.LinuxDoConnectClientSecretConfigured,
+		LinuxDoConnectRedirectURL:             settings.LinuxDoConnectRedirectURL,
+		SiteName:                              settings.SiteName,
+		SiteLogo:                              settings.SiteLogo,
+		SiteSubtitle:                          settings.SiteSubtitle,
+		APIBaseURL:                            settings.APIBaseURL,
+		ContactInfo:                           settings.ContactInfo,
+		DocURL:                                settings.DocURL,
+		HomeContent:                           settings.HomeContent,
+		HideCcsImportButton:                   settings.HideCcsImportButton,
+		PurchaseSubscriptionEnabled:           settings.PurchaseSubscriptionEnabled,
+		PurchaseSubscriptionURL:               settings.PurchaseSubscriptionURL,
+		DefaultConcurrency:                    settings.DefaultConcurrency,
+		DefaultBalance:                        settings.DefaultBalance,
+		EnableModelFallback:                   settings.EnableModelFallback,
+		FallbackModelAnthropic:                settings.FallbackModelAnthropic,
+		FallbackModelOpenAI:                   settings.FallbackModelOpenAI,
+		FallbackModelGemini:                   settings.FallbackModelGemini,
+		FallbackModelAntigravity:              settings.FallbackModelAntigravity,
+		EnableIdentityPatch:                   settings.EnableIdentityPatch,
+		IdentityPatchPrompt:                   settings.IdentityPatchPrompt,
+		OpsMonitoringEnabled:                  opsEnabled && settings.OpsMonitoringEnabled,
+		OpsRealtimeMonitoringEnabled:          settings.OpsRealtimeMonitoringEnabled,
+		OpsQueryModeDefault:                   settings.OpsQueryModeDefault,
+		OpsMetricsIntervalSeconds:             settings.OpsMetricsIntervalSeconds,
+		SecurityChatRetentionDays:             settings.SecurityChatRetentionDays,
+		SecurityChatAIEnabled:                 settings.SecurityChatAIEnabled,
+		SecurityChatAIBaseURL:                 settings.SecurityChatAIBaseURL,
+		SecurityChatAIModel:                   settings.SecurityChatAIModel,
+		SecurityChatExcludedUsers:             settings.SecurityChatExcludedUsers,
+		SecurityChatWhitelistEnabled:          settings.SecurityChatWhitelistEnabled,
+		OpenAIInvalidBearerAutoRecoverEnabled: settings.OpenAIInvalidBearerAutoRecoverEnabled,
+		OpenAIInvalidBearerAutoRecoverCooldownMinutes: settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes,
 	})
 }
 
@@ -168,6 +170,10 @@ type UpdateSettingsRequest struct {
 	SecurityChatAIModel          *string `json:"security_chat_ai_model"`
 	SecurityChatExcludedUsers    *string `json:"security_chat_excluded_users"`
 	SecurityChatWhitelistEnabled *bool   `json:"security_chat_whitelist_enabled"`
+
+	// OpenAI invalid bearer auto recover
+	OpenAIInvalidBearerAutoRecoverEnabled         *bool `json:"openai_invalid_bearer_auto_recover_enabled"`
+	OpenAIInvalidBearerAutoRecoverCooldownMinutes *int  `json:"openai_invalid_bearer_auto_recover_cooldown_minutes"`
 }
 
 // UpdateSettings 更新系统设置
@@ -327,6 +333,17 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		req.SecurityChatExcludedUsers = &v
 	}
 
+	if req.OpenAIInvalidBearerAutoRecoverCooldownMinutes != nil {
+		v := *req.OpenAIInvalidBearerAutoRecoverCooldownMinutes
+		if v < 1 {
+			v = 1
+		}
+		if v > 1440 {
+			v = 1440
+		}
+		req.OpenAIInvalidBearerAutoRecoverCooldownMinutes = &v
+	}
+
 	settings := &service.SystemSettings{
 		RegistrationEnabled:         req.RegistrationEnabled,
 		EmailVerifyEnabled:          req.EmailVerifyEnabled,
@@ -427,6 +444,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.SecurityChatWhitelistEnabled
 		}(),
+		OpenAIInvalidBearerAutoRecoverEnabled: func() bool {
+			if req.OpenAIInvalidBearerAutoRecoverEnabled != nil {
+				return *req.OpenAIInvalidBearerAutoRecoverEnabled
+			}
+			return previousSettings.OpenAIInvalidBearerAutoRecoverEnabled
+		}(),
+		OpenAIInvalidBearerAutoRecoverCooldownMinutes: func() int {
+			if req.OpenAIInvalidBearerAutoRecoverCooldownMinutes != nil {
+				return *req.OpenAIInvalidBearerAutoRecoverCooldownMinutes
+			}
+			return previousSettings.OpenAIInvalidBearerAutoRecoverCooldownMinutes
+		}(),
 	}
 
 	if err := h.settingService.UpdateSettings(c.Request.Context(), settings); err != nil {
@@ -444,56 +473,58 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	response.Success(c, dto.SystemSettings{
-		RegistrationEnabled:                  updatedSettings.RegistrationEnabled,
-		EmailVerifyEnabled:                   updatedSettings.EmailVerifyEnabled,
-		PromoCodeEnabled:                     updatedSettings.PromoCodeEnabled,
-		PasswordResetEnabled:                 updatedSettings.PasswordResetEnabled,
-		InvitationCodeEnabled:                updatedSettings.InvitationCodeEnabled,
-		TotpEnabled:                          updatedSettings.TotpEnabled,
-		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
-		SMTPHost:                             updatedSettings.SMTPHost,
-		SMTPPort:                             updatedSettings.SMTPPort,
-		SMTPUsername:                         updatedSettings.SMTPUsername,
-		SMTPPasswordConfigured:               updatedSettings.SMTPPasswordConfigured,
-		SMTPFrom:                             updatedSettings.SMTPFrom,
-		SMTPFromName:                         updatedSettings.SMTPFromName,
-		SMTPUseTLS:                           updatedSettings.SMTPUseTLS,
-		TurnstileEnabled:                     updatedSettings.TurnstileEnabled,
-		TurnstileSiteKey:                     updatedSettings.TurnstileSiteKey,
-		TurnstileSecretKeyConfigured:         updatedSettings.TurnstileSecretKeyConfigured,
-		LinuxDoConnectEnabled:                updatedSettings.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID:               updatedSettings.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecretConfigured: updatedSettings.LinuxDoConnectClientSecretConfigured,
-		LinuxDoConnectRedirectURL:            updatedSettings.LinuxDoConnectRedirectURL,
-		SiteName:                             updatedSettings.SiteName,
-		SiteLogo:                             updatedSettings.SiteLogo,
-		SiteSubtitle:                         updatedSettings.SiteSubtitle,
-		APIBaseURL:                           updatedSettings.APIBaseURL,
-		ContactInfo:                          updatedSettings.ContactInfo,
-		DocURL:                               updatedSettings.DocURL,
-		HomeContent:                          updatedSettings.HomeContent,
-		HideCcsImportButton:                  updatedSettings.HideCcsImportButton,
-		PurchaseSubscriptionEnabled:          updatedSettings.PurchaseSubscriptionEnabled,
-		PurchaseSubscriptionURL:              updatedSettings.PurchaseSubscriptionURL,
-		DefaultConcurrency:                   updatedSettings.DefaultConcurrency,
-		DefaultBalance:                       updatedSettings.DefaultBalance,
-		EnableModelFallback:                  updatedSettings.EnableModelFallback,
-		FallbackModelAnthropic:               updatedSettings.FallbackModelAnthropic,
-		FallbackModelOpenAI:                  updatedSettings.FallbackModelOpenAI,
-		FallbackModelGemini:                  updatedSettings.FallbackModelGemini,
-		FallbackModelAntigravity:             updatedSettings.FallbackModelAntigravity,
-		EnableIdentityPatch:                  updatedSettings.EnableIdentityPatch,
-		IdentityPatchPrompt:                  updatedSettings.IdentityPatchPrompt,
-		OpsMonitoringEnabled:                 updatedSettings.OpsMonitoringEnabled,
-		OpsRealtimeMonitoringEnabled:         updatedSettings.OpsRealtimeMonitoringEnabled,
-		OpsQueryModeDefault:                  updatedSettings.OpsQueryModeDefault,
-		OpsMetricsIntervalSeconds:            updatedSettings.OpsMetricsIntervalSeconds,
-		SecurityChatRetentionDays:            updatedSettings.SecurityChatRetentionDays,
-		SecurityChatAIEnabled:                updatedSettings.SecurityChatAIEnabled,
-		SecurityChatAIBaseURL:                updatedSettings.SecurityChatAIBaseURL,
-		SecurityChatAIModel:                  updatedSettings.SecurityChatAIModel,
-		SecurityChatExcludedUsers:            updatedSettings.SecurityChatExcludedUsers,
-		SecurityChatWhitelistEnabled:         updatedSettings.SecurityChatWhitelistEnabled,
+		RegistrationEnabled:                   updatedSettings.RegistrationEnabled,
+		EmailVerifyEnabled:                    updatedSettings.EmailVerifyEnabled,
+		PromoCodeEnabled:                      updatedSettings.PromoCodeEnabled,
+		PasswordResetEnabled:                  updatedSettings.PasswordResetEnabled,
+		InvitationCodeEnabled:                 updatedSettings.InvitationCodeEnabled,
+		TotpEnabled:                           updatedSettings.TotpEnabled,
+		TotpEncryptionKeyConfigured:           h.settingService.IsTotpEncryptionKeyConfigured(),
+		SMTPHost:                              updatedSettings.SMTPHost,
+		SMTPPort:                              updatedSettings.SMTPPort,
+		SMTPUsername:                          updatedSettings.SMTPUsername,
+		SMTPPasswordConfigured:                updatedSettings.SMTPPasswordConfigured,
+		SMTPFrom:                              updatedSettings.SMTPFrom,
+		SMTPFromName:                          updatedSettings.SMTPFromName,
+		SMTPUseTLS:                            updatedSettings.SMTPUseTLS,
+		TurnstileEnabled:                      updatedSettings.TurnstileEnabled,
+		TurnstileSiteKey:                      updatedSettings.TurnstileSiteKey,
+		TurnstileSecretKeyConfigured:          updatedSettings.TurnstileSecretKeyConfigured,
+		LinuxDoConnectEnabled:                 updatedSettings.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID:                updatedSettings.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecretConfigured:  updatedSettings.LinuxDoConnectClientSecretConfigured,
+		LinuxDoConnectRedirectURL:             updatedSettings.LinuxDoConnectRedirectURL,
+		SiteName:                              updatedSettings.SiteName,
+		SiteLogo:                              updatedSettings.SiteLogo,
+		SiteSubtitle:                          updatedSettings.SiteSubtitle,
+		APIBaseURL:                            updatedSettings.APIBaseURL,
+		ContactInfo:                           updatedSettings.ContactInfo,
+		DocURL:                                updatedSettings.DocURL,
+		HomeContent:                           updatedSettings.HomeContent,
+		HideCcsImportButton:                   updatedSettings.HideCcsImportButton,
+		PurchaseSubscriptionEnabled:           updatedSettings.PurchaseSubscriptionEnabled,
+		PurchaseSubscriptionURL:               updatedSettings.PurchaseSubscriptionURL,
+		DefaultConcurrency:                    updatedSettings.DefaultConcurrency,
+		DefaultBalance:                        updatedSettings.DefaultBalance,
+		EnableModelFallback:                   updatedSettings.EnableModelFallback,
+		FallbackModelAnthropic:                updatedSettings.FallbackModelAnthropic,
+		FallbackModelOpenAI:                   updatedSettings.FallbackModelOpenAI,
+		FallbackModelGemini:                   updatedSettings.FallbackModelGemini,
+		FallbackModelAntigravity:              updatedSettings.FallbackModelAntigravity,
+		EnableIdentityPatch:                   updatedSettings.EnableIdentityPatch,
+		IdentityPatchPrompt:                   updatedSettings.IdentityPatchPrompt,
+		OpsMonitoringEnabled:                  updatedSettings.OpsMonitoringEnabled,
+		OpsRealtimeMonitoringEnabled:          updatedSettings.OpsRealtimeMonitoringEnabled,
+		OpsQueryModeDefault:                   updatedSettings.OpsQueryModeDefault,
+		OpsMetricsIntervalSeconds:             updatedSettings.OpsMetricsIntervalSeconds,
+		SecurityChatRetentionDays:             updatedSettings.SecurityChatRetentionDays,
+		SecurityChatAIEnabled:                 updatedSettings.SecurityChatAIEnabled,
+		SecurityChatAIBaseURL:                 updatedSettings.SecurityChatAIBaseURL,
+		SecurityChatAIModel:                   updatedSettings.SecurityChatAIModel,
+		SecurityChatExcludedUsers:             updatedSettings.SecurityChatExcludedUsers,
+		SecurityChatWhitelistEnabled:          updatedSettings.SecurityChatWhitelistEnabled,
+		OpenAIInvalidBearerAutoRecoverEnabled: updatedSettings.OpenAIInvalidBearerAutoRecoverEnabled,
+		OpenAIInvalidBearerAutoRecoverCooldownMinutes: updatedSettings.OpenAIInvalidBearerAutoRecoverCooldownMinutes,
 	})
 }
 
@@ -653,6 +684,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SecurityChatWhitelistEnabled != after.SecurityChatWhitelistEnabled {
 		changed = append(changed, "security_chat_whitelist_enabled")
+	}
+	if before.OpenAIInvalidBearerAutoRecoverEnabled != after.OpenAIInvalidBearerAutoRecoverEnabled {
+		changed = append(changed, "openai_invalid_bearer_auto_recover_enabled")
+	}
+	if before.OpenAIInvalidBearerAutoRecoverCooldownMinutes != after.OpenAIInvalidBearerAutoRecoverCooldownMinutes {
+		changed = append(changed, "openai_invalid_bearer_auto_recover_cooldown_minutes")
 	}
 	return changed
 }

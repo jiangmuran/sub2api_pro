@@ -108,6 +108,13 @@
               </div>
             </template>
             <template #beforeCreate>
+              <button
+                @click="handleBulkRefreshTokens"
+                class="btn btn-secondary"
+                :disabled="isBulkRefreshing || selIds.length === 0"
+              >
+                {{ t('admin.accounts.bulkRefreshTokens') }}
+              </button>
               <button @click="showImportData = true" class="btn btn-secondary">
                 {{ t('admin.accounts.dataImport') }}
               </button>
@@ -256,6 +263,26 @@
         <span>{{ t('admin.accounts.dataExportIncludeProxies') }}</span>
       </label>
     </ConfirmDialog>
+    <BaseDialog
+      :show="showBulkRefreshDialog"
+      :title="t('admin.accounts.bulkRefreshDialogTitle')"
+      width="narrow"
+      @close="() => {}"
+    >
+      <div class="space-y-4">
+        <div class="flex items-center justify-between text-sm text-gray-700 dark:text-gray-300">
+          <span>{{ t('admin.accounts.bulkRefreshProgress', { current: bulkRefreshProgress.current, total: bulkRefreshProgress.total }) }}</span>
+          <span class="font-medium text-gray-900 dark:text-white">{{ bulkRefreshProgress.percent }}%</span>
+        </div>
+        <div class="h-2 w-full rounded-full bg-gray-200 dark:bg-dark-700">
+          <div
+            class="h-2 rounded-full bg-primary-600 transition-all"
+            :style="{ width: `${bulkRefreshProgress.percent}%` }"
+          ></div>
+        </div>
+        <div class="text-xs text-gray-500 dark:text-gray-400">{{ bulkRefreshProgress.message }}</div>
+      </div>
+    </BaseDialog>
     <ErrorPassthroughRulesModal :show="showErrorPassthrough" @close="showErrorPassthrough = false" />
   </AppLayout>
 </template>
@@ -273,6 +300,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
@@ -322,6 +350,14 @@ const statsAcc = ref<Account | null>(null)
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
+const isBulkRefreshing = ref(false)
+const showBulkRefreshDialog = ref(false)
+const bulkRefreshProgress = reactive({
+  total: 0,
+  current: 0,
+  percent: 0,
+  message: ''
+})
 
 // Column settings
 const showColumnDropdown = ref(false)
@@ -764,6 +800,51 @@ const handleToggleSchedulable = async (a: Account) => {
 }
 const handleShowTempUnsched = (a: Account) => { tempUnschedAcc.value = a; showTempUnsched.value = true }
 const handleTempUnschedReset = async () => { if(!tempUnschedAcc.value) return; try { await adminAPI.accounts.clearError(tempUnschedAcc.value.id); showTempUnsched.value = false; tempUnschedAcc.value = null; load() } catch (error) { console.error('Failed to reset temp unscheduled:', error) } }
+const updateBulkRefreshProgress = (current: number, total: number, message: string) => {
+  bulkRefreshProgress.current = current
+  bulkRefreshProgress.total = total
+  bulkRefreshProgress.percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0
+  bulkRefreshProgress.message = message
+}
+const handleBulkRefreshTokens = async () => {
+  if (isBulkRefreshing.value || selIds.value.length === 0) {
+    return
+  }
+
+  const accountIds = [...selIds.value]
+  isBulkRefreshing.value = true
+  showBulkRefreshDialog.value = true
+  updateBulkRefreshProgress(0, accountIds.length, t('admin.accounts.bulkRefreshPreparing'))
+
+  let success = 0
+  let failed = 0
+  for (let index = 0; index < accountIds.length; index++) {
+    const accountId = accountIds[index]
+    try {
+      await adminAPI.accounts.refreshCredentials(accountId)
+      await adminAPI.accounts.clearError(accountId)
+      success += 1
+      updateBulkRefreshProgress(index + 1, accountIds.length, t('admin.accounts.bulkRefreshCurrentSuccess', { id: accountId }))
+    } catch (error) {
+      failed += 1
+      console.error(`Failed to bulk refresh account ${accountId}:`, error)
+      updateBulkRefreshProgress(index + 1, accountIds.length, t('admin.accounts.bulkRefreshCurrentFailed', { id: accountId }))
+    }
+  }
+
+  if (failed === 0) {
+    appStore.showSuccess(t('admin.accounts.bulkRefreshSuccess', { count: success }))
+    selIds.value = []
+  } else {
+    appStore.showError(t('admin.accounts.bulkRefreshPartial', { success, failed }))
+  }
+
+  await load()
+  window.setTimeout(() => {
+    showBulkRefreshDialog.value = false
+  }, 600)
+  isBulkRefreshing.value = false
+}
 const formatExpiresAt = (value: number | null) => {
   if (!value) return '-'
   return formatDateTime(

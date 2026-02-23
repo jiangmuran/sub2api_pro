@@ -67,6 +67,10 @@ type SystemSettings struct {
 	SecurityChatAIModel          string
 	SecurityChatExcludedUsers    string
 	SecurityChatWhitelistEnabled bool
+
+	// OpenAI invalid bearer auto recover
+	OpenAIInvalidBearerAutoRecoverEnabled         bool
+	OpenAIInvalidBearerAutoRecoverCooldownMinutes int
 }
 
 type PublicSettings struct {

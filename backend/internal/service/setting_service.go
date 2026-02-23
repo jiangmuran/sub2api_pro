@@ -266,6 +266,16 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeySecurityChatExcludedUsers] = strings.TrimSpace(settings.SecurityChatExcludedUsers)
 	updates[SettingKeySecurityChatWhitelistEnabled] = strconv.FormatBool(settings.SecurityChatWhitelistEnabled)
 
+	// OpenAI invalid bearer auto recover
+	updates[SettingKeyOpenAIInvalidBearerAutoRecoverEnabled] = strconv.FormatBool(settings.OpenAIInvalidBearerAutoRecoverEnabled)
+	if settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes < 1 {
+		settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes = 1
+	}
+	if settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes > 1440 {
+		settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes = 1440
+	}
+	updates[SettingKeyOpenAIInvalidBearerAutoRecoverCooldownMinutes] = strconv.Itoa(settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes)
+
 	err := s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil && s.onUpdate != nil {
 		s.onUpdate() // Invalidate cache after settings update
@@ -414,12 +424,14 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpsMetricsIntervalSeconds:    "60",
 
 		// Security chat logs
-		SettingKeySecurityChatRetentionDays:    "7",
-		SettingKeySecurityChatAIEnabled:        "false",
-		SettingKeySecurityChatAIBaseURL:        "https://api.openai.com/v1",
-		SettingKeySecurityChatAIModel:          "gpt-4o-mini",
-		SettingKeySecurityChatExcludedUsers:    "",
-		SettingKeySecurityChatWhitelistEnabled: "false",
+		SettingKeySecurityChatRetentionDays:                     "7",
+		SettingKeySecurityChatAIEnabled:                         "false",
+		SettingKeySecurityChatAIBaseURL:                         "https://api.openai.com/v1",
+		SettingKeySecurityChatAIModel:                           "gpt-4o-mini",
+		SettingKeySecurityChatExcludedUsers:                     "",
+		SettingKeySecurityChatWhitelistEnabled:                  "false",
+		SettingKeyOpenAIInvalidBearerAutoRecoverEnabled:         "true",
+		SettingKeyOpenAIInvalidBearerAutoRecoverCooldownMinutes: "5",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
@@ -562,6 +574,20 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.SecurityChatAIModel = s.getStringOrDefault(settings, SettingKeySecurityChatAIModel, "gpt-4o-mini")
 	result.SecurityChatExcludedUsers = strings.TrimSpace(settings[SettingKeySecurityChatExcludedUsers])
 	result.SecurityChatWhitelistEnabled = settings[SettingKeySecurityChatWhitelistEnabled] == "true"
+
+	result.OpenAIInvalidBearerAutoRecoverEnabled = !isFalseSettingValue(settings[SettingKeyOpenAIInvalidBearerAutoRecoverEnabled])
+	result.OpenAIInvalidBearerAutoRecoverCooldownMinutes = 5
+	if raw := strings.TrimSpace(settings[SettingKeyOpenAIInvalidBearerAutoRecoverCooldownMinutes]); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil {
+			if v < 1 {
+				v = 1
+			}
+			if v > 1440 {
+				v = 1440
+			}
+			result.OpenAIInvalidBearerAutoRecoverCooldownMinutes = v
+		}
+	}
 
 	return result
 }

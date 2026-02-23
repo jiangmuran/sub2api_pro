@@ -74,6 +74,10 @@ export interface SystemSettings {
   security_chat_ai_model: string
   security_chat_excluded_users: string
   security_chat_whitelist_enabled: boolean
+
+  // OpenAI invalid bearer auto recover
+  openai_invalid_bearer_auto_recover_enabled: boolean
+  openai_invalid_bearer_auto_recover_cooldown_minutes: number
 }
 
 export interface UpdateSettingsRequest {
@@ -126,6 +130,8 @@ export interface UpdateSettingsRequest {
   security_chat_ai_model?: string
   security_chat_excluded_users?: string
   security_chat_whitelist_enabled?: boolean
+  openai_invalid_bearer_auto_recover_enabled?: boolean
+  openai_invalid_bearer_auto_recover_cooldown_minutes?: number
 }
 
 /**
