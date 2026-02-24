@@ -2442,6 +2442,7 @@ export default {
       statsByUser: '分销商销售统计',
       markSettled: '标记已结清',
       email: '分销商邮箱',
+      balance: '余额',
       notes: '备注',
       manage: '管理',
       topup: '充值',

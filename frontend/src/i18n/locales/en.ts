@@ -2274,6 +2274,7 @@ export default {
       statsByUser: 'Sales by Distributor',
       markSettled: 'Mark Settled',
       email: 'Distributor Email',
+      balance: 'Balance',
       notes: 'Notes',
       manage: 'Manage',
       topup: 'Top Up',

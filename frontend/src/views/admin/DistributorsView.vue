@@ -1,24 +1,21 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
-      <template #filters>
-        <div class="flex flex-wrap items-center gap-3">
-          <input v-model="search" type="text" class="input max-w-72" :placeholder="t('admin.distributor.searchProfile')" @input="loadProfiles" />
-          <button class="btn btn-secondary" @click="loadAll">{{ t('common.refresh') }}</button>
-        </div>
-      </template>
+    <div class="space-y-6">
+      <div class="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+        <input v-model="search" type="text" class="input max-w-80" :placeholder="t('admin.distributor.searchProfile')" @input="loadProfiles" />
+        <button class="btn btn-secondary" @click="loadAll">{{ t('common.refresh') }}</button>
+      </div>
 
-      <template #table>
-        <div class="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div class="card p-4">
             <div class="text-sm text-gray-500">{{ t('admin.distributor.unsettled') }}</div>
             <div class="text-2xl font-semibold">{{ formatCNY(summary?.unsettled_cny_cents || 0) }}</div>
             <div class="text-xs text-gray-500">{{ t('admin.distributor.delta') }}: {{ formatCNY(summary?.delta_since_last_settle_cny || 0) }}</div>
             <button class="btn btn-secondary mt-2" @click="markSettled">{{ t('admin.distributor.markSettled') }}</button>
           </div>
-        </div>
+      </div>
 
-        <div class="card p-4 mb-4">
+      <div class="card p-4 mb-4">
           <h3 class="mb-2 text-lg font-semibold">{{ t('admin.distributor.statsByUser') }}</h3>
           <DataTable :columns="statsColumns" :data="summary?.by_user || []">
             <template #cell-distributor_user_id="{ value }">{{ userEmailMap[value] || value }}</template>
@@ -27,31 +24,38 @@
             <template #cell-refund_amount_cny="{ value }">{{ formatCNY(value) }}</template>
             <template #cell-gross_profit_cny="{ value }">{{ formatCNY(value) }}</template>
           </DataTable>
-        </div>
+      </div>
 
-        <div class="card p-4 mb-4">
+      <div class="card p-4 mb-4">
           <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
             <input v-model="createEmail" type="email" class="input" :placeholder="t('admin.distributor.email')" />
             <input v-model="createNotes" type="text" class="input" :placeholder="t('admin.distributor.notes')" />
             <Select v-model="createEnabled" :options="enabledOptions" />
             <button class="btn btn-primary" @click="upsertProfile">{{ t('common.save') }}</button>
           </div>
-        </div>
+      </div>
 
-        <DataTable :columns="profileColumns" :data="profiles" :loading="loadingProfiles">
-          <template #cell-user="{ row }">{{ row.user?.email || row.user_id }}</template>
-          <template #cell-balance_cny_cents="{ value }">{{ formatCNY(value) }}</template>
-          <template #cell-actions="{ row }">
-            <button class="btn btn-secondary btn-sm mr-2" @click="selectUser(row.user_id)">{{ t('admin.distributor.manage') }}</button>
+      <DataTable :columns="profileColumns" :data="profiles" :loading="loadingProfiles" :sticky-actions-column="false">
+        <template #cell-user="{ row }">{{ row.user?.email || row.user_id }}</template>
+        <template #cell-enabled="{ value }">
+          <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="value ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'">
+            {{ value ? t('common.enabled') : t('common.disabled') }}
+          </span>
+        </template>
+        <template #cell-balance_cny_cents="{ value }">{{ formatCNY(value) }}</template>
+        <template #cell-actions="{ row }">
+          <div class="flex flex-wrap items-center gap-2">
+            <button class="btn btn-secondary btn-sm" @click="selectUser(row.user_id)">{{ t('admin.distributor.manage') }}</button>
             <button class="btn btn-secondary btn-sm" @click="adjust(row.user_id, 'topup')">+{{ t('admin.distributor.topup') }}</button>
-            <button class="btn btn-secondary btn-sm ml-1" @click="adjust(row.user_id, 'refund')">-{{ t('admin.distributor.refund') }}</button>
-          </template>
-        </DataTable>
+            <button class="btn btn-secondary btn-sm" @click="adjust(row.user_id, 'refund')">-{{ t('admin.distributor.refund') }}</button>
+          </div>
+        </template>
+      </DataTable>
 
-        <div v-if="selectedUserId" class="mt-4 space-y-4">
+      <div v-if="selectedUserId" class="space-y-4">
           <div class="card p-4">
             <h3 class="mb-2 text-lg font-semibold">{{ t('admin.distributor.offers') }}</h3>
-            <div class="grid grid-cols-1 gap-2 md:grid-cols-6 mb-3">
+            <div class="mb-3 grid grid-cols-1 gap-2 md:grid-cols-6">
               <input v-model="offerForm.name" type="text" class="input" :placeholder="t('admin.distributor.offerName')" />
               <Select v-model="offerForm.target_group_id" :options="groupOptions" />
               <input v-model.number="offerForm.validity_days" type="number" min="1" class="input" />
@@ -59,8 +63,13 @@
               <Select v-model="offerForm.enabled" :options="enabledOptions" />
               <button class="btn btn-primary" @click="createOffer">{{ t('common.create') }}</button>
             </div>
-            <DataTable :columns="offerColumns" :data="offers">
+            <DataTable :columns="offerColumns" :data="offers" :sticky-actions-column="false">
               <template #cell-cost_cny_cents="{ value }">{{ formatCNY(value) }}</template>
+              <template #cell-enabled="{ value }">
+                <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="value ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'">
+                  {{ value ? t('common.enabled') : t('common.disabled') }}
+                </span>
+              </template>
               <template #cell-actions="{ row }">
                 <button class="btn btn-danger btn-sm" @click="deleteOffer(row.id)">{{ t('common.delete') }}</button>
               </template>
@@ -69,11 +78,11 @@
 
           <div class="card p-4">
             <h3 class="mb-2 text-lg font-semibold">{{ t('admin.distributor.orders') }}</h3>
-            <div class="mb-2 flex gap-2">
-              <input v-model="orderSearch" type="text" class="input max-w-72" :placeholder="t('admin.distributor.searchOrders')" @input="loadOrders" />
+            <div class="mb-2 flex flex-wrap gap-2">
+              <input v-model="orderSearch" type="text" class="input max-w-80" :placeholder="t('admin.distributor.searchOrders')" @input="loadOrders" />
               <Select v-model="orderStatus" :options="orderStatusOptions" class="w-44" @change="loadOrders" />
             </div>
-            <DataTable :columns="orderColumns" :data="orders" :loading="loadingOrders">
+            <DataTable :columns="orderColumns" :data="orders" :loading="loadingOrders" :sticky-actions-column="false">
               <template #cell-redeem_code="{ row }">{{ row.redeem_code?.code }}</template>
               <template #cell-used_email="{ row }">{{ row.redeem_code?.user?.email || '-' }}</template>
               <template #cell-issued_at="{ value }">{{ formatDateTime(value) }}</template>
@@ -84,9 +93,8 @@
               </template>
             </DataTable>
           </div>
-        </div>
-      </template>
-    </TablePageLayout>
+      </div>
+    </div>
   </AppLayout>
 </template>
 
@@ -94,7 +102,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import type { Column } from '@/components/common/types'
 import Select from '@/components/common/Select.vue'

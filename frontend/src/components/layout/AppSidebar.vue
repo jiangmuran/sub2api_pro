@@ -594,16 +594,14 @@ onMounted(() => {
     adminSettingsStore.fetch()
   }
 
-  if (!isAdmin.value) {
-    distributorAPI
-      .profile()
-      .then((profile) => {
-        hasDistributorAccess.value = !!profile?.enabled
-      })
-      .catch(() => {
-        hasDistributorAccess.value = false
-      })
-  }
+  distributorAPI
+    .profile()
+    .then((profile) => {
+      hasDistributorAccess.value = !!profile?.enabled
+    })
+    .catch(() => {
+      hasDistributorAccess.value = false
+    })
 })
 </script>
 
