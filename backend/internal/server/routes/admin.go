@@ -50,6 +50,9 @@ func RegisterAdminRoutes(
 		// 优惠码管理
 		registerPromoCodeRoutes(admin, h)
 
+		// 分销管理
+		registerDistributorRoutes(admin, h)
+
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
@@ -349,6 +352,26 @@ func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		promoCodes.PUT("/:id", h.Admin.Promo.Update)
 		promoCodes.DELETE("/:id", h.Admin.Promo.Delete)
 		promoCodes.GET("/:id/usages", h.Admin.Promo.GetUsages)
+	}
+}
+
+func registerDistributorRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	distributors := admin.Group("/distributors")
+	{
+		distributors.GET("/profiles", h.Admin.Distributor.ListProfiles)
+		distributors.POST("/profiles", h.Admin.Distributor.UpsertProfile)
+		distributors.POST("/profiles/:userID/balance", h.Admin.Distributor.AdjustBalance)
+
+		distributors.GET("/offers", h.Admin.Distributor.ListOffers)
+		distributors.POST("/offers", h.Admin.Distributor.CreateOffer)
+		distributors.PUT("/offers/:id", h.Admin.Distributor.UpdateOffer)
+		distributors.DELETE("/offers/:id", h.Admin.Distributor.DeleteOffer)
+
+		distributors.GET("/orders", h.Admin.Distributor.ListOrders)
+		distributors.POST("/orders/:id/revoke", h.Admin.Distributor.RevokeOrder)
+
+		distributors.GET("/summary", h.Admin.Distributor.Summary)
+		distributors.POST("/summary/settle", h.Admin.Distributor.MarkSettled)
 	}
 }
 

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"net/url"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -25,7 +27,7 @@ func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemC
 		SetType(code.Type).
 		SetValue(code.Value).
 		SetStatus(code.Status).
-		SetNotes(code.Notes).
+		SetNotes(service.EncodeRedeemNotes(code.Notes, code.Category)).
 		SetValidityDays(code.ValidityDays).
 		SetNillableUsedBy(code.UsedBy).
 		SetNillableUsedAt(code.UsedAt).
@@ -51,7 +53,7 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 			SetType(c.Type).
 			SetValue(c.Value).
 			SetStatus(c.Status).
-			SetNotes(c.Notes).
+			SetNotes(service.EncodeRedeemNotes(c.Notes, c.Category)).
 			SetValidityDays(c.ValidityDays).
 			SetNillableUsedBy(c.UsedBy).
 			SetNillableUsedAt(c.UsedAt).
@@ -94,10 +96,10 @@ func (r *redeemCodeRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *redeemCodeRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.RedeemCode, *pagination.PaginationResult, error) {
-	return r.ListWithFilters(ctx, params, "", "", "")
+	return r.ListWithFilters(ctx, params, "", "", "", "")
 }
 
-func (r *redeemCodeRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, codeType, status, search string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
+func (r *redeemCodeRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, codeType, status, search, category string) ([]service.RedeemCode, *pagination.PaginationResult, error) {
 	q := r.client.RedeemCode.Query()
 
 	if codeType != "" {
@@ -110,9 +112,14 @@ func (r *redeemCodeRepository) ListWithFilters(ctx context.Context, params pagin
 		q = q.Where(
 			redeemcode.Or(
 				redeemcode.CodeContainsFold(search),
+				redeemcode.NotesContainsFold(search),
 				redeemcode.HasUserWith(user.EmailContainsFold(search)),
 			),
 		)
+	}
+	if category = strings.TrimSpace(category); category != "" {
+		prefix := "[category:" + url.QueryEscape(category) + "]"
+		q = q.Where(redeemcode.NotesHasPrefix(prefix))
 	}
 
 	total, err := q.Count(ctx)
@@ -142,7 +149,7 @@ func (r *redeemCodeRepository) Update(ctx context.Context, code *service.RedeemC
 		SetType(code.Type).
 		SetValue(code.Value).
 		SetStatus(code.Status).
-		SetNotes(code.Notes).
+		SetNotes(service.EncodeRedeemNotes(code.Notes, code.Category)).
 		SetValidityDays(code.ValidityDays)
 
 	if code.UsedBy != nil {
@@ -282,6 +289,7 @@ func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 	if m.Edges.Group != nil {
 		out.Group = groupEntityToService(m.Edges.Group)
 	}
+	out.Notes, out.Category = service.DecodeRedeemNotes(out.Notes)
 	return out
 }
 

@@ -67,12 +67,13 @@ type AdminService interface {
 	TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error)
 
 	// Redeem code management
-	ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string) ([]RedeemCode, int64, error)
+	ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search, category string) ([]RedeemCode, int64, error)
 	GetRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
 	GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error)
 	DeleteRedeemCode(ctx context.Context, id int64) error
 	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
 	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
+	GetRedeemCodeStats(ctx context.Context) (*RedeemCodeStats, error)
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.
@@ -252,8 +253,30 @@ type GenerateRedeemCodesInput struct {
 	Count        int
 	Type         string
 	Value        float64
+	Notes        string
+	Category     string
 	GroupID      *int64 // 订阅类型专用：关联的分组ID
 	ValidityDays int    // 订阅类型专用：有效天数
+}
+
+type RedeemCodeStats struct {
+	TotalCodes            int64
+	ActiveCodes           int64
+	UsedCodes             int64
+	ExpiredCodes          int64
+	TotalValueDistributed float64
+	ByType                map[string]int64
+	ByCategory            []RedeemCategoryStats
+}
+
+type RedeemCategoryStats struct {
+	Category   string
+	Total      int64
+	Unused     int64
+	Used       int64
+	Expired    int64
+	TotalValue float64
+	UsedValue  float64
 }
 
 type ProxyBatchDeleteResult struct {
@@ -1502,9 +1525,9 @@ func (s *adminServiceImpl) CheckProxyExists(ctx context.Context, host string, po
 }
 
 // Redeem code management implementations
-func (s *adminServiceImpl) ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string) ([]RedeemCode, int64, error) {
+func (s *adminServiceImpl) ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search, category string) ([]RedeemCode, int64, error) {
 	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
-	codes, result, err := s.redeemCodeRepo.ListWithFilters(ctx, params, codeType, status, search)
+	codes, result, err := s.redeemCodeRepo.ListWithFilters(ctx, params, codeType, status, search, category)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1538,10 +1561,12 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			return nil, err
 		}
 		code := RedeemCode{
-			Code:   codeValue,
-			Type:   input.Type,
-			Value:  input.Value,
-			Status: StatusUnused,
+			Code:     codeValue,
+			Type:     input.Type,
+			Value:    input.Value,
+			Status:   StatusUnused,
+			Notes:    strings.TrimSpace(input.Notes),
+			Category: strings.TrimSpace(input.Category),
 		}
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {
@@ -1557,6 +1582,65 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		codes = append(codes, code)
 	}
 	return codes, nil
+}
+
+func (s *adminServiceImpl) GetRedeemCodeStats(ctx context.Context) (*RedeemCodeStats, error) {
+	params := pagination.PaginationParams{Page: 1, PageSize: 1000}
+	stats := &RedeemCodeStats{ByType: make(map[string]int64)}
+	categoryMap := make(map[string]*RedeemCategoryStats)
+
+	for {
+		codes, pageResult, err := s.redeemCodeRepo.ListWithFilters(ctx, params, "", "", "", "")
+		if err != nil {
+			return nil, err
+		}
+		for i := range codes {
+			code := codes[i]
+			stats.TotalCodes++
+			stats.TotalValueDistributed += code.Value
+			stats.ByType[code.Type]++
+			switch code.Status {
+			case StatusUnused:
+				stats.ActiveCodes++
+			case StatusUsed:
+				stats.UsedCodes++
+			case StatusExpired:
+				stats.ExpiredCodes++
+			}
+
+			category := strings.TrimSpace(code.Category)
+			if category == "" {
+				category = "未分组"
+			}
+			item, ok := categoryMap[category]
+			if !ok {
+				item = &RedeemCategoryStats{Category: category}
+				categoryMap[category] = item
+			}
+			item.Total++
+			item.TotalValue += code.Value
+			switch code.Status {
+			case StatusUnused:
+				item.Unused++
+			case StatusUsed:
+				item.Used++
+				item.UsedValue += code.Value
+			case StatusExpired:
+				item.Expired++
+			}
+		}
+		if pageResult == nil || params.Page >= pageResult.Pages || len(codes) == 0 {
+			break
+		}
+		params.Page++
+	}
+
+	stats.ByCategory = make([]RedeemCategoryStats, 0, len(categoryMap))
+	for _, item := range categoryMap {
+		stats.ByCategory = append(stats.ByCategory, *item)
+	}
+
+	return stats, nil
 }
 
 func (s *adminServiceImpl) DeleteRedeemCode(ctx context.Context, id int64) error {

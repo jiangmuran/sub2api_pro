@@ -25,6 +25,21 @@
             class="w-36"
             @change="loadCodes"
           />
+          <div class="w-40">
+            <input
+              v-model="filters.category"
+              type="text"
+              :placeholder="t('admin.redeem.categoryFilter')"
+              class="input"
+              @input="handleSearch"
+            />
+          </div>
+          <button
+            class="btn btn-secondary"
+            @click="toggleDistributorFilter"
+          >
+            {{ filters.category === 'distributor' ? t('admin.redeem.clearDistributorFilter') : t('admin.redeem.onlyDistributor') }}
+          </button>
 
           <!-- Right: Action buttons -->
           <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
@@ -47,6 +62,36 @@
       </template>
 
       <template #table>
+        <div class="mb-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+          <div class="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+            {{ t('admin.redeem.categoryStats') }}
+          </div>
+          <div v-if="categoryStats.length === 0" class="text-sm text-gray-500 dark:text-gray-400">
+            {{ t('admin.redeem.noCategoryStats') }}
+          </div>
+          <div v-else class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-500 dark:text-gray-400">
+                  <th class="px-2 py-1">{{ t('admin.redeem.columns.category') }}</th>
+                  <th class="px-2 py-1">{{ t('admin.redeem.columns.total') }}</th>
+                  <th class="px-2 py-1">{{ t('admin.redeem.columns.used') }}</th>
+                  <th class="px-2 py-1">{{ t('admin.redeem.columns.unused') }}</th>
+                  <th class="px-2 py-1">{{ t('admin.redeem.columns.expired') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in categoryStats" :key="item.category" class="border-t border-gray-100 dark:border-dark-700">
+                  <td class="px-2 py-1 text-gray-900 dark:text-gray-100">{{ item.category }}</td>
+                  <td class="px-2 py-1">{{ item.total }}</td>
+                  <td class="px-2 py-1">{{ item.used }}</td>
+                  <td class="px-2 py-1">{{ item.unused }}</td>
+                  <td class="px-2 py-1">{{ item.expired }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
         <DataTable :columns="columns" :data="codes" :loading="loading">
           <template #cell-code="{ value }">
             <div class="flex items-center space-x-2">
@@ -115,6 +160,14 @@
             >
               {{ t('admin.redeem.status.' + value) }}
             </span>
+          </template>
+
+          <template #cell-category="{ value }">
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ value || t('admin.redeem.ungrouped') }}</span>
+          </template>
+
+          <template #cell-notes="{ value }">
+            <span class="text-sm text-gray-500 dark:text-gray-400">{{ value || '-' }}</span>
           </template>
 
           <template #cell-used_by="{ value, row }">
@@ -209,6 +262,14 @@
             <div>
               <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
               <Select v-model="generateForm.type" :options="typeOptions" />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.redeem.category') }}</label>
+              <input v-model="generateForm.category" type="text" maxlength="64" class="input" />
+            </div>
+            <div>
+              <label class="input-label">{{ t('admin.redeem.notes') }}</label>
+              <textarea v-model="generateForm.notes" maxlength="500" class="input min-h-20"></textarea>
             </div>
             <!-- 余额/并发类型：显示数值输入 -->
             <div v-if="generateForm.type !== 'subscription' && generateForm.type !== 'invitation'">
@@ -409,6 +470,16 @@ import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import Icon from '@/components/icons/Icon.vue'
 
+interface RedeemCategoryStat {
+  category: string
+  total: number
+  unused: number
+  used: number
+  expired: number
+  total_value: number
+  used_value: number
+}
+
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
@@ -495,6 +566,8 @@ const columns = computed<Column[]>(() => [
   { key: 'type', label: t('admin.redeem.columns.type'), sortable: true },
   { key: 'value', label: t('admin.redeem.columns.value'), sortable: true },
   { key: 'status', label: t('admin.redeem.columns.status'), sortable: true },
+  { key: 'category', label: t('admin.redeem.columns.category') },
+  { key: 'notes', label: t('admin.redeem.columns.notes') },
   { key: 'used_by', label: t('admin.redeem.columns.usedBy') },
   { key: 'used_at', label: t('admin.redeem.columns.usedAt'), sortable: true },
   { key: 'actions', label: t('admin.redeem.columns.actions') }
@@ -519,7 +592,8 @@ const filterStatusOptions = computed(() => [
   { value: '', label: t('admin.redeem.allStatus') },
   { value: 'unused', label: t('admin.redeem.unused') },
   { value: 'used', label: t('admin.redeem.used') },
-  { value: 'expired', label: t('admin.redeem.status.expired') }
+  { value: 'expired', label: t('admin.redeem.status.expired') },
+  { value: 'revoked', label: t('admin.redeem.status.revoked') }
 ])
 
 const codes = ref<RedeemCode[]>([])
@@ -528,7 +602,8 @@ const generating = ref(false)
 const searchQuery = ref('')
 const filters = reactive({
   type: '',
-  status: ''
+  status: '',
+  category: ''
 })
 const pagination = reactive({
   page: 1,
@@ -543,11 +618,14 @@ const showDeleteDialog = ref(false)
 const showDeleteUnusedDialog = ref(false)
 const deletingCode = ref<RedeemCode | null>(null)
 const copiedCode = ref<string | null>(null)
+const categoryStats = ref<RedeemCategoryStat[]>([])
 
 const generateForm = reactive({
   type: 'balance' as RedeemCodeType,
   value: 10,
   count: 1,
+  category: '',
+  notes: '',
   group_id: null as number | null,
   validity_days: 30
 })
@@ -578,7 +656,8 @@ const loadCodes = async () => {
       {
         type: filters.type as RedeemCodeType,
         status: filters.status as any,
-        search: searchQuery.value || undefined
+        search: searchQuery.value || undefined,
+        category: filters.category || undefined
       },
       {
         signal: currentController.signal
@@ -641,6 +720,8 @@ const handleGenerateCodes = async () => {
       generateForm.count,
       generateForm.type,
       generateForm.value,
+      generateForm.notes,
+      generateForm.category,
       generateForm.type === 'subscription' ? generateForm.group_id : undefined,
       generateForm.type === 'subscription' ? generateForm.validity_days : undefined
     )
@@ -648,9 +729,12 @@ const handleGenerateCodes = async () => {
     generatedCodes.value = result
     showResultDialog.value = true
     // 重置表单
+    generateForm.notes = ''
+    generateForm.category = ''
     generateForm.group_id = null
     generateForm.validity_days = 30
     loadCodes()
+    loadStats()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToGenerate'))
     console.error('Error generating codes:', error)
@@ -673,7 +757,8 @@ const handleExportCodes = async () => {
   try {
     const blob = await adminAPI.redeem.exportCodes({
       type: filters.type as RedeemCodeType,
-      status: filters.status as any
+      status: filters.status as any,
+      category: filters.category || undefined
     })
 
     // Create download link
@@ -707,6 +792,7 @@ const confirmDelete = async () => {
     showDeleteDialog.value = false
     deletingCode.value = null
     loadCodes()
+    loadStats()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToDelete'))
     console.error('Error deleting code:', error)
@@ -729,10 +815,25 @@ const confirmDeleteUnused = async () => {
     appStore.showSuccess(t('admin.redeem.codesDeleted', { count: result.deleted }))
     showDeleteUnusedDialog.value = false
     loadCodes()
+    loadStats()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToDeleteUnused'))
     console.error('Error deleting unused codes:', error)
   }
+}
+
+const loadStats = async () => {
+  try {
+    const stats = await adminAPI.redeem.getStats()
+    categoryStats.value = stats.by_category || []
+  } catch (error) {
+    console.error('Error loading redeem stats:', error)
+  }
+}
+
+const toggleDistributorFilter = () => {
+  filters.category = filters.category === 'distributor' ? '' : 'distributor'
+  loadCodes()
 }
 
 // 加载订阅类型分组
@@ -748,6 +849,7 @@ const loadSubscriptionGroups = async () => {
 onMounted(() => {
   loadCodes()
   loadSubscriptionGroups()
+  loadStats()
 })
 
 onUnmounted(() => {

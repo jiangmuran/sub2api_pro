@@ -21,6 +21,7 @@ import userAttributesAPI from './userAttributes'
 import opsAPI from './ops'
 import errorPassthroughAPI from './errorPassthrough'
 import securityAPI from './security'
+import distributorsAPI from './distributors'
 
 /**
  * Unified admin API object for convenient access
@@ -43,7 +44,8 @@ export const adminAPI = {
   userAttributes: userAttributesAPI,
   ops: opsAPI,
   errorPassthrough: errorPassthroughAPI,
-  security: securityAPI
+  security: securityAPI,
+  distributors: distributorsAPI
 }
 
 export {
@@ -64,7 +66,8 @@ export {
   userAttributesAPI,
   opsAPI,
   errorPassthroughAPI,
-  securityAPI
+  securityAPI,
+  distributorsAPI
 }
 
 export default adminAPI

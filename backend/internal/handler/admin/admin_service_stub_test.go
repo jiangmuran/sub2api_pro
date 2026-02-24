@@ -327,8 +327,17 @@ func (s *stubAdminService) TestProxy(ctx context.Context, id int64) (*service.Pr
 	return &service.ProxyTestResult{Success: true, Message: "ok"}, nil
 }
 
-func (s *stubAdminService) ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search string) ([]service.RedeemCode, int64, error) {
+func (s *stubAdminService) ListRedeemCodes(ctx context.Context, page, pageSize int, codeType, status, search, category string) ([]service.RedeemCode, int64, error) {
 	return s.redeems, int64(len(s.redeems)), nil
+}
+
+func (s *stubAdminService) GetRedeemCodeStats(ctx context.Context) (*service.RedeemCodeStats, error) {
+	return &service.RedeemCodeStats{
+		TotalCodes:            int64(len(s.redeems)),
+		ByType:                map[string]int64{},
+		ByCategory:            []service.RedeemCategoryStats{},
+		TotalValueDistributed: 0,
+	}, nil
 }
 
 func (s *stubAdminService) GetRedeemCode(ctx context.Context, id int64) (*service.RedeemCode, error) {

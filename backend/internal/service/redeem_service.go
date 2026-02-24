@@ -47,7 +47,7 @@ type RedeemCodeRepository interface {
 	Use(ctx context.Context, id, userID int64) error
 
 	List(ctx context.Context, params pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error)
-	ListWithFilters(ctx context.Context, params pagination.PaginationParams, codeType, status, search string) ([]RedeemCode, *pagination.PaginationResult, error)
+	ListWithFilters(ctx context.Context, params pagination.PaginationParams, codeType, status, search, category string) ([]RedeemCode, *pagination.PaginationResult, error)
 	ListByUser(ctx context.Context, userID int64, limit int) ([]RedeemCode, error)
 	// ListByUserPaginated returns paginated balance/concurrency history for a specific user.
 	// codeType filter is optional - pass empty string to return all types.
@@ -80,6 +80,7 @@ type RedeemService struct {
 	billingCacheService  *BillingCacheService
 	entClient            *dbent.Client
 	authCacheInvalidator APIKeyAuthCacheInvalidator
+	distributorService   *DistributorService
 }
 
 // NewRedeemService 创建兑换码服务实例
@@ -101,6 +102,10 @@ func NewRedeemService(
 		entClient:            entClient,
 		authCacheInvalidator: authCacheInvalidator,
 	}
+}
+
+func (s *RedeemService) SetDistributorService(distributorService *DistributorService) {
+	s.distributorService = distributorService
 }
 
 // GenerateRandomCode 生成随机兑换码
@@ -332,6 +337,12 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	redeemCode, err = s.redeemRepo.GetByID(ctx, redeemCode.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get updated redeem code: %w", err)
+	}
+	if s.distributorService != nil {
+		if err := s.distributorService.MarkOrderRedeemedByRedeemCodeID(ctx, redeemCode.ID, userID); err != nil {
+			// 非关键路径：不影响用户兑换成功
+			_ = err
+		}
 	}
 
 	return redeemCode, nil

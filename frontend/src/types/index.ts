@@ -890,13 +890,15 @@ export interface RedeemCode {
   code: string
   type: RedeemCodeType
   value: number
-  status: 'active' | 'used' | 'expired' | 'unused'
+  status: 'active' | 'used' | 'expired' | 'unused' | 'revoked'
   used_by: number | null
   used_at: string | null
   created_at: string
   updated_at?: string
   group_id?: number | null // 订阅类型专用
   validity_days?: number // 订阅类型专用
+  category?: string
+  notes?: string
   user?: User
   group?: Group // 关联的分组
 }
@@ -905,12 +907,77 @@ export interface GenerateRedeemCodesRequest {
   count: number
   type: RedeemCodeType
   value: number
+  notes?: string
+  category?: string
   group_id?: number | null // 订阅类型专用
   validity_days?: number // 订阅类型专用
 }
 
 export interface RedeemCodeRequest {
   code: string
+}
+
+export interface DistributorProfile {
+  id: number
+  user_id: number
+  enabled: boolean
+  balance_cny_cents: number
+  notes: string
+  created_at: string
+  updated_at: string
+  user?: User
+}
+
+export interface DistributorOffer {
+  id: number
+  distributor_user_id: number
+  name: string
+  target_group_id: number
+  validity_days: number
+  cost_cny_cents: number
+  enabled: boolean
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DistributorOrder {
+  id: number
+  distributor_user_id: number
+  offer_id: number
+  redeem_code_id: number
+  cost_cny_cents: number
+  sell_price_cny_cents: number
+  status: 'issued' | 'redeemed' | 'revoked'
+  memo: string
+  issued_at: string
+  redeemed_at?: string | null
+  revoked_at?: string | null
+  revoked_by_admin: boolean
+  created_at: string
+  updated_at: string
+  redeem_code?: RedeemCode
+}
+
+export interface DistributorUserStats {
+  distributor_user_id: number
+  orders_total: number
+  issued_count: number
+  redeemed_count: number
+  revoked_count: number
+  sell_amount_cny: number
+  cost_amount_cny: number
+  refund_amount_cny: number
+  net_sell_amount_cny: number
+  gross_profit_cny: number
+}
+
+export interface DistributorAdminSummary {
+  unsettled_cny_cents: number
+  delta_since_last_settle_cny: number
+  last_settled_at?: string | null
+  last_settled_amount_cny_cents: number
+  by_user: DistributorUserStats[]
 }
 
 // ==================== Dashboard & Statistics ====================

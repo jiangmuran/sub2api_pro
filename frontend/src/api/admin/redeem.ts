@@ -23,8 +23,9 @@ export async function list(
   pageSize: number = 20,
   filters?: {
     type?: RedeemCodeType
-    status?: 'active' | 'used' | 'expired' | 'unused'
+    status?: 'active' | 'used' | 'expired' | 'unused' | 'revoked'
     search?: string
+    category?: string
   },
   options?: {
     signal?: AbortSignal
@@ -64,13 +65,17 @@ export async function generate(
   count: number,
   type: RedeemCodeType,
   value: number,
+  notes?: string,
+  category?: string,
   groupId?: number | null,
   validityDays?: number
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
     type,
-    value
+    value,
+    notes,
+    category
   }
 
   // 订阅类型专用字段
@@ -132,6 +137,15 @@ export async function getStats(): Promise<{
   expired_codes: number
   total_value_distributed: number
   by_type: Record<RedeemCodeType, number>
+  by_category: {
+    category: string
+    total: number
+    unused: number
+    used: number
+    expired: number
+    total_value: number
+    used_value: number
+  }[]
 }> {
   const { data } = await apiClient.get<{
     total_codes: number
@@ -140,6 +154,15 @@ export async function getStats(): Promise<{
     expired_codes: number
     total_value_distributed: number
     by_type: Record<RedeemCodeType, number>
+    by_category: {
+      category: string
+      total: number
+      unused: number
+      used: number
+      expired: number
+      total_value: number
+      used_value: number
+    }[]
   }>('/admin/redeem-codes/stats')
   return data
 }
@@ -151,7 +174,8 @@ export async function getStats(): Promise<{
  */
 export async function exportCodes(filters?: {
   type?: RedeemCodeType
-  status?: 'active' | 'used' | 'expired'
+  status?: 'active' | 'used' | 'expired' | 'unused' | 'revoked'
+  category?: string
 }): Promise<Blob> {
   const response = await apiClient.get('/admin/redeem-codes/export', {
     params: filters,

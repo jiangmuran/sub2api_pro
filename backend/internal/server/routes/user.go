@@ -87,5 +87,15 @@ func RegisterUserRoutes(
 			subscriptions.GET("/progress", h.Subscription.GetProgress)
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
 		}
+
+		// 分销用户模块
+		distributor := authenticated.Group("/distributor")
+		{
+			distributor.GET("/profile", h.Distributor.GetProfile)
+			distributor.GET("/offers", h.Distributor.ListOffers)
+			distributor.GET("/orders", h.Distributor.ListOrders)
+			distributor.POST("/orders", h.Distributor.CreateOrder)
+			distributor.POST("/orders/:id/revoke", h.Distributor.RevokeOrder)
+		}
 	}
 }

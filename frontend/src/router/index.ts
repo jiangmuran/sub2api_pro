@@ -164,6 +164,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/distributor',
+    name: 'Distributor',
+    component: () => import('@/views/user/DistributorView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Distributor',
+      titleKey: 'distributor.title',
+      descriptionKey: 'distributor.description'
+    }
+  },
+  {
     path: '/subscriptions',
     name: 'Subscriptions',
     component: () => import('@/views/user/SubscriptionsView.vue'),
@@ -299,6 +311,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Redeem Code Management',
       titleKey: 'admin.redeem.title',
       descriptionKey: 'admin.redeem.description'
+    }
+  },
+  {
+    path: '/admin/distributors',
+    name: 'AdminDistributors',
+    component: () => import('@/views/admin/DistributorsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Distributor Management',
+      titleKey: 'admin.distributor.title',
+      descriptionKey: 'admin.distributor.description'
     }
   },
   {

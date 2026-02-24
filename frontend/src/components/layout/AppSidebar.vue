@@ -149,6 +149,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import VersionBadge from '@/components/common/VersionBadge.vue'
+import { distributorAPI } from '@/api'
 
 const { t } = useI18n()
 
@@ -168,6 +169,7 @@ const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
+const hasDistributorAccess = ref(false)
 
 // SVG Icon Components
 const DashboardIcon = {
@@ -463,6 +465,9 @@ const userNavItems = computed(() => {
         ]
       : []),
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
+    ...(hasDistributorAccess.value
+      ? [{ path: '/distributor', label: t('nav.distributor'), icon: TicketIcon, hideInSimpleMode: true }]
+      : []),
     { path: '/profile', label: t('nav.profile'), icon: UserIcon }
   ]
   return authStore.isSimpleMode ? items.filter(item => !item.hideInSimpleMode) : items
@@ -485,6 +490,9 @@ const personalNavItems = computed(() => {
         ]
       : []),
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
+    ...(hasDistributorAccess.value
+      ? [{ path: '/distributor', label: t('nav.distributor'), icon: TicketIcon, hideInSimpleMode: true }]
+      : []),
     { path: '/profile', label: t('nav.profile'), icon: UserIcon }
   ]
   return authStore.isSimpleMode ? items.filter(item => !item.hideInSimpleMode) : items
@@ -504,6 +512,7 @@ const adminNavItems = computed(() => {
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
     { path: '/admin/redeem', label: t('nav.redeemCodes'), icon: TicketIcon, hideInSimpleMode: true },
+    { path: '/admin/distributors', label: t('nav.distributors'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/promo-codes', label: t('nav.promoCodes'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/admin/usage', label: t('nav.usage'), icon: ChartIcon },
     { path: '/admin/security', label: t('nav.security'), icon: ShieldIcon },
@@ -583,6 +592,17 @@ watch(
 onMounted(() => {
   if (isAdmin.value) {
     adminSettingsStore.fetch()
+  }
+
+  if (!isAdmin.value) {
+    distributorAPI
+      .profile()
+      .then((profile) => {
+        hasDistributorAccess.value = !!profile?.enabled
+      })
+      .catch(() => {
+        hasDistributorAccess.value = false
+      })
   }
 })
 </script>

@@ -29,6 +29,7 @@ func ProvideAdminHandlers(
 	userAttributeHandler *admin.UserAttributeHandler,
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
 	securityHandler *admin.SecurityHandler,
+	distributorHandler *admin.DistributorHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:        dashboardHandler,
@@ -51,6 +52,7 @@ func ProvideAdminHandlers(
 		UserAttribute:    userAttributeHandler,
 		ErrorPassthrough: errorPassthroughHandler,
 		Security:         securityHandler,
+		Distributor:      distributorHandler,
 	}
 }
 
@@ -78,6 +80,7 @@ func ProvideHandlers(
 	openaiGatewayHandler *OpenAIGatewayHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
+	distributorHandler *DistributorHandler,
 ) *Handlers {
 	return &Handlers{
 		Auth:          authHandler,
@@ -92,6 +95,7 @@ func ProvideHandlers(
 		OpenAIGateway: openaiGatewayHandler,
 		Setting:       settingHandler,
 		Totp:          totpHandler,
+		Distributor:   distributorHandler,
 	}
 }
 
@@ -108,6 +112,7 @@ var ProviderSet = wire.NewSet(
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
 	NewTotpHandler,
+	NewDistributorHandler,
 	ProvideSettingHandler,
 
 	// Admin handlers
@@ -131,6 +136,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
 	admin.NewSecurityHandler,
+	admin.NewDistributorHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

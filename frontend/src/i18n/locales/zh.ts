@@ -281,7 +281,33 @@ export default {
     github: 'GitHub',
     mySubscriptions: '我的订阅',
     buySubscription: '购买订阅',
+    distributor: '分销管理',
+    distributors: '分销商',
     docs: '文档'
+  },
+
+  distributor: {
+	  title: '分销中心',
+	  description: '使用 CNY 余额生成兑换码',
+	  balance: 'CNY 余额',
+	  offers: '可售套餐',
+	  validityDays: '有效天数',
+	  buyCode: '生成兑换码',
+	  memoPrompt: '请输入订单备注（可选）',
+	  searchOrders: '搜索兑换码或备注...',
+	  code: '兑换码',
+	  status: '状态',
+	  sellPrice: '销售价',
+	  issuedAt: '生成时间',
+	  redeemedAt: '激活时间',
+	  revoke: '吊销',
+	  revoked: '吊销并退款成功',
+	  codeCreated: '兑换码生成成功',
+	  orderStatus: {
+	    issued: '已生成',
+	    redeemed: '已兑换',
+	    revoked: '已吊销'
+	  }
   },
 
   // Auth
@@ -2297,6 +2323,9 @@ export default {
         type: '类型',
         value: '面值',
         status: '状态',
+        category: '分组',
+        notes: '备注',
+        total: '总数',
         usedBy: '使用者',
         usedAt: '使用时间',
         createdAt: '创建时间',
@@ -2322,6 +2351,14 @@ export default {
       unused: '未使用',
       used: '已使用',
       searchCodes: '搜索兑换码或邮箱...',
+      categoryFilter: '按分组筛选...',
+      onlyDistributor: '仅看分销兑换码',
+      clearDistributorFilter: '清除分销筛选',
+      category: '分组',
+      notes: '备注',
+      ungrouped: '未分组',
+      categoryStats: '分组统计',
+      noCategoryStats: '暂无分组统计',
       exportCsv: '导出 CSV',
       deleteAllUnused: '删除全部未使用',
       deleteCodeConfirm: '确定要删除此兑换码吗？此操作无法撤销。',
@@ -2354,6 +2391,7 @@ export default {
         unused: '未使用',
         used: '已使用',
         expired: '已过期',
+        revoked: '已吊销',
         disabled: '已禁用'
       },
       form: {
@@ -2394,6 +2432,40 @@ export default {
       failedToGenerate: '生成兑换码失败',
       failedToUpdate: '更新兑换码失败',
       failedToDelete: '删除兑换码失败'
+    },
+    distributor: {
+      title: '分销管理',
+      description: '管理分销商、套餐、订单与结算',
+      searchProfile: '搜索分销商邮箱...',
+      unsettled: '未结资金',
+      delta: '较上次结清变化',
+      statsByUser: '分销商销售统计',
+      markSettled: '标记已结清',
+      email: '分销商邮箱',
+      notes: '备注',
+      manage: '管理',
+      topup: '充值',
+      refund: '退款',
+      amountPrompt: '请输入 CNY 金额',
+      offers: '套餐配置',
+      offerName: '套餐名称',
+      validityDays: '有效天数',
+      cost: '成本价',
+      grossProfit: '毛利',
+      orders: '订单记录',
+      searchOrders: '搜索兑换码/邮箱/备注...',
+      code: '兑换码',
+      status: '状态',
+      sellPrice: '销售价',
+      usedByEmail: '激活邮箱',
+      issuedAt: '生成时间',
+      redeemedAt: '激活时间',
+      revoke: '吊销',
+      orderStatus: {
+        issued: '已生成',
+        redeemed: '已兑换',
+        revoked: '已吊销'
+      }
     },
 
     // Announcements
