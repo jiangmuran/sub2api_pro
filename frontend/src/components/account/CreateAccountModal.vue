@@ -1995,6 +1995,7 @@ import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
+import { applyInterceptWarmup } from '@/components/account/credentialsBuilder'
 import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import OAuthAuthorizationFlow from './OAuthAuthorizationFlow.vue'
 
@@ -2704,6 +2705,8 @@ const handleSubmit = async () => {
       credentials.model_mapping = antigravityModelMapping
     }
 
+    applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
+
     submitting.value = true
     try {
       const extra = mixedScheduling.value ? { mixed_scheduling: true } : undefined
@@ -2755,10 +2758,7 @@ const handleSubmit = async () => {
     credentials.custom_error_codes = [...selectedErrorCodes.value]
   }
 
-  // Add intercept warmup requests setting
-  if (interceptWarmupRequests.value) {
-    credentials.intercept_warmup_requests = true
-  }
+  applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
   if (!applyTempUnschedConfig(credentials)) {
     return
   }
@@ -3112,6 +3112,7 @@ const handleAntigravityExchange = async (authCode: string) => {
 		if (!tokenInfo) return
 
 		const credentials = antigravityOAuth.buildCredentials(tokenInfo)
+		applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
 		// Antigravity 只使用映射模式
 		const antigravityModelMapping = buildModelMappingObject(
 			'mapping',
@@ -3183,10 +3184,8 @@ const handleAnthropicExchange = async (authCode: string) => {
       extra.cache_ttl_override_target = cacheTTLOverrideTarget.value
     }
 
-    const credentials = {
-      ...tokenInfo,
-      ...(interceptWarmupRequests.value ? { intercept_warmup_requests: true } : {})
-    }
+    const credentials: Record<string, unknown> = { ...tokenInfo }
+    applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
     await createAccountAndFinish(form.platform, addMethod.value as AccountType, credentials, extra)
   } catch (error: any) {
     oauth.error.value = error.response?.data?.detail || t('admin.accounts.oauth.authFailed')
@@ -3284,11 +3283,8 @@ const handleCookieAuth = async (sessionKey: string) => {
 
         const accountName = keys.length > 1 ? `${form.name} #${i + 1}` : form.name
 
-        // Merge interceptWarmupRequests into credentials
-        const credentials: Record<string, unknown> = {
-          ...tokenInfo,
-          ...(interceptWarmupRequests.value ? { intercept_warmup_requests: true } : {})
-        }
+        const credentials: Record<string, unknown> = { ...tokenInfo }
+        applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
         if (tempUnschedEnabled.value) {
           credentials.temp_unschedulable_enabled = true
           credentials.temp_unschedulable_rules = tempUnschedPayload
