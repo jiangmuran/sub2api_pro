@@ -772,15 +772,17 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		bodyModified = true
 	}
 
-	// 针对所有 OpenAI 账号执行 Codex 模型名规范化，确保上游识别一致。
-	if model, ok := reqBody["model"].(string); ok {
-		normalizedModel := normalizeCodexModel(model)
-		if normalizedModel != "" && normalizedModel != model {
-			log.Printf("[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
-				model, normalizedModel, account.Name, account.Type, isCodexCLI)
-			reqBody["model"] = normalizedModel
-			mappedModel = normalizedModel
-			bodyModified = true
+	// 仅对 OAuth 账号执行 Codex 模型名规范化，避免影响自定义上游 APIKey 兼容性。
+	if account.Type == AccountTypeOAuth {
+		if model, ok := reqBody["model"].(string); ok {
+			normalizedModel := normalizeCodexModel(model)
+			if normalizedModel != "" && normalizedModel != model {
+				log.Printf("[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
+					model, normalizedModel, account.Name, account.Type, isCodexCLI)
+				reqBody["model"] = normalizedModel
+				mappedModel = normalizedModel
+				bodyModified = true
+			}
 		}
 	}
 
