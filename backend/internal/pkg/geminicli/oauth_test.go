@@ -1,9 +1,435 @@
 package geminicli
 
 import (
+	"encoding/hex"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
+
+// ---------------------------------------------------------------------------
+// SessionStore 测试
+// ---------------------------------------------------------------------------
+
+func TestSessionStore_SetAndGet(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Stop()
+
+	session := &OAuthSession{
+		State:     "test-state",
+		OAuthType: "code_assist",
+		CreatedAt: time.Now(),
+	}
+	store.Set("sid-1", session)
+
+	got, ok := store.Get("sid-1")
+	if !ok {
+		t.Fatal("期望 Get 返回 ok=true，实际返回 false")
+	}
+	if got.State != "test-state" {
+		t.Errorf("期望 State=%q，实际=%q", "test-state", got.State)
+	}
+}
+
+func TestSessionStore_GetNotFound(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Stop()
+
+	_, ok := store.Get("不存在的ID")
+	if ok {
+		t.Error("期望不存在的 sessionID 返回 ok=false")
+	}
+}
+
+func TestSessionStore_GetExpired(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Stop()
+
+	// 创建一个已过期的 session（CreatedAt 设置为 SessionTTL+1 分钟之前）
+	session := &OAuthSession{
+		State:     "expired-state",
+		OAuthType: "code_assist",
+		CreatedAt: time.Now().Add(-(SessionTTL + 1*time.Minute)),
+	}
+	store.Set("expired-sid", session)
+
+	_, ok := store.Get("expired-sid")
+	if ok {
+		t.Error("期望过期的 session 返回 ok=false")
+	}
+}
+
+func TestSessionStore_Delete(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Stop()
+
+	session := &OAuthSession{
+		State:     "to-delete",
+		OAuthType: "code_assist",
+		CreatedAt: time.Now(),
+	}
+	store.Set("del-sid", session)
+
+	// 先确认存在
+	if _, ok := store.Get("del-sid"); !ok {
+		t.Fatal("删除前 session 应该存在")
+	}
+
+	store.Delete("del-sid")
+
+	if _, ok := store.Get("del-sid"); ok {
+		t.Error("删除后 session 不应该存在")
+	}
+}
+
+func TestSessionStore_Stop_Idempotent(t *testing.T) {
+	store := NewSessionStore()
+
+	// 多次调用 Stop 不应 panic
+	store.Stop()
+	store.Stop()
+	store.Stop()
+}
+
+func TestSessionStore_ConcurrentAccess(t *testing.T) {
+	store := NewSessionStore()
+	defer store.Stop()
+
+	const goroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines * 3)
+
+	// 并发写入
+	for i := 0; i < goroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			sid := "concurrent-" + string(rune('A'+idx%26))
+			store.Set(sid, &OAuthSession{
+				State:     sid,
+				OAuthType: "code_assist",
+				CreatedAt: time.Now(),
+			})
+		}(i)
+	}
+
+	// 并发读取
+	for i := 0; i < goroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			sid := "concurrent-" + string(rune('A'+idx%26))
+			store.Get(sid) // 可能找到也可能没找到，关键是不 panic
+		}(i)
+	}
+
+	// 并发删除
+	for i := 0; i < goroutines; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			sid := "concurrent-" + string(rune('A'+idx%26))
+			store.Delete(sid)
+		}(i)
+	}
+
+	wg.Wait()
+}
+
+// ---------------------------------------------------------------------------
+// GenerateRandomBytes 测试
+// ---------------------------------------------------------------------------
+
+func TestGenerateRandomBytes(t *testing.T) {
+	tests := []int{0, 1, 16, 32, 64}
+	for _, n := range tests {
+		b, err := GenerateRandomBytes(n)
+		if err != nil {
+			t.Errorf("GenerateRandomBytes(%d) 出错: %v", n, err)
+			continue
+		}
+		if len(b) != n {
+			t.Errorf("GenerateRandomBytes(%d) 返回长度=%d，期望=%d", n, len(b), n)
+		}
+	}
+}
+
+func TestGenerateRandomBytes_Uniqueness(t *testing.T) {
+	// 两次调用应该返回不同的结果（极小概率相同，32字节足够）
+	a, _ := GenerateRandomBytes(32)
+	b, _ := GenerateRandomBytes(32)
+	if string(a) == string(b) {
+		t.Error("两次 GenerateRandomBytes(32) 返回了相同结果，随机性可能有问题")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GenerateState 测试
+// ---------------------------------------------------------------------------
+
+func TestGenerateState(t *testing.T) {
+	state, err := GenerateState()
+	if err != nil {
+		t.Fatalf("GenerateState() 出错: %v", err)
+	}
+	if state == "" {
+		t.Error("GenerateState() 返回空字符串")
+	}
+	// base64url 编码不应包含 padding '='
+	if strings.Contains(state, "=") {
+		t.Errorf("GenerateState() 结果包含 '=' padding: %s", state)
+	}
+	// base64url 不应包含 '+' 或 '/'
+	if strings.ContainsAny(state, "+/") {
+		t.Errorf("GenerateState() 结果包含非 base64url 字符: %s", state)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GenerateSessionID 测试
+// ---------------------------------------------------------------------------
+
+func TestGenerateSessionID(t *testing.T) {
+	sid, err := GenerateSessionID()
+	if err != nil {
+		t.Fatalf("GenerateSessionID() 出错: %v", err)
+	}
+	// 16 字节 -> 32 个 hex 字符
+	if len(sid) != 32 {
+		t.Errorf("GenerateSessionID() 长度=%d，期望=32", len(sid))
+	}
+	// 必须是合法的 hex 字符串
+	if _, err := hex.DecodeString(sid); err != nil {
+		t.Errorf("GenerateSessionID() 不是合法的 hex 字符串: %s, err=%v", sid, err)
+	}
+}
+
+func TestGenerateSessionID_Uniqueness(t *testing.T) {
+	a, _ := GenerateSessionID()
+	b, _ := GenerateSessionID()
+	if a == b {
+		t.Error("两次 GenerateSessionID() 返回了相同结果")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GenerateCodeVerifier 测试
+// ---------------------------------------------------------------------------
+
+func TestGenerateCodeVerifier(t *testing.T) {
+	verifier, err := GenerateCodeVerifier()
+	if err != nil {
+		t.Fatalf("GenerateCodeVerifier() 出错: %v", err)
+	}
+	if verifier == "" {
+		t.Error("GenerateCodeVerifier() 返回空字符串")
+	}
+	// RFC 7636 要求 code_verifier 至少 43 个字符
+	if len(verifier) < 43 {
+		t.Errorf("GenerateCodeVerifier() 长度=%d，RFC 7636 要求至少 43 字符", len(verifier))
+	}
+	// base64url 编码不应包含 padding 和非 URL 安全字符
+	if strings.Contains(verifier, "=") {
+		t.Errorf("GenerateCodeVerifier() 包含 '=' padding: %s", verifier)
+	}
+	if strings.ContainsAny(verifier, "+/") {
+		t.Errorf("GenerateCodeVerifier() 包含非 base64url 字符: %s", verifier)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GenerateCodeChallenge 测试
+// ---------------------------------------------------------------------------
+
+func TestGenerateCodeChallenge(t *testing.T) {
+	// 使用已知输入验证输出
+	// RFC 7636 附录 B 示例: verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	// 预期 challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+	verifier := "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	expected := "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
+	challenge := GenerateCodeChallenge(verifier)
+	if challenge != expected {
+		t.Errorf("GenerateCodeChallenge(%q) = %q，期望 %q", verifier, challenge, expected)
+	}
+}
+
+func TestGenerateCodeChallenge_NoPadding(t *testing.T) {
+	challenge := GenerateCodeChallenge("test-verifier-string")
+	if strings.Contains(challenge, "=") {
+		t.Errorf("GenerateCodeChallenge() 结果包含 '=' padding: %s", challenge)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// base64URLEncode 测试
+// ---------------------------------------------------------------------------
+
+func TestBase64URLEncode(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []byte
+	}{
+		{"空字节", []byte{}},
+		{"单字节", []byte{0xff}},
+		{"多字节", []byte{0x01, 0x02, 0x03, 0x04, 0x05}},
+		{"全零", []byte{0x00, 0x00, 0x00}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := base64URLEncode(tt.input)
+			// 不应包含 '=' padding
+			if strings.Contains(result, "=") {
+				t.Errorf("base64URLEncode(%v) 包含 '=' padding: %s", tt.input, result)
+			}
+			// 不应包含标准 base64 的 '+' 或 '/'
+			if strings.ContainsAny(result, "+/") {
+				t.Errorf("base64URLEncode(%v) 包含非 URL 安全字符: %s", tt.input, result)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// hasRestrictedScope 测试
+// ---------------------------------------------------------------------------
+
+func TestHasRestrictedScope(t *testing.T) {
+	tests := []struct {
+		scope    string
+		expected bool
+	}{
+		// 受限 scope
+		{"https://www.googleapis.com/auth/generative-language", true},
+		{"https://www.googleapis.com/auth/generative-language.retriever", true},
+		{"https://www.googleapis.com/auth/generative-language.tuning", true},
+		{"https://www.googleapis.com/auth/drive", true},
+		{"https://www.googleapis.com/auth/drive.readonly", true},
+		{"https://www.googleapis.com/auth/drive.file", true},
+		// 非受限 scope
+		{"https://www.googleapis.com/auth/cloud-platform", false},
+		{"https://www.googleapis.com/auth/userinfo.email", false},
+		{"https://www.googleapis.com/auth/userinfo.profile", false},
+		// 边界情况
+		{"", false},
+		{"random-scope", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.scope, func(t *testing.T) {
+			got := hasRestrictedScope(tt.scope)
+			if got != tt.expected {
+				t.Errorf("hasRestrictedScope(%q) = %v，期望 %v", tt.scope, got, tt.expected)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BuildAuthorizationURL 测试
+// ---------------------------------------------------------------------------
+
+func TestBuildAuthorizationURL(t *testing.T) {
+	t.Setenv(GeminiCLIOAuthClientSecretEnv, "test-secret")
+
+	authURL, err := BuildAuthorizationURL(
+		OAuthConfig{},
+		"test-state",
+		"test-challenge",
+		"https://example.com/callback",
+		"",
+		"code_assist",
+	)
+	if err != nil {
+		t.Fatalf("BuildAuthorizationURL() 出错: %v", err)
+	}
+
+	// 检查返回的 URL 包含期望的参数
+	checks := []string{
+		"response_type=code",
+		"client_id=" + GeminiCLIOAuthClientID,
+		"redirect_uri=",
+		"state=test-state",
+		"code_challenge=test-challenge",
+		"code_challenge_method=S256",
+		"access_type=offline",
+		"prompt=consent",
+		"include_granted_scopes=true",
+	}
+	for _, check := range checks {
+		if !strings.Contains(authURL, check) {
+			t.Errorf("BuildAuthorizationURL() URL 缺少参数 %q\nURL: %s", check, authURL)
+		}
+	}
+
+	// 不应包含 project_id（因为传的是空字符串）
+	if strings.Contains(authURL, "project_id=") {
+		t.Errorf("BuildAuthorizationURL() 空 projectID 时不应包含 project_id 参数")
+	}
+
+	// URL 应该以正确的授权端点开头
+	if !strings.HasPrefix(authURL, AuthorizeURL+"?") {
+		t.Errorf("BuildAuthorizationURL() URL 应以 %s? 开头，实际: %s", AuthorizeURL, authURL)
+	}
+}
+
+func TestBuildAuthorizationURL_EmptyRedirectURI(t *testing.T) {
+	t.Setenv(GeminiCLIOAuthClientSecretEnv, "test-secret")
+
+	_, err := BuildAuthorizationURL(
+		OAuthConfig{},
+		"test-state",
+		"test-challenge",
+		"", // 空 redirectURI
+		"",
+		"code_assist",
+	)
+	if err == nil {
+		t.Error("BuildAuthorizationURL() 空 redirectURI 应该报错")
+	}
+	if !strings.Contains(err.Error(), "redirect_uri") {
+		t.Errorf("错误消息应包含 'redirect_uri'，实际: %v", err)
+	}
+}
+
+func TestBuildAuthorizationURL_WithProjectID(t *testing.T) {
+	t.Setenv(GeminiCLIOAuthClientSecretEnv, "test-secret")
+
+	authURL, err := BuildAuthorizationURL(
+		OAuthConfig{},
+		"test-state",
+		"test-challenge",
+		"https://example.com/callback",
+		"my-project-123",
+		"code_assist",
+	)
+	if err != nil {
+		t.Fatalf("BuildAuthorizationURL() 出错: %v", err)
+	}
+	if !strings.Contains(authURL, "project_id=my-project-123") {
+		t.Errorf("BuildAuthorizationURL() 带 projectID 时应包含 project_id 参数\nURL: %s", authURL)
+	}
+}
+
+func TestBuildAuthorizationURL_UsesBuiltinSecretFallback(t *testing.T) {
+	t.Setenv(GeminiCLIOAuthClientSecretEnv, "")
+
+	authURL, err := BuildAuthorizationURL(
+		OAuthConfig{},
+		"test-state",
+		"test-challenge",
+		"https://example.com/callback",
+		"",
+		"code_assist",
+	)
+	if err != nil {
+		t.Fatalf("BuildAuthorizationURL() 不应报错: %v", err)
+	}
+	if !strings.Contains(authURL, "client_id="+GeminiCLIOAuthClientID) {
+		t.Errorf("应使用内置 Gemini CLI client_id，实际 URL: %s", authURL)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// EffectiveOAuthConfig 测试 - 原有测试
+// ---------------------------------------------------------------------------
 
 func TestEffectiveOAuthConfig_GoogleOne(t *testing.T) {
 	tests := []struct {
