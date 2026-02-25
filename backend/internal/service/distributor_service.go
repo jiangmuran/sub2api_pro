@@ -310,21 +310,46 @@ func (s *DistributorService) PurchaseOrder(ctx context.Context, distributorUserI
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDistributorProfileNotFound
 		}
-		return nil, err
+		if !isDistributorSchemaCompatError(err) {
+			return nil, err
+		}
+		// Legacy fallback for instances that have not fully migrated distributor_profiles.
+		if legacyErr := tx.QueryRowContext(ctx, `SELECT balance_cny_cents FROM distributor_profiles WHERE user_id=$1 FOR UPDATE`, distributorUserID).Scan(&balance); legacyErr != nil {
+			if errors.Is(legacyErr, sql.ErrNoRows) {
+				return nil, ErrDistributorProfileNotFound
+			}
+			return nil, wrapDistributorSchemaError(legacyErr)
+		}
+		profileEnabled = true
 	}
 	if !profileEnabled {
 		return nil, ErrDistributorDisabled
 	}
 
 	var offer DistributorOffer
-	if err := tx.QueryRowContext(ctx, `
+	if err = tx.QueryRowContext(ctx, `
 SELECT id, distributor_user_id, name, target_group_id, validity_days, cost_cny_cents, enabled, notes, created_at, updated_at
 FROM distributor_offers WHERE id=$1 AND distributor_user_id=$2 FOR UPDATE
 `, offerID, distributorUserID).Scan(&offer.ID, &offer.DistributorUserID, &offer.Name, &offer.TargetGroupID, &offer.ValidityDays, &offer.CostCNYCents, &offer.Enabled, &offer.Notes, &offer.CreatedAt, &offer.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrDistributorOfferNotFound
 		}
-		return nil, err
+		if !isDistributorSchemaCompatError(err) {
+			return nil, err
+		}
+
+		// Legacy fallback for instances that have not fully migrated distributor_offers.
+		if legacyErr := tx.QueryRowContext(ctx, `
+SELECT id, distributor_user_id, name, target_group_id, validity_days, cost_cny_cents, created_at, updated_at
+FROM distributor_offers WHERE id=$1 AND distributor_user_id=$2 FOR UPDATE
+`, offerID, distributorUserID).Scan(&offer.ID, &offer.DistributorUserID, &offer.Name, &offer.TargetGroupID, &offer.ValidityDays, &offer.CostCNYCents, &offer.CreatedAt, &offer.UpdatedAt); legacyErr != nil {
+			if errors.Is(legacyErr, sql.ErrNoRows) {
+				return nil, ErrDistributorOfferNotFound
+			}
+			return nil, wrapDistributorSchemaError(legacyErr)
+		}
+		offer.Enabled = true
+		offer.Notes = ""
 	}
 	if !offer.Enabled {
 		return nil, ErrDistributorDisabled
@@ -797,12 +822,16 @@ func isDistributorSchemaCompatError(err error) bool {
 	if msg == "" {
 		return false
 	}
-	if !strings.Contains(msg, "distributor_") {
-		return false
+	if strings.Contains(msg, "relation") && strings.Contains(msg, "does not exist") && strings.Contains(msg, "distributor_") {
+		return true
+	}
+	if strings.Contains(msg, "column") && strings.Contains(msg, "does not exist") {
+		return true
 	}
 	return strings.Contains(msg, "does not exist") ||
 		strings.Contains(msg, "undefined column") ||
-		strings.Contains(msg, "undefined table")
+		strings.Contains(msg, "undefined table") ||
+		strings.Contains(msg, "no such column")
 }
 
 func wrapDistributorSchemaError(err error) error {
