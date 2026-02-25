@@ -329,6 +329,23 @@ FROM distributor_offers WHERE id=$1 AND distributor_user_id=$2 FOR UPDATE
 	if !offer.Enabled {
 		return nil, ErrDistributorDisabled
 	}
+	if offer.CostCNYCents <= 0 {
+		return nil, infraerrors.BadRequest("DISTRIBUTOR_COST_INVALID", "offer cost must be > 0")
+	}
+
+	targetGroup, err := s.groupRepo.GetByIDLite(ctx, offer.TargetGroupID)
+	if err != nil {
+		if errors.Is(err, ErrGroupNotFound) {
+			return nil, infraerrors.BadRequest("DISTRIBUTOR_GROUP_INVALID", "target group is invalid")
+		}
+		return nil, err
+	}
+	if targetGroup.SubscriptionType != SubscriptionTypeSubscription {
+		return nil, infraerrors.BadRequest("DISTRIBUTOR_GROUP_INVALID", "target group must be subscription type")
+	}
+	if targetGroup.Status != StatusActive {
+		return nil, infraerrors.BadRequest("DISTRIBUTOR_GROUP_INACTIVE", "target group is not active")
+	}
 	if sellPriceCNYCents <= 0 {
 		sellPriceCNYCents = offer.CostCNYCents
 	}

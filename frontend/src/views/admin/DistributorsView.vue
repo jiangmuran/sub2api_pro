@@ -2,7 +2,7 @@
   <AppLayout>
     <div class="space-y-6">
       <section
-        class="rounded-2xl border border-gray-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+        class="rounded-2xl border border-gray-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-5 shadow-sm dark:border-dark-700 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800"
       >
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div>
