@@ -10,6 +10,23 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 )
 
+var (
+	patternTypeThinking         = []byte(`"type":"thinking"`)
+	patternTypeThinkingSpaced   = []byte(`"type": "thinking"`)
+	patternTypeRedactedThinking = []byte(`"type":"redacted_thinking"`)
+	patternTypeRedactedSpaced   = []byte(`"type": "redacted_thinking"`)
+	patternTypeToolUse          = []byte(`"type":"tool_use"`)
+	patternTypeToolUseSpaced    = []byte(`"type": "tool_use"`)
+	patternTypeToolResult       = []byte(`"type":"tool_result"`)
+	patternTypeToolResultSpaced = []byte(`"type": "tool_result"`)
+	patternThinkingField        = []byte(`"thinking":`)
+	patternThinkingFieldSpaced  = []byte(`"thinking" :`)
+	patternEmptyContent         = []byte(`"content":[]`)
+	patternEmptyContentSpaced   = []byte(`"content": []`)
+	patternEmptyContentSp1      = []byte(`"content" : []`)
+	patternEmptyContentSp2      = []byte(`"content" :[]`)
+)
+
 // SessionContext 粘性会话上下文，用于区分不同来源的请求。
 // 仅在 GenerateSessionHash 第 3 级 fallback（消息内容 hash）时混入，
 // 避免不同用户发送相同消息产生相同 hash 导致账号集中。
@@ -184,19 +201,19 @@ func FilterThinkingBlocks(body []byte) []byte {
 //   - Remove `redacted_thinking` blocks (cannot be converted to text).
 //   - Ensure no message ends up with empty content.
 func FilterThinkingBlocksForRetry(body []byte) []byte {
-	hasThinkingContent := bytes.Contains(body, []byte(`"type":"thinking"`)) ||
-		bytes.Contains(body, []byte(`"type": "thinking"`)) ||
-		bytes.Contains(body, []byte(`"type":"redacted_thinking"`)) ||
-		bytes.Contains(body, []byte(`"type": "redacted_thinking"`)) ||
-		bytes.Contains(body, []byte(`"thinking":`)) ||
-		bytes.Contains(body, []byte(`"thinking" :`))
+	hasThinkingContent := bytes.Contains(body, patternTypeThinking) ||
+		bytes.Contains(body, patternTypeThinkingSpaced) ||
+		bytes.Contains(body, patternTypeRedactedThinking) ||
+		bytes.Contains(body, patternTypeRedactedSpaced) ||
+		bytes.Contains(body, patternThinkingField) ||
+		bytes.Contains(body, patternThinkingFieldSpaced)
 
 	// Also check for empty content arrays that need fixing.
 	// Note: This is a heuristic check; the actual empty content handling is done below.
-	hasEmptyContent := bytes.Contains(body, []byte(`"content":[]`)) ||
-		bytes.Contains(body, []byte(`"content": []`)) ||
-		bytes.Contains(body, []byte(`"content" : []`)) ||
-		bytes.Contains(body, []byte(`"content" :[]`))
+	hasEmptyContent := bytes.Contains(body, patternEmptyContent) ||
+		bytes.Contains(body, patternEmptyContentSpaced) ||
+		bytes.Contains(body, patternEmptyContentSp1) ||
+		bytes.Contains(body, patternEmptyContentSp2)
 
 	// Fast path: nothing to process
 	if !hasThinkingContent && !hasEmptyContent {
@@ -333,16 +350,16 @@ func FilterThinkingBlocksForRetry(body []byte) []byte {
 // risk of prompt injection (tool output becomes plain conversation text).
 func FilterSignatureSensitiveBlocksForRetry(body []byte) []byte {
 	// Fast path: only run when we see likely relevant constructs.
-	if !bytes.Contains(body, []byte(`"type":"thinking"`)) &&
-		!bytes.Contains(body, []byte(`"type": "thinking"`)) &&
-		!bytes.Contains(body, []byte(`"type":"redacted_thinking"`)) &&
-		!bytes.Contains(body, []byte(`"type": "redacted_thinking"`)) &&
-		!bytes.Contains(body, []byte(`"type":"tool_use"`)) &&
-		!bytes.Contains(body, []byte(`"type": "tool_use"`)) &&
-		!bytes.Contains(body, []byte(`"type":"tool_result"`)) &&
-		!bytes.Contains(body, []byte(`"type": "tool_result"`)) &&
-		!bytes.Contains(body, []byte(`"thinking":`)) &&
-		!bytes.Contains(body, []byte(`"thinking" :`)) {
+	if !bytes.Contains(body, patternTypeThinking) &&
+		!bytes.Contains(body, patternTypeThinkingSpaced) &&
+		!bytes.Contains(body, patternTypeRedactedThinking) &&
+		!bytes.Contains(body, patternTypeRedactedSpaced) &&
+		!bytes.Contains(body, patternTypeToolUse) &&
+		!bytes.Contains(body, patternTypeToolUseSpaced) &&
+		!bytes.Contains(body, patternTypeToolResult) &&
+		!bytes.Contains(body, patternTypeToolResultSpaced) &&
+		!bytes.Contains(body, patternThinkingField) &&
+		!bytes.Contains(body, patternThinkingFieldSpaced) {
 		return body
 	}
 
