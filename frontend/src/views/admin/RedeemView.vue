@@ -75,14 +75,16 @@
                 <tr class="text-left text-gray-500 dark:text-gray-400">
                   <th class="px-2 py-1">{{ t('admin.redeem.columns.category') }}</th>
                   <th class="px-2 py-1">{{ t('admin.redeem.columns.total') }}</th>
-                  <th class="px-2 py-1">{{ t('admin.redeem.columns.used') }}</th>
-                  <th class="px-2 py-1">{{ t('admin.redeem.columns.unused') }}</th>
-                  <th class="px-2 py-1">{{ t('admin.redeem.columns.expired') }}</th>
+                  <th class="px-2 py-1">{{ t('admin.redeem.used') }}</th>
+                  <th class="px-2 py-1">{{ t('admin.redeem.unused') }}</th>
+                  <th class="px-2 py-1">{{ t('admin.redeem.status.expired') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="item in categoryStats" :key="item.category" class="border-t border-gray-100 dark:border-dark-700">
-                  <td class="px-2 py-1 text-gray-900 dark:text-gray-100">{{ item.category }}</td>
+                  <td class="px-2 py-1 text-gray-900 dark:text-gray-100">
+                    {{ item.category || t('admin.redeem.ungrouped') }}
+                  </td>
                   <td class="px-2 py-1">{{ item.total }}</td>
                   <td class="px-2 py-1">{{ item.used }}</td>
                   <td class="px-2 py-1">{{ item.unused }}</td>

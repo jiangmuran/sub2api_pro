@@ -3,15 +3,15 @@ import type { DistributorOffer, DistributorOrder, DistributorProfile, PaginatedR
 
 const distributorAPI = {
   async profile(): Promise<DistributorProfile> {
-    const { data } = await apiClient.get<DistributorProfile>('/user/distributor/profile')
+    const { data } = await apiClient.get<DistributorProfile>('/distributor/profile')
     return data
   },
   async offers(): Promise<DistributorOffer[]> {
-    const { data } = await apiClient.get<DistributorOffer[]>('/user/distributor/offers')
+    const { data } = await apiClient.get<DistributorOffer[]>('/distributor/offers')
     return data
   },
   async orders(page = 1, pageSize = 20, params?: { status?: string; search?: string }): Promise<PaginatedResponse<DistributorOrder>> {
-    const { data } = await apiClient.get<PaginatedResponse<DistributorOrder>>('/user/distributor/orders', {
+    const { data } = await apiClient.get<PaginatedResponse<DistributorOrder>>('/distributor/orders', {
       params: {
         page,
         page_size: pageSize,
@@ -22,7 +22,7 @@ const distributorAPI = {
     return data
   },
   async createOrder(offerId: number, sellPriceCNY: number, memo?: string): Promise<DistributorOrder> {
-    const { data } = await apiClient.post<DistributorOrder>('/user/distributor/orders', {
+    const { data } = await apiClient.post<DistributorOrder>('/distributor/orders', {
       offer_id: offerId,
       sell_price_cny: sellPriceCNY,
       memo
@@ -30,7 +30,7 @@ const distributorAPI = {
     return data
   },
   async revokeOrder(orderId: number, notes?: string): Promise<DistributorOrder> {
-    const { data } = await apiClient.post<DistributorOrder>(`/user/distributor/orders/${orderId}/revoke`, { notes })
+    const { data } = await apiClient.post<DistributorOrder>(`/distributor/orders/${orderId}/revoke`, { notes })
     return data
   }
 }

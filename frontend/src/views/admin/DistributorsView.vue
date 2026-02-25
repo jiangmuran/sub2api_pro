@@ -1,112 +1,383 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <div class="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
-        <input v-model="search" type="text" class="input max-w-80" :placeholder="t('admin.distributor.searchProfile')" @input="loadProfiles" />
-        <button class="btn btn-secondary" @click="loadAll">{{ t('common.refresh') }}</button>
-      </div>
-
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div class="card p-4">
-            <div class="text-sm text-gray-500">{{ t('admin.distributor.unsettled') }}</div>
-            <div class="text-2xl font-semibold">{{ formatCNY(summary?.unsettled_cny_cents || 0) }}</div>
-            <div class="text-xs text-gray-500">{{ t('admin.distributor.delta') }}: {{ formatCNY(summary?.delta_since_last_settle_cny || 0) }}</div>
-            <button class="btn btn-secondary mt-2" @click="markSettled">{{ t('admin.distributor.markSettled') }}</button>
+      <section
+        class="rounded-2xl border border-gray-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 p-5 shadow-sm dark:border-dark-700 dark:bg-dark-900"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.distributor.title') }}
+            </h1>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              {{ t('admin.distributor.description') }}
+            </p>
           </div>
-      </div>
 
-      <div class="card p-4 mb-4">
-          <h3 class="mb-2 text-lg font-semibold">{{ t('admin.distributor.statsByUser') }}</h3>
-          <DataTable :columns="statsColumns" :data="summary?.by_user || []">
-            <template #cell-distributor_user_id="{ value }">{{ userEmailMap[value] || value }}</template>
-            <template #cell-sell_amount_cny="{ value }">{{ formatCNY(value) }}</template>
-            <template #cell-cost_amount_cny="{ value }">{{ formatCNY(value) }}</template>
-            <template #cell-refund_amount_cny="{ value }">{{ formatCNY(value) }}</template>
-            <template #cell-gross_profit_cny="{ value }">{{ formatCNY(value) }}</template>
-          </DataTable>
-      </div>
-
-      <div class="card p-4 mb-4">
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <input v-model="createEmail" type="email" class="input" :placeholder="t('admin.distributor.email')" />
-            <input v-model="createNotes" type="text" class="input" :placeholder="t('admin.distributor.notes')" />
-            <Select v-model="createEnabled" :options="enabledOptions" />
-            <button class="btn btn-primary" @click="upsertProfile">{{ t('common.save') }}</button>
-          </div>
-      </div>
-
-      <DataTable :columns="profileColumns" :data="profiles" :loading="loadingProfiles" :sticky-actions-column="false">
-        <template #cell-user="{ row }">{{ row.user?.email || row.user_id }}</template>
-        <template #cell-enabled="{ value }">
-          <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="value ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'">
-            {{ value ? t('common.enabled') : t('common.disabled') }}
-          </span>
-        </template>
-        <template #cell-balance_cny_cents="{ value }">{{ formatCNY(value) }}</template>
-        <template #cell-actions="{ row }">
           <div class="flex flex-wrap items-center gap-2">
-            <button class="btn btn-secondary btn-sm" @click="selectUser(row.user_id)">{{ t('admin.distributor.manage') }}</button>
-            <button class="btn btn-secondary btn-sm" @click="adjust(row.user_id, 'topup')">+{{ t('admin.distributor.topup') }}</button>
-            <button class="btn btn-secondary btn-sm" @click="adjust(row.user_id, 'refund')">-{{ t('admin.distributor.refund') }}</button>
+            <input
+              v-model="settleNotes"
+              type="text"
+              maxlength="200"
+              class="input w-52"
+              :placeholder="t('admin.distributor.notes')"
+            />
+            <button class="btn btn-secondary" :disabled="settling" @click="markSettled">
+              {{ settling ? t('common.processing') : t('admin.distributor.markSettled') }}
+            </button>
+            <button class="btn btn-primary" :disabled="isRefreshing" @click="loadAll">
+              {{ t('common.refresh') }}
+            </button>
           </div>
-        </template>
-      </DataTable>
+        </div>
 
-      <div v-if="selectedUserId" class="space-y-4">
-          <div class="card p-4">
-            <h3 class="mb-2 text-lg font-semibold">{{ t('admin.distributor.offers') }}</h3>
-            <div class="mb-3 grid grid-cols-1 gap-2 md:grid-cols-6">
-              <input v-model="offerForm.name" type="text" class="input" :placeholder="t('admin.distributor.offerName')" />
-              <Select v-model="offerForm.target_group_id" :options="groupOptions" />
-              <input v-model.number="offerForm.validity_days" type="number" min="1" class="input" />
-              <input v-model.number="offerForm.cost_cny" type="number" min="1" class="input" />
-              <Select v-model="offerForm.enabled" :options="enabledOptions" />
-              <button class="btn btn-primary" @click="createOffer">{{ t('common.create') }}</button>
-            </div>
-            <DataTable :columns="offerColumns" :data="offers" :sticky-actions-column="false">
-              <template #cell-cost_cny_cents="{ value }">{{ formatCNY(value) }}</template>
-              <template #cell-enabled="{ value }">
-                <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="value ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'">
-                  {{ value ? t('common.enabled') : t('common.disabled') }}
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+          <input
+            v-model="profileSearch"
+            type="text"
+            class="input"
+            :placeholder="t('admin.distributor.searchProfile')"
+            @input="handleProfileSearch"
+          />
+          <input
+            v-model="createForm.email"
+            type="email"
+            class="input"
+            :placeholder="t('admin.distributor.email')"
+          />
+          <Select v-model="createForm.enabled" :options="enabledOptions" />
+          <button class="btn btn-primary" :disabled="savingProfile" @click="upsertProfile">
+            {{ savingProfile ? t('common.processing') : t('common.save') }}
+          </button>
+        </div>
+        <input
+          v-model="createForm.notes"
+          type="text"
+          maxlength="200"
+          class="input mt-3"
+          :placeholder="t('admin.distributor.notes')"
+        />
+      </section>
+
+      <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <article class="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm dark:border-emerald-800 dark:bg-dark-900">
+          <p class="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+            {{ t('admin.distributor.unsettled') }}
+          </p>
+          <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+            {{ formatCNY(summary?.unsettled_cny_cents) }}
+          </p>
+        </article>
+
+        <article class="rounded-2xl border border-cyan-200 bg-white p-4 shadow-sm dark:border-cyan-800 dark:bg-dark-900">
+          <p class="text-xs font-medium uppercase tracking-wide text-cyan-700 dark:text-cyan-300">
+            {{ t('admin.distributor.delta') }}
+          </p>
+          <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+            {{ formatCNY(summary?.delta_since_last_settle_cny) }}
+          </p>
+        </article>
+
+        <article class="rounded-2xl border border-blue-200 bg-white p-4 shadow-sm dark:border-blue-800 dark:bg-dark-900">
+          <p class="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">
+            {{ t('admin.distributor.grossProfit') }}
+          </p>
+          <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+            {{ formatCNY(totalGrossProfit) }}
+          </p>
+        </article>
+
+        <article class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+          <p class="text-xs font-medium uppercase tracking-wide text-gray-600 dark:text-gray-300">
+            {{ t('admin.distributor.orders') }}
+          </p>
+          <p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
+            {{ totalOrderCount }}
+          </p>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('common.enabled') }} {{ enabledProfileCount }} / {{ totalProfileCount }}
+          </p>
+        </article>
+      </section>
+
+      <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            {{ t('admin.distributor.statsByUser') }}
+          </h2>
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            {{ t('common.total') }} {{ summaryRows.length }}
+          </span>
+        </div>
+        <DataTable :columns="statsColumns" :data="summaryRows" :sticky-actions-column="false">
+          <template #cell-distributor_user_id="{ value }">
+            <span class="font-medium text-gray-800 dark:text-gray-100">{{ userEmailMap[value] || value }}</span>
+          </template>
+          <template #cell-sell_amount_cny="{ value }">{{ formatCNY(value) }}</template>
+          <template #cell-cost_amount_cny="{ value }">{{ formatCNY(value) }}</template>
+          <template #cell-refund_amount_cny="{ value }">{{ formatCNY(value) }}</template>
+          <template #cell-gross_profit_cny="{ value }">{{ formatCNY(value) }}</template>
+        </DataTable>
+      </section>
+
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900 xl:col-span-5">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.distributor.email') }}
+            </h2>
+            <span class="text-sm text-gray-500 dark:text-gray-400">
+              {{ t('common.total') }} {{ profiles.length }}
+            </span>
+          </div>
+
+          <DataTable
+            :columns="profileColumns"
+            :data="profiles"
+            :loading="loadingProfiles"
+            :sticky-actions-column="false"
+          >
+            <template #cell-user="{ row }">
+              <div class="min-w-40">
+                <p class="font-medium text-gray-900 dark:text-gray-100">{{ row.user?.email || row.user_id }}</p>
+                <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ row.notes || '-' }}</p>
+              </div>
+            </template>
+
+            <template #cell-enabled="{ value }">
+              <span
+                class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
+                :class="value
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                  : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'"
+              >
+                {{ value ? t('common.enabled') : t('common.disabled') }}
+              </span>
+            </template>
+
+            <template #cell-balance_cny_cents="{ value }">{{ formatCNY(value) }}</template>
+
+            <template #cell-actions="{ row }">
+              <button
+                class="btn btn-secondary btn-sm"
+                :class="selectedUserId === row.user_id ? 'ring-2 ring-primary-300 dark:ring-primary-700' : ''"
+                @click="selectUser(row.user_id)"
+              >
+                {{ t('admin.distributor.manage') }}
+              </button>
+            </template>
+          </DataTable>
+        </section>
+
+        <section class="space-y-6 xl:col-span-7">
+          <div
+            v-if="!selectedProfile"
+            class="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:bg-dark-900 dark:text-gray-400"
+          >
+            {{ t('admin.distributor.description') }}
+          </div>
+
+          <template v-else>
+            <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                    {{ selectedProfile.user?.email || selectedProfile.user_id }}
+                  </h3>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ selectedProfile.notes || '-' }}</p>
+                </div>
+                <span
+                  class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
+                  :class="selectedProfile.enabled
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                    : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'"
+                >
+                  {{ selectedProfile.enabled ? t('common.enabled') : t('common.disabled') }}
                 </span>
-              </template>
-              <template #cell-actions="{ row }">
-                <button class="btn btn-danger btn-sm" @click="deleteOffer(row.id)">{{ t('common.delete') }}</button>
-              </template>
-            </DataTable>
-          </div>
+              </div>
 
-          <div class="card p-4">
-            <h3 class="mb-2 text-lg font-semibold">{{ t('admin.distributor.orders') }}</h3>
-            <div class="mb-2 flex flex-wrap gap-2">
-              <input v-model="orderSearch" type="text" class="input max-w-80" :placeholder="t('admin.distributor.searchOrders')" @input="loadOrders" />
-              <Select v-model="orderStatus" :options="orderStatusOptions" class="w-44" @change="loadOrders" />
-            </div>
-            <DataTable :columns="orderColumns" :data="orders" :loading="loadingOrders" :sticky-actions-column="false">
-              <template #cell-redeem_code="{ row }">{{ row.redeem_code?.code }}</template>
-              <template #cell-used_email="{ row }">{{ row.redeem_code?.user?.email || '-' }}</template>
-              <template #cell-issued_at="{ value }">{{ formatDateTime(value) }}</template>
-              <template #cell-redeemed_at="{ value }">{{ value ? formatDateTime(value) : '-' }}</template>
-              <template #cell-sell_price_cny_cents="{ value }">{{ formatCNY(value) }}</template>
-              <template #cell-actions="{ row }">
-                <button v-if="row.status === 'issued'" class="btn btn-secondary btn-sm" @click="revokeOrder(row.id)">{{ t('admin.distributor.revoke') }}</button>
-              </template>
-            </DataTable>
-          </div>
+              <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-800">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.distributor.balance') }}</p>
+                  <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+                    {{ formatCNY(selectedProfile.balance_cny_cents) }}
+                  </p>
+                </div>
+                <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-800">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.distributor.orders') }}</p>
+                  <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">{{ selectedOrderCount }}</p>
+                </div>
+                <div class="rounded-xl bg-gray-50 p-3 dark:bg-dark-800">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.distributor.grossProfit') }}</p>
+                  <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">
+                    {{ formatCNY(selectedGrossProfit) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,120px)_minmax(0,1fr)_auto_auto]">
+                <input
+                  v-model.number="balanceForm.amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  class="input"
+                  :placeholder="t('admin.distributor.amountPrompt')"
+                />
+                <input
+                  v-model="balanceForm.notes"
+                  type="text"
+                  maxlength="200"
+                  class="input"
+                  :placeholder="t('admin.distributor.notes')"
+                />
+                <button
+                  class="btn btn-secondary"
+                  :disabled="adjustingBalance"
+                  @click="submitBalanceAdjust('topup')"
+                >
+                  +{{ t('admin.distributor.topup') }}
+                </button>
+                <button
+                  class="btn btn-secondary"
+                  :disabled="adjustingBalance"
+                  @click="submitBalanceAdjust('refund')"
+                >
+                  -{{ t('admin.distributor.refund') }}
+                </button>
+              </div>
+            </section>
+
+            <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+              <h3 class="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.distributor.offers') }}
+              </h3>
+
+              <div class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+                <input
+                  v-model="offerForm.name"
+                  type="text"
+                  class="input xl:col-span-2"
+                  maxlength="128"
+                  :placeholder="t('admin.distributor.offerName')"
+                />
+                <Select v-model="offerForm.target_group_id" :options="groupOptions" />
+                <input v-model.number="offerForm.validity_days" type="number" min="1" max="36500" class="input" />
+                <input v-model.number="offerForm.cost_cny" type="number" min="0.01" step="0.01" class="input" />
+                <Select v-model="offerForm.enabled" :options="enabledOptions" />
+              </div>
+
+              <div class="mb-4 flex flex-wrap items-center gap-3">
+                <input
+                  v-model="offerForm.notes"
+                  type="text"
+                  maxlength="200"
+                  class="input min-w-64 flex-1"
+                  :placeholder="t('admin.distributor.notes')"
+                />
+                <button class="btn btn-primary" :disabled="creatingOffer" @click="createOffer">
+                  {{ creatingOffer ? t('common.processing') : t('common.create') }}
+                </button>
+              </div>
+
+              <DataTable :columns="offerColumns" :data="offers" :loading="loadingOffers" :sticky-actions-column="false">
+                <template #cell-target_group_id="{ value }">
+                  {{ groupNameMap[value] || value }}
+                </template>
+                <template #cell-cost_cny_cents="{ value }">{{ formatCNY(value) }}</template>
+                <template #cell-enabled="{ value }">
+                  <span
+                    class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
+                    :class="value
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                      : 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'"
+                  >
+                    {{ value ? t('common.enabled') : t('common.disabled') }}
+                  </span>
+                </template>
+                <template #cell-notes="{ value }">{{ value || '-' }}</template>
+                <template #cell-actions="{ row }">
+                  <button class="btn btn-danger btn-sm" :disabled="deletingOfferId === row.id" @click="deleteOffer(row.id)">
+                    {{ deletingOfferId === row.id ? t('common.processing') : t('common.delete') }}
+                  </button>
+                </template>
+              </DataTable>
+            </section>
+
+            <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-700 dark:bg-dark-900">
+              <h3 class="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.distributor.orders') }}
+              </h3>
+
+              <div class="mb-3 flex flex-wrap items-center gap-2">
+                <input
+                  v-model="orderSearch"
+                  type="text"
+                  class="input max-w-80"
+                  :placeholder="t('admin.distributor.searchOrders')"
+                  @input="handleOrderSearch"
+                />
+                <Select v-model="orderStatus" :options="orderStatusOptions" class="w-44" @change="loadOrders" />
+                <button class="btn btn-secondary" :disabled="loadingOrders" @click="loadOrders">
+                  {{ t('common.refresh') }}
+                </button>
+              </div>
+
+              <DataTable :columns="orderColumns" :data="orders" :loading="loadingOrders" :sticky-actions-column="false">
+                <template #cell-redeem_code="{ row }">
+                  <code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-800 dark:bg-dark-700 dark:text-dark-100">
+                    {{ row.redeem_code?.code || '-' }}
+                  </code>
+                </template>
+                <template #cell-status="{ value }">
+                  <span
+                    class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
+                    :class="orderStatusClass(value)"
+                  >
+                    {{ t(`admin.distributor.orderStatus.${value}`) }}
+                  </span>
+                </template>
+                <template #cell-used_email="{ row }">{{ row.redeem_code?.user?.email || '-' }}</template>
+                <template #cell-issued_at="{ value }">{{ formatDateTime(value) }}</template>
+                <template #cell-redeemed_at="{ value }">{{ value ? formatDateTime(value) : '-' }}</template>
+                <template #cell-sell_price_cny_cents="{ value }">{{ formatCNY(value) }}</template>
+                <template #cell-memo="{ value }">{{ value || '-' }}</template>
+                <template #cell-actions="{ row }">
+                  <button
+                    v-if="row.status === 'issued'"
+                    class="btn btn-secondary btn-sm"
+                    :disabled="revokeLoadingId === row.id"
+                    @click="revokeOrder(row.id)"
+                  >
+                    {{ revokeLoadingId === row.id ? t('common.processing') : t('admin.distributor.revoke') }}
+                  </button>
+                  <span v-else class="text-xs text-gray-400">-</span>
+                </template>
+              </DataTable>
+            </section>
+          </template>
+        </section>
       </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import type { Column } from '@/components/common/types'
 import Select from '@/components/common/Select.vue'
 import { adminAPI } from '@/api/admin'
-import type { DistributorAdminSummary, DistributorOffer, DistributorOrder, DistributorProfile, Group } from '@/types'
+import type {
+  DistributorAdminSummary,
+  DistributorOffer,
+  DistributorOrder,
+  DistributorProfile,
+  Group,
+  DistributorUserStats
+} from '@/types'
 import { useAppStore } from '@/stores/app'
 import { formatDateTime } from '@/utils/format'
 
@@ -118,31 +389,84 @@ const profiles = ref<DistributorProfile[]>([])
 const offers = ref<DistributorOffer[]>([])
 const orders = ref<DistributorOrder[]>([])
 const groups = ref<Group[]>([])
+
+const isRefreshing = ref(false)
 const loadingProfiles = ref(false)
+const loadingOffers = ref(false)
 const loadingOrders = ref(false)
+const savingProfile = ref(false)
+const creatingOffer = ref(false)
+const deletingOfferId = ref<number | null>(null)
+const revokeLoadingId = ref<number | null>(null)
+const adjustingBalance = ref(false)
+const settling = ref(false)
+
 const selectedUserId = ref<number | null>(null)
 
-const search = ref('')
-const createEmail = ref('')
-const createEnabled = ref(true)
-const createNotes = ref('')
+const profileSearch = ref('')
 const orderSearch = ref('')
 const orderStatus = ref('')
+const settleNotes = ref('')
+
+const createForm = reactive({
+  email: '',
+  enabled: true,
+  notes: ''
+})
 
 const offerForm = reactive({
   name: '',
   target_group_id: 0,
   validity_days: 30,
-  cost_cny: 100,
-  enabled: true
+  cost_cny: 1,
+  enabled: true,
+  notes: ''
 })
+
+const balanceForm = reactive({
+  amount: 10,
+  notes: ''
+})
+
+const summaryRows = computed<DistributorUserStats[]>(() => summary.value?.by_user || [])
+
+const selectedProfile = computed(() =>
+  profiles.value.find((item) => item.user_id === selectedUserId.value) || null
+)
+
+const selectedStats = computed(
+  () => summaryRows.value.find((item) => item.distributor_user_id === selectedUserId.value) || null
+)
+
+const selectedOrderCount = computed(() => selectedStats.value?.orders_total || 0)
+const selectedGrossProfit = computed(() => selectedStats.value?.gross_profit_cny || 0)
+const enabledProfileCount = computed(() => profiles.value.filter((item) => item.enabled).length)
+const totalProfileCount = computed(() => profiles.value.length)
+const totalOrderCount = computed(() =>
+  summaryRows.value.reduce((acc, item) => acc + (item.orders_total || 0), 0)
+)
+const totalGrossProfit = computed(() =>
+  summaryRows.value.reduce((acc, item) => acc + (item.gross_profit_cny || 0), 0)
+)
 
 const enabledOptions = computed(() => [
   { value: true, label: t('common.enabled') },
   { value: false, label: t('common.disabled') }
 ])
 
-const groupOptions = computed(() => groups.value.filter(g => g.subscription_type === 'subscription').map(g => ({ value: g.id, label: g.name })))
+const groupOptions = computed(() =>
+  groups.value
+    .filter((item) => item.subscription_type === 'subscription')
+    .map((item) => ({ value: item.id, label: item.name }))
+)
+
+const groupNameMap = computed<Record<number, string>>(() => {
+  const map: Record<number, string> = {}
+  for (const group of groups.value) {
+    map[group.id] = group.name
+  }
+  return map
+})
 
 const profileColumns = computed<Column[]>(() => [
   { key: 'user', label: t('admin.distributor.email') },
@@ -153,9 +477,11 @@ const profileColumns = computed<Column[]>(() => [
 
 const offerColumns = computed<Column[]>(() => [
   { key: 'name', label: t('admin.distributor.offerName') },
+  { key: 'target_group_id', label: t('keys.group') },
   { key: 'validity_days', label: t('admin.distributor.validityDays') },
   { key: 'cost_cny_cents', label: t('admin.distributor.cost') },
   { key: 'enabled', label: t('common.status') },
+  { key: 'notes', label: t('admin.distributor.notes') },
   { key: 'actions', label: t('common.actions') }
 ])
 
@@ -164,16 +490,10 @@ const orderColumns = computed<Column[]>(() => [
   { key: 'status', label: t('admin.distributor.status') },
   { key: 'sell_price_cny_cents', label: t('admin.distributor.sellPrice') },
   { key: 'used_email', label: t('admin.distributor.usedByEmail') },
+  { key: 'memo', label: t('admin.distributor.notes') },
   { key: 'issued_at', label: t('admin.distributor.issuedAt') },
   { key: 'redeemed_at', label: t('admin.distributor.redeemedAt') },
   { key: 'actions', label: t('common.actions') }
-])
-
-const orderStatusOptions = computed(() => [
-  { value: '', label: t('common.all') },
-  { value: 'issued', label: t('admin.distributor.orderStatus.issued') },
-  { value: 'redeemed', label: t('admin.distributor.orderStatus.redeemed') },
-  { value: 'revoked', label: t('admin.distributor.orderStatus.revoked') }
 ])
 
 const statsColumns = computed<Column[]>(() => [
@@ -185,108 +505,290 @@ const statsColumns = computed<Column[]>(() => [
   { key: 'gross_profit_cny', label: t('admin.distributor.grossProfit') }
 ])
 
+const orderStatusOptions = computed(() => [
+  { value: '', label: t('common.all') },
+  { value: 'issued', label: t('admin.distributor.orderStatus.issued') },
+  { value: 'redeemed', label: t('admin.distributor.orderStatus.redeemed') },
+  { value: 'revoked', label: t('admin.distributor.orderStatus.revoked') }
+])
+
 const userEmailMap = computed<Record<number, string>>(() => {
-  const m: Record<number, string> = {}
+  const map: Record<number, string> = {}
   for (const item of profiles.value) {
-    m[item.user_id] = item.user?.email || String(item.user_id)
+    map[item.user_id] = item.user?.email || String(item.user_id)
   }
-  return m
+  return map
 })
 
-const formatCNY = (cents: number) => `CNY ${(cents / 100).toFixed(2)}`
+const formatCNY = (cents?: number | null) => {
+  const value = Number.isFinite(cents as number) ? Number(cents) : 0
+  return `CNY ${(value / 100).toFixed(2)}`
+}
 
-const loadSummary = async () => { summary.value = await adminAPI.distributors.summary() }
+const orderStatusClass = (status: string) => {
+  if (status === 'issued') {
+    return 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+  }
+  if (status === 'redeemed') {
+    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+  }
+  return 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-dark-300'
+}
+
+const showRequestError = (error: any) => {
+  appStore.showError(error?.response?.data?.detail || t('common.unknownError'))
+}
+
+const loadSummary = async () => {
+  summary.value = await adminAPI.distributors.summary()
+}
+
 const loadProfiles = async () => {
   loadingProfiles.value = true
   try {
-    const resp = await adminAPI.distributors.listProfiles(1, 50, search.value)
+    const resp = await adminAPI.distributors.listProfiles(1, 50, profileSearch.value.trim())
     profiles.value = resp.items
+    if (selectedUserId.value && !profiles.value.some((item) => item.user_id === selectedUserId.value)) {
+      selectedUserId.value = null
+      offers.value = []
+      orders.value = []
+    }
   } finally {
     loadingProfiles.value = false
   }
 }
+
+const loadOffers = async () => {
+  if (!selectedUserId.value) {
+    offers.value = []
+    return
+  }
+  loadingOffers.value = true
+  try {
+    offers.value = await adminAPI.distributors.listOffers(selectedUserId.value)
+  } finally {
+    loadingOffers.value = false
+  }
+}
+
 const loadOrders = async () => {
-  if (!selectedUserId.value) return
+  if (!selectedUserId.value) {
+    orders.value = []
+    return
+  }
   loadingOrders.value = true
   try {
     const resp = await adminAPI.distributors.listOrders(1, 100, {
       distributor_user_id: selectedUserId.value,
       status: orderStatus.value,
-      search: orderSearch.value
+      search: orderSearch.value.trim()
     })
     orders.value = resp.items
   } finally {
     loadingOrders.value = false
   }
 }
-const loadOffers = async () => {
-  if (!selectedUserId.value) return
-  offers.value = await adminAPI.distributors.listOffers(selectedUserId.value)
-}
+
 const loadGroups = async () => {
-  const resp = await adminAPI.groups.getAll()
-  groups.value = resp
+  groups.value = await adminAPI.groups.getAll()
+  if (!offerForm.target_group_id && groupOptions.value.length > 0) {
+    offerForm.target_group_id = Number(groupOptions.value[0].value)
+  }
 }
 
 const loadAll = async () => {
-  await Promise.all([loadSummary(), loadProfiles()])
-  if (selectedUserId.value) {
-    await Promise.all([loadOffers(), loadOrders()])
+  isRefreshing.value = true
+  try {
+    await Promise.all([loadSummary(), loadProfiles()])
+    if (selectedUserId.value) {
+      await Promise.all([loadOffers(), loadOrders()])
+    }
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    isRefreshing.value = false
   }
 }
 
 const upsertProfile = async () => {
-  await adminAPI.distributors.upsertProfile(createEmail.value, createEnabled.value, createNotes.value)
-  appStore.showSuccess(t('common.saved'))
-  await loadProfiles()
+  const email = createForm.email.trim()
+  if (!email) {
+    appStore.showError(t('auth.emailRequired'))
+    return
+  }
+
+  savingProfile.value = true
+  try {
+    const profile = await adminAPI.distributors.upsertProfile(email, createForm.enabled, createForm.notes.trim())
+    appStore.showSuccess(t('common.success'))
+    createForm.email = ''
+    createForm.notes = ''
+
+    await loadProfiles()
+    if (!selectedUserId.value) {
+      await selectUser(profile.user_id)
+    }
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    savingProfile.value = false
+  }
 }
 
-const adjust = async (userId: number, operation: 'topup' | 'refund') => {
-  const raw = window.prompt(t('admin.distributor.amountPrompt'))
-  const amount = Number(raw)
-  if (!Number.isFinite(amount) || amount <= 0) return
-  await adminAPI.distributors.adjustBalance(userId, operation, Math.round(amount * 100))
-  await Promise.all([loadProfiles(), loadSummary()])
+const submitBalanceAdjust = async (operation: 'topup' | 'refund') => {
+  if (!selectedUserId.value) {
+    return
+  }
+
+  const amount = Number(balanceForm.amount)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    appStore.showError(t('admin.distributor.amountPrompt'))
+    return
+  }
+
+  adjustingBalance.value = true
+  try {
+    await adminAPI.distributors.adjustBalance(
+      selectedUserId.value,
+      operation,
+      Math.round(amount * 100),
+      balanceForm.notes.trim()
+    )
+    appStore.showSuccess(t('common.success'))
+    await Promise.all([loadProfiles(), loadSummary(), loadOrders()])
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    adjustingBalance.value = false
+  }
 }
 
 const selectUser = async (userId: number) => {
   selectedUserId.value = userId
-  await Promise.all([loadOffers(), loadOrders()])
+  try {
+    await Promise.all([loadOffers(), loadOrders()])
+  } catch (error: any) {
+    showRequestError(error)
+  }
 }
 
 const createOffer = async () => {
-  if (!selectedUserId.value) return
-  await adminAPI.distributors.createOffer({
-    distributor_user_id: selectedUserId.value,
-    name: offerForm.name,
-    target_group_id: offerForm.target_group_id,
-    validity_days: offerForm.validity_days,
-    cost_cny: offerForm.cost_cny,
-    enabled: offerForm.enabled
-  })
-  await loadOffers()
+  if (!selectedUserId.value) {
+    return
+  }
+
+  const name = offerForm.name.trim()
+  const costCNY = Number(offerForm.cost_cny)
+  if (!name) {
+    appStore.showError(t('admin.distributor.offerName'))
+    return
+  }
+  if (!offerForm.target_group_id) {
+    appStore.showError(t('admin.redeem.groupRequired'))
+    return
+  }
+  if (!Number.isFinite(costCNY) || costCNY <= 0) {
+    appStore.showError(t('admin.distributor.cost'))
+    return
+  }
+
+  creatingOffer.value = true
+  try {
+    await adminAPI.distributors.createOffer({
+      distributor_user_id: selectedUserId.value,
+      name,
+      target_group_id: offerForm.target_group_id,
+      validity_days: offerForm.validity_days,
+      cost_cny: Math.round(costCNY * 100),
+      enabled: offerForm.enabled,
+      notes: offerForm.notes.trim()
+    })
+    appStore.showSuccess(t('common.success'))
+    offerForm.name = ''
+    offerForm.notes = ''
+    await loadOffers()
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    creatingOffer.value = false
+  }
 }
 
 const deleteOffer = async (id: number) => {
-  await adminAPI.distributors.deleteOffer(id)
-  await loadOffers()
+  deletingOfferId.value = id
+  try {
+    await adminAPI.distributors.deleteOffer(id)
+    appStore.showSuccess(t('common.success'))
+    await loadOffers()
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    deletingOfferId.value = null
+  }
 }
 
 const revokeOrder = async (id: number) => {
-  await adminAPI.distributors.revokeOrder(id)
-  await Promise.all([loadOrders(), loadSummary(), loadProfiles()])
+  revokeLoadingId.value = id
+  try {
+    await adminAPI.distributors.revokeOrder(id)
+    appStore.showSuccess(t('common.success'))
+    await Promise.all([loadOrders(), loadSummary(), loadProfiles()])
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    revokeLoadingId.value = null
+  }
 }
 
 const markSettled = async () => {
-  await adminAPI.distributors.settle()
-  await loadSummary()
+  settling.value = true
+  try {
+    await adminAPI.distributors.settle(settleNotes.value.trim())
+    settleNotes.value = ''
+    appStore.showSuccess(t('common.success'))
+    await loadSummary()
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    settling.value = false
+  }
+}
+
+let profileSearchTimer: ReturnType<typeof setTimeout> | null = null
+let orderSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+const handleProfileSearch = () => {
+  if (profileSearchTimer) {
+    clearTimeout(profileSearchTimer)
+  }
+  profileSearchTimer = setTimeout(() => {
+    loadProfiles().catch((error: any) => showRequestError(error))
+  }, 250)
+}
+
+const handleOrderSearch = () => {
+  if (orderSearchTimer) {
+    clearTimeout(orderSearchTimer)
+  }
+  orderSearchTimer = setTimeout(() => {
+    loadOrders().catch((error: any) => showRequestError(error))
+  }, 250)
 }
 
 onMounted(async () => {
   try {
     await Promise.all([loadGroups(), loadAll()])
   } catch (error: any) {
-    appStore.showError(error?.response?.data?.detail || t('common.operationFailed'))
+    showRequestError(error)
+  }
+})
+
+onUnmounted(() => {
+  if (profileSearchTimer) {
+    clearTimeout(profileSearchTimer)
+  }
+  if (orderSearchTimer) {
+    clearTimeout(orderSearchTimer)
   }
 })
 </script>

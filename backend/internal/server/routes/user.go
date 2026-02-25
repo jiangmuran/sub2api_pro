@@ -99,5 +99,15 @@ func RegisterUserRoutes(
 			distributor.POST("/orders", h.Distributor.CreateOrder)
 			distributor.POST("/orders/:id/revoke", h.Distributor.RevokeOrder)
 		}
+
+		// Legacy alias for older frontend bundles.
+		legacyDistributor := authenticated.Group("/user/distributor")
+		{
+			legacyDistributor.GET("/profile", h.Distributor.GetProfile)
+			legacyDistributor.GET("/offers", h.Distributor.ListOffers)
+			legacyDistributor.GET("/orders", h.Distributor.ListOrders)
+			legacyDistributor.POST("/orders", h.Distributor.CreateOrder)
+			legacyDistributor.POST("/orders/:id/revoke", h.Distributor.RevokeOrder)
+		}
 	}
 }
