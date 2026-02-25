@@ -363,12 +363,12 @@ FROM distributor_offers WHERE id=$1 AND distributor_user_id=$2 FOR UPDATE
 INSERT INTO redeem_codes(code,type,value,status,notes,group_id,validity_days,created_at,updated_at)
 VALUES($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()) RETURNING id
 `, code, RedeemTypeSubscription, 0, StatusUnused, redeemNotes, offer.TargetGroupID, offer.ValidityDays).Scan(&redeemCodeID); err != nil {
-		return nil, err
+		return nil, wrapDistributorSchemaError(err)
 	}
 
 	newBalance := balance - offer.CostCNYCents
 	if _, err := tx.ExecContext(ctx, `UPDATE distributor_profiles SET balance_cny_cents=$2, updated_at=NOW() WHERE user_id=$1`, distributorUserID, newBalance); err != nil {
-		return nil, err
+		return nil, wrapDistributorSchemaError(err)
 	}
 
 	var orderID int64
@@ -376,17 +376,35 @@ VALUES($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()) RETURNING id
 INSERT INTO distributor_orders(distributor_user_id,offer_id,redeem_code_id,cost_cny_cents,sell_price_cny_cents,status,memo,issued_at,created_at,updated_at)
 VALUES($1,$2,$3,$4,$5,$6,$7,NOW(),NOW(),NOW()) RETURNING id
 `, distributorUserID, offer.ID, redeemCodeID, offer.CostCNYCents, sellPriceCNYCents, DistributorOrderStatusIssued, memo).Scan(&orderID); err != nil {
-		return nil, err
+		if !isDistributorSchemaCompatError(err) {
+			return nil, wrapDistributorSchemaError(err)
+		}
+		// Legacy fallback for instances that have not fully migrated distributor_orders.
+		if err := tx.QueryRowContext(ctx, `
+INSERT INTO distributor_orders(distributor_user_id,offer_id,redeem_code_id,cost_cny_cents,status,created_at,updated_at)
+VALUES($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING id
+`, distributorUserID, offer.ID, redeemCodeID, offer.CostCNYCents, DistributorOrderStatusIssued).Scan(&orderID); err != nil {
+			return nil, wrapDistributorSchemaError(err)
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `
 INSERT INTO distributor_wallet_ledger(distributor_user_id,type,amount_cny_cents,balance_after_cny_cents,order_id,notes)
 VALUES($1,$2,$3,$4,$5,$6)
 `, distributorUserID, DistributorLedgerTypeRedeemBuy, -offer.CostCNYCents, newBalance, orderID, memo); err != nil {
-		return nil, err
+		if !isDistributorSchemaCompatError(err) {
+			return nil, wrapDistributorSchemaError(err)
+		}
+		// Legacy fallback for instances that have not fully migrated distributor_wallet_ledger.
+		if _, legacyErr := tx.ExecContext(ctx, `
+INSERT INTO distributor_wallet_ledger(distributor_user_id,type,amount_cny_cents,balance_after_cny_cents,order_id)
+VALUES($1,$2,$3,$4,$5)
+`, distributorUserID, DistributorLedgerTypeRedeemBuy, -offer.CostCNYCents, newBalance, orderID); legacyErr != nil {
+			return nil, wrapDistributorSchemaError(legacyErr)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, wrapDistributorSchemaError(err)
 	}
 	return s.GetOrderByID(ctx, orderID, true), nil
 }
@@ -495,49 +513,60 @@ func (s *DistributorService) ListOrdersAdmin(ctx context.Context, params paginat
 }
 
 func (s *DistributorService) listOrders(ctx context.Context, params pagination.PaginationParams, distributorUserID int64, status, search string, includeEmail bool) ([]DistributorOrder, *pagination.PaginationResult, error) {
-	status = strings.TrimSpace(status)
-	search = strings.TrimSpace(search)
-	args := make([]any, 0)
-	where := make([]string, 0)
-	if distributorUserID > 0 {
-		args = append(args, distributorUserID)
-		where = append(where, fmt.Sprintf("o.distributor_user_id = $%d", len(args)))
-	}
-	if status != "" {
-		args = append(args, status)
-		where = append(where, fmt.Sprintf("o.status = $%d", len(args)))
-	}
-	if search != "" {
-		args = append(args, "%"+search+"%")
-		cond := fmt.Sprintf("(r.code ILIKE $%d OR o.memo ILIKE $%d)", len(args), len(args))
-		if includeEmail {
-			cond = fmt.Sprintf("(r.code ILIKE $%d OR o.memo ILIKE $%d OR ru.email ILIKE $%d)", len(args), len(args), len(args))
+	whereSQL, args := buildDistributorOrderWhere(distributorUserID, status, search, includeEmail, true)
+	total, err := s.countOrders(ctx, whereSQL, args)
+	if err != nil {
+		if !isDistributorSchemaCompatError(err) {
+			return nil, nil, err
 		}
-		where = append(where, cond)
-	}
-	whereSQL := ""
-	if len(where) > 0 {
-		whereSQL = " WHERE " + strings.Join(where, " AND ")
+		whereSQL, args = buildDistributorOrderWhere(distributorUserID, status, search, includeEmail, false)
+		total, err = s.countOrders(ctx, whereSQL, args)
+		if err != nil {
+			return nil, nil, wrapDistributorSchemaError(err)
+		}
 	}
 
+	queryArgs := append(append([]any(nil), args...), params.Limit(), params.Offset())
+	listQ := s.orderQuery(includeEmail) + whereSQL + fmt.Sprintf(" ORDER BY o.issued_at DESC LIMIT $%d OFFSET $%d", len(queryArgs)-1, len(queryArgs))
+	rows, err := s.db.QueryContext(ctx, listQ, queryArgs...)
+	if err != nil {
+		if !isDistributorSchemaCompatError(err) {
+			return nil, nil, err
+		}
+
+		legacyWhereSQL, legacyArgs := buildDistributorOrderWhere(distributorUserID, status, search, includeEmail, false)
+		total, err = s.countOrders(ctx, legacyWhereSQL, legacyArgs)
+		if err != nil {
+			return nil, nil, wrapDistributorSchemaError(err)
+		}
+
+		queryArgs = append(append([]any(nil), legacyArgs...), params.Limit(), params.Offset())
+		legacyQ := s.orderQueryLegacy(includeEmail) + legacyWhereSQL + fmt.Sprintf(" ORDER BY o.id DESC LIMIT $%d OFFSET $%d", len(queryArgs)-1, len(queryArgs))
+		rows, err = s.db.QueryContext(ctx, legacyQ, queryArgs...)
+		if err != nil {
+			return nil, nil, wrapDistributorSchemaError(err)
+		}
+	}
+	defer rows.Close()
+
+	items, err := s.scanOrders(rows, includeEmail)
+	if err != nil {
+		if isDistributorSchemaCompatError(err) {
+			return nil, nil, wrapDistributorSchemaError(err)
+		}
+		return nil, nil, err
+	}
+
+	return items, buildPaginationResult(total, params), nil
+}
+
+func (s *DistributorService) countOrders(ctx context.Context, whereSQL string, args []any) (int64, error) {
 	countQ := `SELECT COUNT(1) FROM distributor_orders o JOIN redeem_codes r ON r.id=o.redeem_code_id LEFT JOIN users ru ON ru.id=r.used_by` + whereSQL
 	var total int64
 	if err := s.db.QueryRowContext(ctx, countQ, args...).Scan(&total); err != nil {
-		return nil, nil, err
+		return 0, err
 	}
-
-	args = append(args, params.Limit(), params.Offset())
-	listQ := s.orderQuery(includeEmail) + whereSQL + fmt.Sprintf(" ORDER BY o.issued_at DESC LIMIT $%d OFFSET $%d", len(args)-1, len(args))
-	rows, err := s.db.QueryContext(ctx, listQ, args...)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer rows.Close()
-	items, err := s.scanOrders(rows, includeEmail)
-	if err != nil {
-		return nil, nil, err
-	}
-	return items, buildPaginationResult(total, params), nil
+	return total, nil
 }
 
 func (s *DistributorService) orderQuery(includeEmail bool) string {
@@ -555,24 +584,91 @@ LEFT JOIN users ru ON ru.id = r.used_by
 `
 }
 
+func (s *DistributorService) orderQueryLegacy(includeEmail bool) string {
+	selectUser := ""
+	if includeEmail {
+		selectUser = ", ru.email"
+	}
+	return `
+SELECT o.id, o.distributor_user_id, o.offer_id, o.redeem_code_id, o.cost_cny_cents,
+       o.cost_cny_cents AS sell_price_cny_cents,
+       o.status,
+       ''::text AS memo,
+       NOW() AS issued_at,
+       NULL::timestamptz AS redeemed_at,
+       NULL::timestamptz AS revoked_at,
+       FALSE AS revoked_by_admin,
+       NOW() AS created_at,
+       NOW() AS updated_at,
+       r.code, r.status, r.used_at, r.used_by` + selectUser + `
+FROM distributor_orders o
+JOIN redeem_codes r ON r.id = o.redeem_code_id
+LEFT JOIN users ru ON ru.id = r.used_by
+`
+}
+
 func (s *DistributorService) scanOrders(rows *sql.Rows, includeEmail bool) ([]DistributorOrder, error) {
 	out := make([]DistributorOrder, 0)
 	for rows.Next() {
 		var o DistributorOrder
 		var code string
 		var redeemStatus string
+		var costCNY sql.NullInt64
+		var sellPriceCNY sql.NullInt64
+		var orderStatus sql.NullString
+		var memo sql.NullString
+		var issuedAt sql.NullTime
 		var usedAt sql.NullTime
 		var usedBy sql.NullInt64
 		var redeemedAt sql.NullTime
 		var revokedAt sql.NullTime
+		var revokedByAdmin sql.NullBool
+		var createdAt sql.NullTime
+		var updatedAt sql.NullTime
 		var usedByEmail sql.NullString
-		base := []any{&o.ID, &o.DistributorUserID, &o.OfferID, &o.RedeemCodeID, &o.CostCNYCents, &o.SellPriceCNYCents, &o.Status, &o.Memo, &o.IssuedAt, &redeemedAt, &revokedAt, &o.RevokedByAdmin, &o.CreatedAt, &o.UpdatedAt, &code, &redeemStatus, &usedAt, &usedBy}
+		base := []any{&o.ID, &o.DistributorUserID, &o.OfferID, &o.RedeemCodeID, &costCNY, &sellPriceCNY, &orderStatus, &memo, &issuedAt, &redeemedAt, &revokedAt, &revokedByAdmin, &createdAt, &updatedAt, &code, &redeemStatus, &usedAt, &usedBy}
 		if includeEmail {
 			base = append(base, &usedByEmail)
 		}
 		if err := rows.Scan(base...); err != nil {
 			return nil, err
 		}
+
+		if costCNY.Valid {
+			o.CostCNYCents = costCNY.Int64
+		}
+		if sellPriceCNY.Valid {
+			o.SellPriceCNYCents = sellPriceCNY.Int64
+		} else {
+			o.SellPriceCNYCents = o.CostCNYCents
+		}
+		if orderStatus.Valid {
+			o.Status = orderStatus.String
+		} else {
+			o.Status = DistributorOrderStatusIssued
+		}
+		if memo.Valid {
+			o.Memo = memo.String
+		}
+		if issuedAt.Valid {
+			o.IssuedAt = issuedAt.Time
+		} else {
+			o.IssuedAt = time.Now()
+		}
+		if revokedByAdmin.Valid {
+			o.RevokedByAdmin = revokedByAdmin.Bool
+		}
+		if createdAt.Valid {
+			o.CreatedAt = createdAt.Time
+		} else {
+			o.CreatedAt = o.IssuedAt
+		}
+		if updatedAt.Valid {
+			o.UpdatedAt = updatedAt.Time
+		} else {
+			o.UpdatedAt = o.CreatedAt
+		}
+
 		if redeemedAt.Valid {
 			t := redeemedAt.Time
 			o.RedeemedAt = &t
@@ -656,6 +752,67 @@ VALUES($1,$2,$3)
 		return nil, err
 	}
 	return s.GetAdminSummary(ctx)
+}
+
+func buildDistributorOrderWhere(distributorUserID int64, status, search string, includeEmail, includeMemo bool) (string, []any) {
+	status = strings.TrimSpace(status)
+	search = strings.TrimSpace(search)
+
+	args := make([]any, 0)
+	where := make([]string, 0)
+
+	if distributorUserID > 0 {
+		args = append(args, distributorUserID)
+		where = append(where, fmt.Sprintf("o.distributor_user_id = $%d", len(args)))
+	}
+	if status != "" {
+		args = append(args, status)
+		where = append(where, fmt.Sprintf("o.status = $%d", len(args)))
+	}
+	if search != "" {
+		args = append(args, "%"+search+"%")
+		idx := len(args)
+		orConds := []string{fmt.Sprintf("r.code ILIKE $%d", idx)}
+		if includeMemo {
+			orConds = append(orConds, fmt.Sprintf("o.memo ILIKE $%d", idx))
+		}
+		if includeEmail {
+			orConds = append(orConds, fmt.Sprintf("ru.email ILIKE $%d", idx))
+		}
+		where = append(where, "("+strings.Join(orConds, " OR ")+")")
+	}
+
+	whereSQL := ""
+	if len(where) > 0 {
+		whereSQL = " WHERE " + strings.Join(where, " AND ")
+	}
+	return whereSQL, args
+}
+
+func isDistributorSchemaCompatError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if msg == "" {
+		return false
+	}
+	if !strings.Contains(msg, "distributor_") {
+		return false
+	}
+	return strings.Contains(msg, "does not exist") ||
+		strings.Contains(msg, "undefined column") ||
+		strings.Contains(msg, "undefined table")
+}
+
+func wrapDistributorSchemaError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if isDistributorSchemaCompatError(err) {
+		return infraerrors.ServiceUnavailable("DISTRIBUTOR_SCHEMA_OUTDATED", "distributor schema is outdated, please run latest migrations")
+	}
+	return err
 }
 
 func nullableInt64(v int64) any {
