@@ -255,13 +255,25 @@ func FilterThinkingBlocksForRetry(body []byte) []byte {
 			continue
 		}
 
-		newContent := make([]any, 0, len(content))
+		var newContent []any
 		modifiedThisMsg := false
 
-		for _, block := range content {
+		ensureNewContent := func(prefixLen int) {
+			if newContent != nil {
+				return
+			}
+			newContent = make([]any, 0, len(content))
+			if prefixLen > 0 {
+				newContent = append(newContent, content[:prefixLen]...)
+			}
+		}
+
+		for bi, block := range content {
 			blockMap, ok := block.(map[string]any)
 			if !ok {
-				newContent = append(newContent, block)
+				if newContent != nil {
+					newContent = append(newContent, block)
+				}
 				continue
 			}
 
@@ -271,6 +283,7 @@ func FilterThinkingBlocksForRetry(body []byte) []byte {
 			switch blockType {
 			case "thinking":
 				modifiedThisMsg = true
+				ensureNewContent(bi)
 				thinkingText, _ := blockMap["thinking"].(string)
 				if thinkingText == "" {
 					continue
@@ -282,6 +295,7 @@ func FilterThinkingBlocksForRetry(body []byte) []byte {
 				continue
 			case "redacted_thinking":
 				modifiedThisMsg = true
+				ensureNewContent(bi)
 				continue
 			}
 
@@ -289,6 +303,7 @@ func FilterThinkingBlocksForRetry(body []byte) []byte {
 			if blockType == "" {
 				if rawThinking, hasThinking := blockMap["thinking"]; hasThinking {
 					modifiedThisMsg = true
+					ensureNewContent(bi)
 					switch v := rawThinking.(type) {
 					case string:
 						if v != "" {
@@ -303,11 +318,28 @@ func FilterThinkingBlocksForRetry(body []byte) []byte {
 				}
 			}
 
-			newContent = append(newContent, block)
+			if newContent != nil {
+				newContent = append(newContent, block)
+			}
 		}
 
-		// Handle empty content: either from filtering or originally empty
-		if len(newContent) == 0 {
+		// Handle originally empty content
+		if newContent == nil && len(content) == 0 {
+			modified = true
+			placeholder := "(content removed)"
+			if role == "assistant" {
+				placeholder = "(assistant content removed)"
+			}
+			msgMap["content"] = []any{map[string]any{
+				"type": "text",
+				"text": placeholder,
+			}}
+			newMessages = append(newMessages, msgMap)
+			continue
+		}
+
+		// Handle empty content produced by filtering
+		if newContent != nil && len(newContent) == 0 {
 			modified = true
 			placeholder := "(content removed)"
 			if role == "assistant" {
@@ -318,7 +350,7 @@ func FilterThinkingBlocksForRetry(body []byte) []byte {
 				"text": placeholder,
 			})
 			msgMap["content"] = newContent
-		} else if modifiedThisMsg {
+		} else if modifiedThisMsg && newContent != nil {
 			modified = true
 			msgMap["content"] = newContent
 		}
