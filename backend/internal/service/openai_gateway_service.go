@@ -1023,7 +1023,6 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 				AccountID:          account.ID,
 				AccountName:        account.Name,
 				UpstreamStatusCode: http.StatusForbidden,
-				Passthrough:        true,
 				Kind:               "request_error",
 				Message:            rejectMsg,
 				Detail:             rejectReason,
@@ -1167,9 +1166,7 @@ func logOpenAIPassthroughInstructionsRejected(
 	rejectReason string,
 	body []byte,
 ) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	_ = ctx
 	accountID := int64(0)
 	accountName := ""
 	accountType := ""
@@ -1178,16 +1175,20 @@ func logOpenAIPassthroughInstructionsRejected(
 		accountName = strings.TrimSpace(account.Name)
 		accountType = strings.TrimSpace(string(account.Type))
 	}
-	fields := []zap.Field{
-		zap.String("component", "service.openai_gateway"),
-		zap.Int64("account_id", accountID),
-		zap.String("account_name", accountName),
-		zap.String("account_type", accountType),
-		zap.String("request_model", strings.TrimSpace(reqModel)),
-		zap.String("reject_reason", strings.TrimSpace(rejectReason)),
+	requestID := ""
+	if c != nil {
+		requestID = strings.TrimSpace(c.GetHeader("x-request-id"))
 	}
-	fields = appendCodexCLIOnlyRejectedRequestFields(fields, c, body)
-	logger.FromContext(ctx).With(fields...).Warn("OpenAI passthrough 本地拦截：Codex 请求缺少有效 instructions")
+	log.Printf(
+		"[OpenAI passthrough] Local reject: missing instructions account=%d name=%s type=%s model=%s reason=%s req_id=%s body_bytes=%d",
+		accountID,
+		accountName,
+		accountType,
+		strings.TrimSpace(reqModel),
+		strings.TrimSpace(rejectReason),
+		requestID,
+		len(body),
+	)
 }
 
 func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
@@ -2720,4 +2721,3 @@ func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byt
 	}
 	return ""
 }
-
