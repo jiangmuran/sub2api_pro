@@ -1,11 +1,7 @@
 package service
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -244,25 +240,6 @@ func TestApplyCodexOAuthTransform_NonCodexCLI_DoesNotInjectInstructions(t *testi
 
 func setupCodexCache(t *testing.T) {
 	t.Helper()
-
-	// 使用临时 HOME 避免触发网络拉取 header。
-	// Windows 使用 USERPROFILE，Unix 使用 HOME。
-	tempDir := t.TempDir()
-	t.Setenv("HOME", tempDir)
-	t.Setenv("USERPROFILE", tempDir)
-
-	cacheDir := filepath.Join(tempDir, ".opencode", "cache")
-	require.NoError(t, os.MkdirAll(cacheDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "opencode-codex-header.txt"), []byte("header"), 0o644))
-
-	meta := map[string]any{
-		"etag":        "",
-		"lastFetch":   time.Now().UTC().Format(time.RFC3339),
-		"lastChecked": time.Now().UnixMilli(),
-	}
-	data, err := json.Marshal(meta)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(cacheDir, "opencode-codex-header-meta.json"), data, 0o644))
 }
 
 func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T) {
@@ -283,7 +260,7 @@ func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T
 }
 
 func TestApplyCodexOAuthTransform_NonCodexCLI_OverridesInstructions(t *testing.T) {
-	// 非 Codex CLI 场景：保留用户 instructions
+	// 非 Codex CLI 场景：使用内置指令覆盖
 	setupCodexCache(t)
 
 	reqBody := map[string]any{
