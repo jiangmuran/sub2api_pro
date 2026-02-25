@@ -2431,6 +2431,10 @@ func (s *OpenAIGatewayService) updateCodexUsageSnapshot(ctx context.Context, acc
 		}
 	}
 
+	if s.accountRepo == nil {
+		return
+	}
+
 	// Update account's Extra field asynchronously
 	go func() {
 		updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
