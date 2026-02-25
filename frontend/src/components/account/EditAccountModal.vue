@@ -1758,32 +1758,6 @@ const handleSubmit = async () => {
 
       updatePayload.extra = newExtra
     }
-
-    // For OpenAI OAuth/API Key accounts, handle passthrough mode in extra
-    if (props.account.platform === 'openai' && (props.account.type === 'oauth' || props.account.type === 'apikey')) {
-      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
-      const newExtra: Record<string, unknown> = { ...currentExtra }
-      const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
-      if (openaiPassthroughEnabled.value) {
-        newExtra.openai_passthrough = true
-      } else {
-        delete newExtra.openai_passthrough
-        delete newExtra.openai_oauth_passthrough
-      }
-
-      if (props.account.type === 'oauth') {
-        if (codexCLIOnlyEnabled.value) {
-          newExtra.codex_cli_only = true
-        } else if (hadCodexCLIOnlyEnabled) {
-          // Explicit false ensures backend clears previous true value.
-          newExtra.codex_cli_only = false
-        } else {
-          delete newExtra.codex_cli_only
-        }
-      }
-
-      updatePayload.extra = newExtra
-    }
     await adminAPI.accounts.update(props.account.id, updatePayload)
     appStore.showSuccess(t('admin.accounts.accountUpdated'))
     emit('updated')

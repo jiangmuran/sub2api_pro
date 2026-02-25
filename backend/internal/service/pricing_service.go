@@ -663,8 +663,8 @@ func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
 func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 	if strings.HasPrefix(model, "gpt-5.3-codex-spark") {
 		if pricing, ok := s.pricingData["gpt-5.1-codex"]; ok {
-			logger.LegacyPrintf("service.pricing", "[Pricing][SparkBilling] %s -> %s billing", model, "gpt-5.1-codex")
-			logger.LegacyPrintf("service.pricing", "[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.1-codex")
+			log.Printf("[Pricing][SparkBilling] %s -> %s billing", model, "gpt-5.1-codex")
+			log.Printf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.1-codex")
 			return pricing
 		}
 	}
