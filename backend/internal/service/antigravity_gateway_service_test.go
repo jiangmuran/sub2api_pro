@@ -848,7 +848,9 @@ func TestHandleClaudeStreamingResponse_ContextCanceled(t *testing.T) {
 
 // TestExtractSSEUsage 验证 extractSSEUsage 从 SSE data 行正确提取 usage
 func TestExtractSSEUsage(t *testing.T) {
-	svc := &AntigravityGatewayService{}
+	svc := &AntigravityGatewayService{
+		settingService: &SettingService{cfg: &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}},
+	}
 	tests := []struct {
 		name     string
 		line     string
@@ -937,19 +939,22 @@ func TestAntigravityStreamUpstreamResponse_UsageAndFirstToken(t *testing.T) {
 		_, _ = pw.Write([]byte("data: {\"usage\":{\"output_tokens\":5}}\n"))
 	}()
 
-	svc := &AntigravityGatewayService{}
+	svc := &AntigravityGatewayService{
+		settingService: &SettingService{cfg: &config.Config{Gateway: config.GatewayConfig{MaxLineSize: defaultMaxLineSize}}},
+	}
 	start := time.Now().Add(-10 * time.Millisecond)
-	usage, firstTokenMs := svc.streamUpstreamResponse(c, resp, start)
+	streamRes := svc.streamUpstreamResponse(c, resp, start)
 	_ = pr.Close()
 
-	require.NotNil(t, usage)
-	require.Equal(t, 1, usage.InputTokens)
+	require.NotNil(t, streamRes)
+	require.NotNil(t, streamRes.usage)
+	require.Equal(t, 1, streamRes.usage.InputTokens)
 	// 第二次事件覆盖 output_tokens
-	require.Equal(t, 5, usage.OutputTokens)
-	require.Equal(t, 3, usage.CacheReadInputTokens)
-	require.Equal(t, 4, usage.CacheCreationInputTokens)
+	require.Equal(t, 5, streamRes.usage.OutputTokens)
+	require.Equal(t, 3, streamRes.usage.CacheReadInputTokens)
+	require.Equal(t, 4, streamRes.usage.CacheCreationInputTokens)
 
-	if firstTokenMs == nil {
+	if streamRes.firstTokenMs == nil {
 		t.Fatalf("expected firstTokenMs to be set")
 	}
 	// 确保有透传输出
