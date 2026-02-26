@@ -326,7 +326,7 @@
               <DataTable :columns="orderColumns" :data="orders" :loading="loadingOrders" :sticky-actions-column="false">
                 <template #cell-redeem_code="{ row }">
                   <code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-800 dark:bg-dark-700 dark:text-dark-100">
-                    {{ row.redeem_code?.code || '-' }}
+                    {{ getRedeemCode(row) || '-' }}
                   </code>
                 </template>
                 <template #cell-status="{ value }">
@@ -523,6 +523,14 @@ const userEmailMap = computed<Record<number, string>>(() => {
 const formatCNY = (cents?: number | null) => {
   const value = Number.isFinite(cents as number) ? Number(cents) : 0
   return `CNY ${(value / 100).toFixed(2)}`
+}
+
+const getRedeemCode = (order: DistributorOrder): string => {
+  const redeem = (order as any)?.redeem_code
+  if (!redeem) {
+    return ''
+  }
+  return String(redeem.code ?? redeem.Code ?? '').trim()
 }
 
 const orderStatusClass = (status: string) => {

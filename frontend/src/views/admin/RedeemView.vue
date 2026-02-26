@@ -43,6 +43,9 @@
 
           <!-- Right: Action buttons -->
           <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
+            <button @click="toggleCategoryStats" class="btn btn-secondary">
+              {{ showCategoryStats ? t('admin.redeem.hideCategoryStats') : t('admin.redeem.showCategoryStats') }}
+            </button>
             <button
               @click="loadCodes"
               :disabled="loading"
@@ -62,7 +65,10 @@
       </template>
 
       <template #table>
-        <div class="mb-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800">
+        <div
+          v-if="showCategoryStats"
+          class="mb-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+        >
           <div class="mb-2 text-sm font-medium text-gray-900 dark:text-white">
             {{ t('admin.redeem.categoryStats') }}
           </div>
@@ -485,6 +491,7 @@ interface RedeemCategoryStat {
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
+const CATEGORY_STATS_VISIBLE_KEY = 'redeem_category_stats_visible'
 
 interface GroupOption {
   value: number
@@ -532,6 +539,7 @@ const textareaHeight = computed(() => {
 })
 
 const copiedAll = ref(false)
+const showCategoryStats = ref(true)
 
 const closeResultDialog = () => {
   showResultDialog.value = false
@@ -833,6 +841,11 @@ const loadStats = async () => {
   }
 }
 
+const toggleCategoryStats = () => {
+  showCategoryStats.value = !showCategoryStats.value
+  localStorage.setItem(CATEGORY_STATS_VISIBLE_KEY, showCategoryStats.value ? '1' : '0')
+}
+
 const toggleDistributorFilter = () => {
   filters.category = filters.category === 'distributor' ? '' : 'distributor'
   loadCodes()
@@ -849,6 +862,10 @@ const loadSubscriptionGroups = async () => {
 }
 
 onMounted(() => {
+  const saved = localStorage.getItem(CATEGORY_STATS_VISIBLE_KEY)
+  if (saved === '0') {
+    showCategoryStats.value = false
+  }
   loadCodes()
   loadSubscriptionGroups()
   loadStats()

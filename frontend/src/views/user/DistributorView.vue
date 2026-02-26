@@ -141,10 +141,10 @@
           <template #cell-redeem_code="{ row }">
             <div class="flex items-center gap-2">
               <code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-800 dark:bg-dark-700 dark:text-dark-100">
-                {{ row.redeem_code?.code || '-' }}
+                {{ getRedeemCode(row) || '-' }}
               </code>
-              <button class="text-xs text-primary-600 dark:text-primary-400" @click="copyCode(row.redeem_code?.code || '')">
-                {{ t('common.copy') }}
+              <button class="text-xs text-primary-600 dark:text-primary-400" @click="copyCode(getRedeemCode(row))">
+                {{ t('admin.redeem.copyCode') }}
               </button>
             </div>
           </template>
@@ -230,6 +230,14 @@ const redeemedCount = computed(() => orders.value.filter((item) => item.status =
 const revokedCount = computed(() => orders.value.filter((item) => item.status === 'revoked').length)
 
 const formatCNY = (cents: number) => `CNY ${(cents / 100).toFixed(2)}`
+
+const getRedeemCode = (order: DistributorOrder): string => {
+  const redeem = (order as any)?.redeem_code
+  if (!redeem) {
+    return ''
+  }
+  return String(redeem.code ?? redeem.Code ?? '').trim()
+}
 
 const orderStatusClass = (statusValue: string) => {
   if (statusValue === 'issued') {
