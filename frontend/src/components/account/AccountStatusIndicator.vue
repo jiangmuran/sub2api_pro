@@ -154,7 +154,27 @@ const activeModelRateLimits = computed(() => {
 })
 
 const formatScopeName = (scope: string): string => {
-  const names: Record<string, string> = {
+  const aliases: Record<string, string> = {
+    // Claude 系列
+    'claude-opus-4-6': 'COpus46',
+    'claude-opus-4-6-thinking': 'COpus46T',
+    'claude-sonnet-4-6': 'CSon46',
+    'claude-sonnet-4-5': 'CSon45',
+    'claude-sonnet-4-5-thinking': 'CSon45T',
+    // Gemini 2.5 系列
+    'gemini-2.5-flash': 'G25F',
+    'gemini-2.5-flash-lite': 'G25FL',
+    'gemini-2.5-flash-thinking': 'G25FT',
+    'gemini-2.5-pro': 'G25P',
+    // Gemini 3 系列
+    'gemini-3-flash': 'G3F',
+    'gemini-3.1-pro-high': 'G3PH',
+    'gemini-3.1-pro-low': 'G3PL',
+    'gemini-3-pro-image': 'G3PI',
+    // 其他
+    'gpt-oss-120b-medium': 'GPT120',
+    'tab_flash_lite_preview': 'TabFL',
+    // 旧版 scope 别名（兼容）
     claude: 'Claude',
     claude_sonnet: 'Claude Sonnet',
     claude_opus: 'Claude Opus',
@@ -164,7 +184,7 @@ const formatScopeName = (scope: string): string => {
     gemini_flash: 'Gemini Flash',
     gemini_pro: 'Gemini Pro'
   }
-  return names[scope] || scope
+  return aliases[scope] || scope
 }
 
 // Computed: is overloaded (529)
