@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
+	"html"
 	"log"
 	"math/big"
 	"net/smtp"
@@ -259,7 +260,7 @@ func (s *EmailService) SendVerifyCode(ctx context.Context, email, siteName strin
 	}
 
 	// 构建邮件内容
-	subject := fmt.Sprintf("[%s] Email Verification Code", siteName)
+	subject := fmt.Sprintf("[%s] 邮箱验证码", siteName)
 	body := s.buildVerifyCodeEmailBody(code, siteName)
 
 	// 发送邮件
@@ -303,42 +304,47 @@ func (s *EmailService) VerifyCode(ctx context.Context, email, code string) error
 
 // buildVerifyCodeEmailBody 构建验证码邮件HTML内容
 func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
+	safeSiteName := html.EscapeString(siteName)
+	safeCode := html.EscapeString(code)
 	return fmt.Sprintf(`
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 30px; text-align: center; }
-        .header h1 { margin: 0; font-size: 24px; }
-        .content { padding: 40px 30px; text-align: center; }
-        .code { font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #333; background-color: #f8f9fa; padding: 20px 30px; border-radius: 8px; display: inline-block; margin: 20px 0; font-family: monospace; }
-        .info { color: #666; font-size: 14px; line-height: 1.6; margin-top: 20px; }
-        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #999; font-size: 12px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>%s - 邮箱验证码</title>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>%s</h1>
-        </div>
-        <div class="content">
-            <p style="font-size: 18px; color: #333;">Your verification code is:</p>
-            <div class="code">%s</div>
-            <div class="info">
-                <p>This code will expire in <strong>15 minutes</strong>.</p>
-                <p>If you did not request this code, please ignore this email.</p>
-            </div>
-        </div>
-        <div class="footer">
-            <p>This is an automated message, please do not reply.</p>
-        </div>
-    </div>
+<body style="margin:0;padding:0;background:#f3f6fb;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%%" style="background:#f3f6fb;padding:24px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%%" style="max-width:640px;background:#ffffff;border:1px solid #e6edf5;border-radius:16px;overflow:hidden;">
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#0284c7 0%%,#0369a1 100%%);padding:28px 28px 24px;">
+                            <div style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#d7efff;font-size:12px;letter-spacing:1px;text-transform:uppercase;">%s</div>
+                            <div style="margin-top:8px;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#ffffff;font-size:22px;line-height:30px;font-weight:600;">邮箱验证码</div>
+                            <div style="margin-top:8px;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#d7efff;font-size:14px;line-height:22px;">请使用下方验证码完成邮箱验证。</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px;">
+                            <div style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#1f2937;font-size:14px;line-height:22px;">验证码（15 分钟内有效）</div>
+                            <div style="margin-top:12px;background:#f0f9ff;border:1px dashed #7dd3fc;border-radius:12px;padding:18px 16px;text-align:center;font-family:Menlo,Consolas,'SFMono-Regular',monospace;font-size:34px;line-height:40px;letter-spacing:8px;font-weight:700;color:#0c4a6e;">%s</div>
+                            <div style="margin-top:18px;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#4b5563;font-size:14px;line-height:22px;">如果这不是您本人操作，请忽略本邮件。为保障安全，请勿将验证码透露给任何人。</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:18px 28px;background:#f8fafc;border-top:1px solid #e6edf5;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#94a3b8;font-size:12px;line-height:20px;">
+                            此邮件由系统自动发送，请勿直接回复。
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
-`, siteName, code)
+`, safeSiteName, safeSiteName, safeCode)
 }
 
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
@@ -494,48 +500,53 @@ func (s *EmailService) ConsumePasswordResetToken(ctx context.Context, email, tok
 
 // buildPasswordResetEmailBody builds the HTML content for password reset email
 func (s *EmailService) buildPasswordResetEmailBody(resetURL, siteName string) string {
+	safeSiteName := html.EscapeString(siteName)
+	safeResetURL := html.EscapeString(resetURL)
 	return fmt.Sprintf(`
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .header { background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 30px; text-align: center; }
-        .header h1 { margin: 0; font-size: 24px; }
-        .content { padding: 40px 30px; text-align: center; }
-        .button { display: inline-block; background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; margin: 20px 0; }
-        .button:hover { opacity: 0.9; }
-        .info { color: #666; font-size: 14px; line-height: 1.6; margin-top: 20px; }
-        .link-fallback { color: #666; font-size: 12px; word-break: break-all; margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 4px; }
-        .footer { background-color: #f8f9fa; padding: 20px; text-align: center; color: #999; font-size: 12px; }
-        .warning { color: #e74c3c; font-weight: 500; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>%s - 密码重置</title>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>%s</h1>
-        </div>
-        <div class="content">
-            <p style="font-size: 18px; color: #333;">密码重置请求</p>
-            <p style="color: #666;">您已请求重置密码。请点击下方按钮设置新密码：</p>
-            <a href="%s" class="button">重置密码</a>
-            <div class="info">
-                <p>此链接将在 <strong>30 分钟</strong>后失效。</p>
-                <p class="warning">如果您没有请求重置密码，请忽略此邮件。您的密码将保持不变。</p>
-            </div>
-            <div class="link-fallback">
-                <p>如果按钮无法点击，请复制以下链接到浏览器中打开：</p>
-                <p>%s</p>
-            </div>
-        </div>
-        <div class="footer">
-            <p>这是一封自动发送的邮件，请勿回复。</p>
-        </div>
-    </div>
+<body style="margin:0;padding:0;background:#f3f6fb;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%%" style="background:#f3f6fb;padding:24px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%%" style="max-width:640px;background:#ffffff;border:1px solid #e6edf5;border-radius:16px;overflow:hidden;">
+                    <tr>
+                        <td style="background:linear-gradient(135deg,#0f766e 0%%,#0f766e 15%%,#0369a1 100%%);padding:28px 28px 24px;">
+                            <div style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#d7efff;font-size:12px;letter-spacing:1px;text-transform:uppercase;">%s</div>
+                            <div style="margin-top:8px;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#ffffff;font-size:22px;line-height:30px;font-weight:600;">重置登录密码</div>
+                            <div style="margin-top:8px;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#d7efff;font-size:14px;line-height:22px;">我们收到了一次密码重置请求。</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px;">
+                            <div style="font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#374151;font-size:14px;line-height:24px;">请点击下方按钮继续操作。该链接将在 <strong>30 分钟</strong>后失效。</div>
+                            <div style="margin-top:20px;">
+                                <a href="%s" style="display:inline-block;background:#0284c7;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;font-size:15px;font-weight:600;">立即重置密码</a>
+                            </div>
+                            <div style="margin-top:18px;padding:14px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#9a3412;font-size:13px;line-height:20px;">
+                                如果不是您本人操作，请忽略此邮件，您的账户密码不会发生变化。
+                            </div>
+                            <div style="margin-top:18px;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#6b7280;font-size:12px;line-height:20px;word-break:break-all;">
+                                如果按钮无法点击，请复制以下链接到浏览器打开：<br>
+                                <a href="%s" style="color:#0369a1;text-decoration:none;">%s</a>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:18px 28px;background:#f8fafc;border-top:1px solid #e6edf5;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;color:#94a3b8;font-size:12px;line-height:20px;">
+                            此邮件由系统自动发送，请勿直接回复。
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
-`, siteName, resetURL, resetURL)
+`, safeSiteName, safeSiteName, safeResetURL, safeResetURL, safeResetURL)
 }

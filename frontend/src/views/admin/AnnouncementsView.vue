@@ -2,85 +2,135 @@
   <AppLayout>
     <TablePageLayout>
       <template #filters>
-        <div class="flex flex-wrap items-center gap-3">
-          <!-- Left: Search + Filters -->
-          <div class="flex-1 sm:max-w-64">
-            <input
-              v-model="searchQuery"
-              type="text"
-              :placeholder="t('admin.announcements.searchAnnouncements')"
-              class="input"
-              @input="handleSearch"
+        <div class="rounded-2xl border border-gray-200 bg-gradient-to-br from-cyan-50 via-white to-blue-50 p-3.5 shadow-sm dark:border-dark-700 dark:from-dark-900 dark:via-dark-900 dark:to-dark-800">
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="w-full sm:w-auto sm:flex-1 sm:max-w-72">
+              <input
+                v-model="searchQuery"
+                type="text"
+                :placeholder="t('admin.announcements.searchAnnouncements')"
+                class="input"
+                @input="handleSearch"
+              />
+            </div>
+            <Select
+              v-model="filters.status"
+              :options="statusFilterOptions"
+              class="w-40"
+              @change="handleStatusChange"
             />
-          </div>
-          <Select
-            v-model="filters.status"
-            :options="statusFilterOptions"
-            class="w-40"
-            @change="handleStatusChange"
-          />
 
-          <!-- Right: Action buttons -->
-          <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
-            <button
-              @click="loadAnnouncements"
-              :disabled="loading"
-              class="btn btn-secondary"
-              :title="t('common.refresh')"
-            >
-              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-            </button>
-            <button @click="openCreateDialog" class="btn btn-primary">
-              <Icon name="plus" size="md" class="mr-1" />
-              {{ t('admin.announcements.createAnnouncement') }}
-            </button>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="filters.status === ''
+                  ? 'bg-gray-900 text-white dark:bg-white dark:text-dark-900'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600'"
+                @click="setStatusFilter('')"
+              >
+                {{ t('admin.announcements.allStatus') }}
+              </button>
+              <button
+                class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="filters.status === 'active'
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600'"
+                @click="setStatusFilter('active')"
+              >
+                {{ t('admin.announcements.statusLabels.active') }}
+              </button>
+              <button
+                class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="filters.status === 'draft'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600'"
+                @click="setStatusFilter('draft')"
+              >
+                {{ t('admin.announcements.statusLabels.draft') }}
+              </button>
+              <button
+                class="rounded-lg px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="filters.status === 'archived'
+                  ? 'bg-slate-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-dark-700 dark:text-gray-300 dark:hover:bg-dark-600'"
+                @click="setStatusFilter('archived')"
+              >
+                {{ t('admin.announcements.statusLabels.archived') }}
+              </button>
+            </div>
+
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                @click="loadAnnouncements"
+                :disabled="loading"
+                class="btn btn-secondary"
+                :title="t('common.refresh')"
+              >
+                <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+              </button>
+              <button @click="openCreateDialog" class="btn btn-primary">
+                <Icon name="plus" size="md" class="mr-1" />
+                {{ t('admin.announcements.createAnnouncement') }}
+              </button>
+            </div>
           </div>
         </div>
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="announcements" :loading="loading">
+        <div class="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div class="rounded-xl border border-blue-200 bg-white p-3 dark:border-blue-800 dark:bg-dark-900">
+            <div class="text-xs text-blue-700 dark:text-blue-300">{{ t('common.total') }}</div>
+            <div class="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{{ pagination.total }}</div>
+          </div>
+          <div class="rounded-xl border border-emerald-200 bg-white p-3 dark:border-emerald-800 dark:bg-dark-900">
+            <div class="text-xs text-emerald-700 dark:text-emerald-300">{{ t('admin.announcements.statusLabels.active') }}</div>
+            <div class="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{{ activeCount }}</div>
+          </div>
+          <div class="rounded-xl border border-amber-200 bg-white p-3 dark:border-amber-800 dark:bg-dark-900">
+            <div class="text-xs text-amber-700 dark:text-amber-300">{{ t('admin.announcements.statusLabels.draft') }}</div>
+            <div class="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{{ draftCount }}</div>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-dark-900">
+            <div class="text-xs text-slate-700 dark:text-slate-300">{{ t('admin.announcements.statusLabels.archived') }}</div>
+            <div class="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{{ archivedCount }}</div>
+          </div>
+        </div>
+
+        <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-700 dark:bg-dark-900">
+          <DataTable :columns="columns" :data="announcements" :loading="loading">
           <template #cell-title="{ value, row }">
             <div class="min-w-0">
               <div class="flex items-center gap-2">
                 <span class="truncate font-medium text-gray-900 dark:text-white">{{ value }}</span>
+                <span class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-dark-700 dark:text-gray-400">#{{ row.id }}</span>
               </div>
+              <p class="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">{{ contentPreview(row.content) }}</p>
               <div class="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-dark-400">
-                <span>#{{ row.id }}</span>
-                <span class="text-gray-300 dark:text-dark-700">·</span>
                 <span>{{ formatDateTime(row.created_at) }}</span>
               </div>
             </div>
           </template>
 
           <template #cell-status="{ value }">
-            <span
-              :class="[
-                'badge',
-                value === 'active'
-                  ? 'badge-success'
-                  : value === 'draft'
-                    ? 'badge-gray'
-                    : 'badge-warning'
-              ]"
-            >
+            <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="statusClass(value)">
               {{ statusLabel(value) }}
             </span>
           </template>
 
           <template #cell-targeting="{ row }">
-            <span class="text-sm text-gray-600 dark:text-gray-300">
+            <span class="inline-flex rounded-lg bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">
               {{ targetingSummary(row.targeting) }}
             </span>
           </template>
 
           <template #cell-timeRange="{ row }">
-            <div class="text-sm text-gray-600 dark:text-gray-300">
-              <div>
+            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+              <div class="rounded bg-gray-50 px-2 py-1 dark:bg-dark-800">
                 <span class="font-medium">{{ t('admin.announcements.form.startsAt') }}:</span>
                 <span class="ml-1">{{ row.starts_at ? formatDateTime(row.starts_at) : t('admin.announcements.timeImmediate') }}</span>
               </div>
-              <div class="mt-0.5">
+              <div class="rounded bg-gray-50 px-2 py-1 dark:bg-dark-800">
                 <span class="font-medium">{{ t('admin.announcements.form.endsAt') }}:</span>
                 <span class="ml-1">{{ row.ends_at ? formatDateTime(row.ends_at) : t('admin.announcements.timeNever') }}</span>
               </div>
@@ -95,21 +145,21 @@
             <div class="flex items-center space-x-1">
               <button
                 @click="openReadStatus(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                class="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
                 :title="t('admin.announcements.readStatus')"
               >
                 <Icon name="eye" size="sm" />
               </button>
               <button
                 @click="openEditDialog(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-600 dark:hover:text-gray-300"
+                class="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-dark-600 dark:hover:text-gray-300"
                 :title="t('common.edit')"
               >
                 <Icon name="edit" size="sm" />
               </button>
               <button
                 @click="handleDelete(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                class="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
                 :title="t('common.delete')"
               >
                 <Icon name="trash" size="sm" />
@@ -120,12 +170,13 @@
           <template #empty>
             <EmptyState
               :title="t('empty.noData')"
-              :description="t('admin.announcements.failedToLoad')"
+              :description="t('admin.announcements.description')"
               :action-text="t('admin.announcements.createAnnouncement')"
               @action="openCreateDialog"
             />
           </template>
-        </DataTable>
+          </DataTable>
+        </div>
       </template>
 
       <template #pagination>
@@ -280,11 +331,42 @@ const columns = computed<Column[]>(() => [
   { key: 'actions', label: t('admin.announcements.columns.actions') }
 ])
 
+const activeCount = computed(() => announcements.value.filter((item) => item.status === 'active').length)
+const draftCount = computed(() => announcements.value.filter((item) => item.status === 'draft').length)
+const archivedCount = computed(() => announcements.value.filter((item) => item.status === 'archived').length)
+
 const statusLabel = (status: string) => {
   if (status === 'draft') return t('admin.announcements.statusLabels.draft')
   if (status === 'active') return t('admin.announcements.statusLabels.active')
   if (status === 'archived') return t('admin.announcements.statusLabels.archived')
   return status
+}
+
+const statusClass = (status: string) => {
+  if (status === 'active') {
+    return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+  }
+  if (status === 'draft') {
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+  }
+  return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+}
+
+const contentPreview = (content: string) => {
+  if (!content) return '-'
+  return content
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/[>#*_`~\-|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const setStatusFilter = (status: string) => {
+  if (filters.status === status) return
+  filters.status = status
+  pagination.page = 1
+  loadAnnouncements()
 }
 
 const targetingSummary = (targeting: AnnouncementTargeting) => {

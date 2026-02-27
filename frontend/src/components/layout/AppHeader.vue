@@ -123,7 +123,7 @@
                 </router-link>
 
                 <a
-                  href="https://github.com/Wei-Shaw/sub2api"
+                  href="https://github.com/jiangmuran/sub2api_pro"
                   target="_blank"
                   rel="noopener noreferrer"
                   @click="closeDropdown"
