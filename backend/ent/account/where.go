@@ -115,6 +115,31 @@ func Status(v string) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldStatus, v))
 }
 
+// OauthStatus applies equality check predicate on the "oauth_status" field. It's identical to OauthStatusEQ.
+func OauthStatus(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthStatus, v))
+}
+
+// OauthRefreshAttempts applies equality check predicate on the "oauth_refresh_attempts" field. It's identical to OauthRefreshAttemptsEQ.
+func OauthRefreshAttempts(v int) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthRefreshAttempts, v))
+}
+
+// OauthNextRefreshAt applies equality check predicate on the "oauth_next_refresh_at" field. It's identical to OauthNextRefreshAtEQ.
+func OauthNextRefreshAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthNextRefreshAt, v))
+}
+
+// OauthLastRefreshAt applies equality check predicate on the "oauth_last_refresh_at" field. It's identical to OauthLastRefreshAtEQ.
+func OauthLastRefreshAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthLastRefreshAt, v))
+}
+
+// OauthLastError applies equality check predicate on the "oauth_last_error" field. It's identical to OauthLastErrorEQ.
+func OauthLastError(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthLastError, v))
+}
+
 // ErrorMessage applies equality check predicate on the "error_message" field. It's identical to ErrorMessageEQ.
 func ErrorMessage(v string) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldErrorMessage, v))
@@ -783,6 +808,286 @@ func StatusEqualFold(v string) predicate.Account {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Account {
 	return predicate.Account(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// OauthStatusEQ applies the EQ predicate on the "oauth_status" field.
+func OauthStatusEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthStatus, v))
+}
+
+// OauthStatusNEQ applies the NEQ predicate on the "oauth_status" field.
+func OauthStatusNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldOauthStatus, v))
+}
+
+// OauthStatusIn applies the In predicate on the "oauth_status" field.
+func OauthStatusIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldOauthStatus, vs...))
+}
+
+// OauthStatusNotIn applies the NotIn predicate on the "oauth_status" field.
+func OauthStatusNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldOauthStatus, vs...))
+}
+
+// OauthStatusGT applies the GT predicate on the "oauth_status" field.
+func OauthStatusGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldOauthStatus, v))
+}
+
+// OauthStatusGTE applies the GTE predicate on the "oauth_status" field.
+func OauthStatusGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldOauthStatus, v))
+}
+
+// OauthStatusLT applies the LT predicate on the "oauth_status" field.
+func OauthStatusLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldOauthStatus, v))
+}
+
+// OauthStatusLTE applies the LTE predicate on the "oauth_status" field.
+func OauthStatusLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldOauthStatus, v))
+}
+
+// OauthStatusContains applies the Contains predicate on the "oauth_status" field.
+func OauthStatusContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldOauthStatus, v))
+}
+
+// OauthStatusHasPrefix applies the HasPrefix predicate on the "oauth_status" field.
+func OauthStatusHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldOauthStatus, v))
+}
+
+// OauthStatusHasSuffix applies the HasSuffix predicate on the "oauth_status" field.
+func OauthStatusHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldOauthStatus, v))
+}
+
+// OauthStatusEqualFold applies the EqualFold predicate on the "oauth_status" field.
+func OauthStatusEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldOauthStatus, v))
+}
+
+// OauthStatusContainsFold applies the ContainsFold predicate on the "oauth_status" field.
+func OauthStatusContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldOauthStatus, v))
+}
+
+// OauthRefreshAttemptsEQ applies the EQ predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsEQ(v int) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthRefreshAttempts, v))
+}
+
+// OauthRefreshAttemptsNEQ applies the NEQ predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsNEQ(v int) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldOauthRefreshAttempts, v))
+}
+
+// OauthRefreshAttemptsIn applies the In predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsIn(vs ...int) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldOauthRefreshAttempts, vs...))
+}
+
+// OauthRefreshAttemptsNotIn applies the NotIn predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsNotIn(vs ...int) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldOauthRefreshAttempts, vs...))
+}
+
+// OauthRefreshAttemptsGT applies the GT predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsGT(v int) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldOauthRefreshAttempts, v))
+}
+
+// OauthRefreshAttemptsGTE applies the GTE predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsGTE(v int) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldOauthRefreshAttempts, v))
+}
+
+// OauthRefreshAttemptsLT applies the LT predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsLT(v int) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldOauthRefreshAttempts, v))
+}
+
+// OauthRefreshAttemptsLTE applies the LTE predicate on the "oauth_refresh_attempts" field.
+func OauthRefreshAttemptsLTE(v int) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldOauthRefreshAttempts, v))
+}
+
+// OauthNextRefreshAtEQ applies the EQ predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthNextRefreshAt, v))
+}
+
+// OauthNextRefreshAtNEQ applies the NEQ predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldOauthNextRefreshAt, v))
+}
+
+// OauthNextRefreshAtIn applies the In predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldOauthNextRefreshAt, vs...))
+}
+
+// OauthNextRefreshAtNotIn applies the NotIn predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldOauthNextRefreshAt, vs...))
+}
+
+// OauthNextRefreshAtGT applies the GT predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldOauthNextRefreshAt, v))
+}
+
+// OauthNextRefreshAtGTE applies the GTE predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldOauthNextRefreshAt, v))
+}
+
+// OauthNextRefreshAtLT applies the LT predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldOauthNextRefreshAt, v))
+}
+
+// OauthNextRefreshAtLTE applies the LTE predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldOauthNextRefreshAt, v))
+}
+
+// OauthNextRefreshAtIsNil applies the IsNil predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldOauthNextRefreshAt))
+}
+
+// OauthNextRefreshAtNotNil applies the NotNil predicate on the "oauth_next_refresh_at" field.
+func OauthNextRefreshAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldOauthNextRefreshAt))
+}
+
+// OauthLastRefreshAtEQ applies the EQ predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthLastRefreshAt, v))
+}
+
+// OauthLastRefreshAtNEQ applies the NEQ predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldOauthLastRefreshAt, v))
+}
+
+// OauthLastRefreshAtIn applies the In predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldOauthLastRefreshAt, vs...))
+}
+
+// OauthLastRefreshAtNotIn applies the NotIn predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldOauthLastRefreshAt, vs...))
+}
+
+// OauthLastRefreshAtGT applies the GT predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldOauthLastRefreshAt, v))
+}
+
+// OauthLastRefreshAtGTE applies the GTE predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldOauthLastRefreshAt, v))
+}
+
+// OauthLastRefreshAtLT applies the LT predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldOauthLastRefreshAt, v))
+}
+
+// OauthLastRefreshAtLTE applies the LTE predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldOauthLastRefreshAt, v))
+}
+
+// OauthLastRefreshAtIsNil applies the IsNil predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldOauthLastRefreshAt))
+}
+
+// OauthLastRefreshAtNotNil applies the NotNil predicate on the "oauth_last_refresh_at" field.
+func OauthLastRefreshAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldOauthLastRefreshAt))
+}
+
+// OauthLastErrorEQ applies the EQ predicate on the "oauth_last_error" field.
+func OauthLastErrorEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldOauthLastError, v))
+}
+
+// OauthLastErrorNEQ applies the NEQ predicate on the "oauth_last_error" field.
+func OauthLastErrorNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldOauthLastError, v))
+}
+
+// OauthLastErrorIn applies the In predicate on the "oauth_last_error" field.
+func OauthLastErrorIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldOauthLastError, vs...))
+}
+
+// OauthLastErrorNotIn applies the NotIn predicate on the "oauth_last_error" field.
+func OauthLastErrorNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldOauthLastError, vs...))
+}
+
+// OauthLastErrorGT applies the GT predicate on the "oauth_last_error" field.
+func OauthLastErrorGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldOauthLastError, v))
+}
+
+// OauthLastErrorGTE applies the GTE predicate on the "oauth_last_error" field.
+func OauthLastErrorGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldOauthLastError, v))
+}
+
+// OauthLastErrorLT applies the LT predicate on the "oauth_last_error" field.
+func OauthLastErrorLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldOauthLastError, v))
+}
+
+// OauthLastErrorLTE applies the LTE predicate on the "oauth_last_error" field.
+func OauthLastErrorLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldOauthLastError, v))
+}
+
+// OauthLastErrorContains applies the Contains predicate on the "oauth_last_error" field.
+func OauthLastErrorContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldOauthLastError, v))
+}
+
+// OauthLastErrorHasPrefix applies the HasPrefix predicate on the "oauth_last_error" field.
+func OauthLastErrorHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldOauthLastError, v))
+}
+
+// OauthLastErrorHasSuffix applies the HasSuffix predicate on the "oauth_last_error" field.
+func OauthLastErrorHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldOauthLastError, v))
+}
+
+// OauthLastErrorIsNil applies the IsNil predicate on the "oauth_last_error" field.
+func OauthLastErrorIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldOauthLastError))
+}
+
+// OauthLastErrorNotNil applies the NotNil predicate on the "oauth_last_error" field.
+func OauthLastErrorNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldOauthLastError))
+}
+
+// OauthLastErrorEqualFold applies the EqualFold predicate on the "oauth_last_error" field.
+func OauthLastErrorEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldOauthLastError, v))
+}
+
+// OauthLastErrorContainsFold applies the ContainsFold predicate on the "oauth_last_error" field.
+func OauthLastErrorContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldOauthLastError, v))
 }
 
 // ErrorMessageEQ applies the EQ predicate on the "error_message" field.

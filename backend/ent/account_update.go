@@ -228,6 +228,101 @@ func (_u *AccountUpdate) SetNillableStatus(v *string) *AccountUpdate {
 	return _u
 }
 
+// SetOauthStatus sets the "oauth_status" field.
+func (_u *AccountUpdate) SetOauthStatus(v string) *AccountUpdate {
+	_u.mutation.SetOauthStatus(v)
+	return _u
+}
+
+// SetNillableOauthStatus sets the "oauth_status" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableOauthStatus(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetOauthStatus(*v)
+	}
+	return _u
+}
+
+// SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
+func (_u *AccountUpdate) SetOauthRefreshAttempts(v int) *AccountUpdate {
+	_u.mutation.ResetOauthRefreshAttempts()
+	_u.mutation.SetOauthRefreshAttempts(v)
+	return _u
+}
+
+// SetNillableOauthRefreshAttempts sets the "oauth_refresh_attempts" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableOauthRefreshAttempts(v *int) *AccountUpdate {
+	if v != nil {
+		_u.SetOauthRefreshAttempts(*v)
+	}
+	return _u
+}
+
+// AddOauthRefreshAttempts adds value to the "oauth_refresh_attempts" field.
+func (_u *AccountUpdate) AddOauthRefreshAttempts(v int) *AccountUpdate {
+	_u.mutation.AddOauthRefreshAttempts(v)
+	return _u
+}
+
+// SetOauthNextRefreshAt sets the "oauth_next_refresh_at" field.
+func (_u *AccountUpdate) SetOauthNextRefreshAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetOauthNextRefreshAt(v)
+	return _u
+}
+
+// SetNillableOauthNextRefreshAt sets the "oauth_next_refresh_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableOauthNextRefreshAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetOauthNextRefreshAt(*v)
+	}
+	return _u
+}
+
+// ClearOauthNextRefreshAt clears the value of the "oauth_next_refresh_at" field.
+func (_u *AccountUpdate) ClearOauthNextRefreshAt() *AccountUpdate {
+	_u.mutation.ClearOauthNextRefreshAt()
+	return _u
+}
+
+// SetOauthLastRefreshAt sets the "oauth_last_refresh_at" field.
+func (_u *AccountUpdate) SetOauthLastRefreshAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetOauthLastRefreshAt(v)
+	return _u
+}
+
+// SetNillableOauthLastRefreshAt sets the "oauth_last_refresh_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableOauthLastRefreshAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetOauthLastRefreshAt(*v)
+	}
+	return _u
+}
+
+// ClearOauthLastRefreshAt clears the value of the "oauth_last_refresh_at" field.
+func (_u *AccountUpdate) ClearOauthLastRefreshAt() *AccountUpdate {
+	_u.mutation.ClearOauthLastRefreshAt()
+	return _u
+}
+
+// SetOauthLastError sets the "oauth_last_error" field.
+func (_u *AccountUpdate) SetOauthLastError(v string) *AccountUpdate {
+	_u.mutation.SetOauthLastError(v)
+	return _u
+}
+
+// SetNillableOauthLastError sets the "oauth_last_error" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableOauthLastError(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetOauthLastError(*v)
+	}
+	return _u
+}
+
+// ClearOauthLastError clears the value of the "oauth_last_error" field.
+func (_u *AccountUpdate) ClearOauthLastError() *AccountUpdate {
+	_u.mutation.ClearOauthLastError()
+	return _u
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (_u *AccountUpdate) SetErrorMessage(v string) *AccountUpdate {
 	_u.mutation.SetErrorMessage(v)
@@ -588,6 +683,11 @@ func (_u *AccountUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OauthStatus(); ok {
+		if err := account.OauthStatusValidator(v); err != nil {
+			return &ValidationError{Name: "oauth_status", err: fmt.Errorf(`ent: validator failed for field "Account.oauth_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionWindowStatus(); ok {
 		if err := account.SessionWindowStatusValidator(v); err != nil {
 			return &ValidationError{Name: "session_window_status", err: fmt.Errorf(`ent: validator failed for field "Account.session_window_status": %w`, err)}
@@ -658,6 +758,33 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(account.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OauthStatus(); ok {
+		_spec.SetField(account.FieldOauthStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OauthRefreshAttempts(); ok {
+		_spec.SetField(account.FieldOauthRefreshAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedOauthRefreshAttempts(); ok {
+		_spec.AddField(account.FieldOauthRefreshAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.OauthNextRefreshAt(); ok {
+		_spec.SetField(account.FieldOauthNextRefreshAt, field.TypeTime, value)
+	}
+	if _u.mutation.OauthNextRefreshAtCleared() {
+		_spec.ClearField(account.FieldOauthNextRefreshAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.OauthLastRefreshAt(); ok {
+		_spec.SetField(account.FieldOauthLastRefreshAt, field.TypeTime, value)
+	}
+	if _u.mutation.OauthLastRefreshAtCleared() {
+		_spec.ClearField(account.FieldOauthLastRefreshAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.OauthLastError(); ok {
+		_spec.SetField(account.FieldOauthLastError, field.TypeString, value)
+	}
+	if _u.mutation.OauthLastErrorCleared() {
+		_spec.ClearField(account.FieldOauthLastError, field.TypeString)
 	}
 	if value, ok := _u.mutation.ErrorMessage(); ok {
 		_spec.SetField(account.FieldErrorMessage, field.TypeString, value)
@@ -1067,6 +1194,101 @@ func (_u *AccountUpdateOne) SetNillableStatus(v *string) *AccountUpdateOne {
 	return _u
 }
 
+// SetOauthStatus sets the "oauth_status" field.
+func (_u *AccountUpdateOne) SetOauthStatus(v string) *AccountUpdateOne {
+	_u.mutation.SetOauthStatus(v)
+	return _u
+}
+
+// SetNillableOauthStatus sets the "oauth_status" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableOauthStatus(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetOauthStatus(*v)
+	}
+	return _u
+}
+
+// SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
+func (_u *AccountUpdateOne) SetOauthRefreshAttempts(v int) *AccountUpdateOne {
+	_u.mutation.ResetOauthRefreshAttempts()
+	_u.mutation.SetOauthRefreshAttempts(v)
+	return _u
+}
+
+// SetNillableOauthRefreshAttempts sets the "oauth_refresh_attempts" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableOauthRefreshAttempts(v *int) *AccountUpdateOne {
+	if v != nil {
+		_u.SetOauthRefreshAttempts(*v)
+	}
+	return _u
+}
+
+// AddOauthRefreshAttempts adds value to the "oauth_refresh_attempts" field.
+func (_u *AccountUpdateOne) AddOauthRefreshAttempts(v int) *AccountUpdateOne {
+	_u.mutation.AddOauthRefreshAttempts(v)
+	return _u
+}
+
+// SetOauthNextRefreshAt sets the "oauth_next_refresh_at" field.
+func (_u *AccountUpdateOne) SetOauthNextRefreshAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetOauthNextRefreshAt(v)
+	return _u
+}
+
+// SetNillableOauthNextRefreshAt sets the "oauth_next_refresh_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableOauthNextRefreshAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetOauthNextRefreshAt(*v)
+	}
+	return _u
+}
+
+// ClearOauthNextRefreshAt clears the value of the "oauth_next_refresh_at" field.
+func (_u *AccountUpdateOne) ClearOauthNextRefreshAt() *AccountUpdateOne {
+	_u.mutation.ClearOauthNextRefreshAt()
+	return _u
+}
+
+// SetOauthLastRefreshAt sets the "oauth_last_refresh_at" field.
+func (_u *AccountUpdateOne) SetOauthLastRefreshAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetOauthLastRefreshAt(v)
+	return _u
+}
+
+// SetNillableOauthLastRefreshAt sets the "oauth_last_refresh_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableOauthLastRefreshAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetOauthLastRefreshAt(*v)
+	}
+	return _u
+}
+
+// ClearOauthLastRefreshAt clears the value of the "oauth_last_refresh_at" field.
+func (_u *AccountUpdateOne) ClearOauthLastRefreshAt() *AccountUpdateOne {
+	_u.mutation.ClearOauthLastRefreshAt()
+	return _u
+}
+
+// SetOauthLastError sets the "oauth_last_error" field.
+func (_u *AccountUpdateOne) SetOauthLastError(v string) *AccountUpdateOne {
+	_u.mutation.SetOauthLastError(v)
+	return _u
+}
+
+// SetNillableOauthLastError sets the "oauth_last_error" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableOauthLastError(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetOauthLastError(*v)
+	}
+	return _u
+}
+
+// ClearOauthLastError clears the value of the "oauth_last_error" field.
+func (_u *AccountUpdateOne) ClearOauthLastError() *AccountUpdateOne {
+	_u.mutation.ClearOauthLastError()
+	return _u
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (_u *AccountUpdateOne) SetErrorMessage(v string) *AccountUpdateOne {
 	_u.mutation.SetErrorMessage(v)
@@ -1440,6 +1662,11 @@ func (_u *AccountUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OauthStatus(); ok {
+		if err := account.OauthStatusValidator(v); err != nil {
+			return &ValidationError{Name: "oauth_status", err: fmt.Errorf(`ent: validator failed for field "Account.oauth_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionWindowStatus(); ok {
 		if err := account.SessionWindowStatusValidator(v); err != nil {
 			return &ValidationError{Name: "session_window_status", err: fmt.Errorf(`ent: validator failed for field "Account.session_window_status": %w`, err)}
@@ -1527,6 +1754,33 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(account.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OauthStatus(); ok {
+		_spec.SetField(account.FieldOauthStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.OauthRefreshAttempts(); ok {
+		_spec.SetField(account.FieldOauthRefreshAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedOauthRefreshAttempts(); ok {
+		_spec.AddField(account.FieldOauthRefreshAttempts, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.OauthNextRefreshAt(); ok {
+		_spec.SetField(account.FieldOauthNextRefreshAt, field.TypeTime, value)
+	}
+	if _u.mutation.OauthNextRefreshAtCleared() {
+		_spec.ClearField(account.FieldOauthNextRefreshAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.OauthLastRefreshAt(); ok {
+		_spec.SetField(account.FieldOauthLastRefreshAt, field.TypeTime, value)
+	}
+	if _u.mutation.OauthLastRefreshAtCleared() {
+		_spec.ClearField(account.FieldOauthLastRefreshAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.OauthLastError(); ok {
+		_spec.SetField(account.FieldOauthLastError, field.TypeString, value)
+	}
+	if _u.mutation.OauthLastErrorCleared() {
+		_spec.ClearField(account.FieldOauthLastError, field.TypeString)
 	}
 	if value, ok := _u.mutation.ErrorMessage(); ok {
 		_spec.SetField(account.FieldErrorMessage, field.TypeString, value)

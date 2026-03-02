@@ -43,6 +43,16 @@ const (
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldOauthStatus holds the string denoting the oauth_status field in the database.
+	FieldOauthStatus = "oauth_status"
+	// FieldOauthRefreshAttempts holds the string denoting the oauth_refresh_attempts field in the database.
+	FieldOauthRefreshAttempts = "oauth_refresh_attempts"
+	// FieldOauthNextRefreshAt holds the string denoting the oauth_next_refresh_at field in the database.
+	FieldOauthNextRefreshAt = "oauth_next_refresh_at"
+	// FieldOauthLastRefreshAt holds the string denoting the oauth_last_refresh_at field in the database.
+	FieldOauthLastRefreshAt = "oauth_last_refresh_at"
+	// FieldOauthLastError holds the string denoting the oauth_last_error field in the database.
+	FieldOauthLastError = "oauth_last_error"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
 	FieldErrorMessage = "error_message"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -120,6 +130,11 @@ var Columns = []string{
 	FieldPriority,
 	FieldRateMultiplier,
 	FieldStatus,
+	FieldOauthStatus,
+	FieldOauthRefreshAttempts,
+	FieldOauthNextRefreshAt,
+	FieldOauthLastRefreshAt,
+	FieldOauthLastError,
 	FieldErrorMessage,
 	FieldLastUsedAt,
 	FieldExpiresAt,
@@ -183,6 +198,12 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// DefaultOauthStatus holds the default value on creation for the "oauth_status" field.
+	DefaultOauthStatus string
+	// OauthStatusValidator is a validator for the "oauth_status" field. It is called by the builders before save.
+	OauthStatusValidator func(string) error
+	// DefaultOauthRefreshAttempts holds the default value on creation for the "oauth_refresh_attempts" field.
+	DefaultOauthRefreshAttempts int
 	// DefaultAutoPauseOnExpired holds the default value on creation for the "auto_pause_on_expired" field.
 	DefaultAutoPauseOnExpired bool
 	// DefaultSchedulable holds the default value on creation for the "schedulable" field.
@@ -257,6 +278,31 @@ func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByOauthStatus orders the results by the oauth_status field.
+func ByOauthStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOauthStatus, opts...).ToFunc()
+}
+
+// ByOauthRefreshAttempts orders the results by the oauth_refresh_attempts field.
+func ByOauthRefreshAttempts(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOauthRefreshAttempts, opts...).ToFunc()
+}
+
+// ByOauthNextRefreshAt orders the results by the oauth_next_refresh_at field.
+func ByOauthNextRefreshAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOauthNextRefreshAt, opts...).ToFunc()
+}
+
+// ByOauthLastRefreshAt orders the results by the oauth_last_refresh_at field.
+func ByOauthLastRefreshAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOauthLastRefreshAt, opts...).ToFunc()
+}
+
+// ByOauthLastError orders the results by the oauth_last_error field.
+func ByOauthLastError(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOauthLastError, opts...).ToFunc()
 }
 
 // ByErrorMessage orders the results by the error_message field.

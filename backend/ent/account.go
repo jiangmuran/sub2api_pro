@@ -47,6 +47,16 @@ type Account struct {
 	RateMultiplier float64 `json:"rate_multiplier,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// OauthStatus holds the value of the "oauth_status" field.
+	OauthStatus string `json:"oauth_status,omitempty"`
+	// OauthRefreshAttempts holds the value of the "oauth_refresh_attempts" field.
+	OauthRefreshAttempts int `json:"oauth_refresh_attempts,omitempty"`
+	// OauthNextRefreshAt holds the value of the "oauth_next_refresh_at" field.
+	OauthNextRefreshAt *time.Time `json:"oauth_next_refresh_at,omitempty"`
+	// OauthLastRefreshAt holds the value of the "oauth_last_refresh_at" field.
+	OauthLastRefreshAt *time.Time `json:"oauth_last_refresh_at,omitempty"`
+	// OauthLastError holds the value of the "oauth_last_error" field.
+	OauthLastError *string `json:"oauth_last_error,omitempty"`
 	// ErrorMessage holds the value of the "error_message" field.
 	ErrorMessage *string `json:"error_message,omitempty"`
 	// LastUsedAt holds the value of the "last_used_at" field.
@@ -139,11 +149,11 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case account.FieldRateMultiplier:
 			values[i] = new(sql.NullFloat64)
-		case account.FieldID, account.FieldProxyID, account.FieldConcurrency, account.FieldPriority:
+		case account.FieldID, account.FieldProxyID, account.FieldConcurrency, account.FieldPriority, account.FieldOauthRefreshAttempts:
 			values[i] = new(sql.NullInt64)
-		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldSessionWindowStatus:
+		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldOauthStatus, account.FieldOauthLastError, account.FieldErrorMessage, account.FieldSessionWindowStatus:
 			values[i] = new(sql.NullString)
-		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldSessionWindowStart, account.FieldSessionWindowEnd:
+		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldOauthNextRefreshAt, account.FieldOauthLastRefreshAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldSessionWindowStart, account.FieldSessionWindowEnd:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -256,6 +266,39 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case account.FieldOauthStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field oauth_status", values[i])
+			} else if value.Valid {
+				_m.OauthStatus = value.String
+			}
+		case account.FieldOauthRefreshAttempts:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field oauth_refresh_attempts", values[i])
+			} else if value.Valid {
+				_m.OauthRefreshAttempts = int(value.Int64)
+			}
+		case account.FieldOauthNextRefreshAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field oauth_next_refresh_at", values[i])
+			} else if value.Valid {
+				_m.OauthNextRefreshAt = new(time.Time)
+				*_m.OauthNextRefreshAt = value.Time
+			}
+		case account.FieldOauthLastRefreshAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field oauth_last_refresh_at", values[i])
+			} else if value.Valid {
+				_m.OauthLastRefreshAt = new(time.Time)
+				*_m.OauthLastRefreshAt = value.Time
+			}
+		case account.FieldOauthLastError:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field oauth_last_error", values[i])
+			} else if value.Valid {
+				_m.OauthLastError = new(string)
+				*_m.OauthLastError = value.String
 			}
 		case account.FieldErrorMessage:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -435,6 +478,27 @@ func (_m *Account) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("oauth_status=")
+	builder.WriteString(_m.OauthStatus)
+	builder.WriteString(", ")
+	builder.WriteString("oauth_refresh_attempts=")
+	builder.WriteString(fmt.Sprintf("%v", _m.OauthRefreshAttempts))
+	builder.WriteString(", ")
+	if v := _m.OauthNextRefreshAt; v != nil {
+		builder.WriteString("oauth_next_refresh_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.OauthLastRefreshAt; v != nil {
+		builder.WriteString("oauth_last_refresh_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.OauthLastError; v != nil {
+		builder.WriteString("oauth_last_error=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	if v := _m.ErrorMessage; v != nil {
 		builder.WriteString("error_message=")

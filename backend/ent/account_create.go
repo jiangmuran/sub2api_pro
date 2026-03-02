@@ -181,6 +181,76 @@ func (_c *AccountCreate) SetNillableStatus(v *string) *AccountCreate {
 	return _c
 }
 
+// SetOauthStatus sets the "oauth_status" field.
+func (_c *AccountCreate) SetOauthStatus(v string) *AccountCreate {
+	_c.mutation.SetOauthStatus(v)
+	return _c
+}
+
+// SetNillableOauthStatus sets the "oauth_status" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableOauthStatus(v *string) *AccountCreate {
+	if v != nil {
+		_c.SetOauthStatus(*v)
+	}
+	return _c
+}
+
+// SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
+func (_c *AccountCreate) SetOauthRefreshAttempts(v int) *AccountCreate {
+	_c.mutation.SetOauthRefreshAttempts(v)
+	return _c
+}
+
+// SetNillableOauthRefreshAttempts sets the "oauth_refresh_attempts" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableOauthRefreshAttempts(v *int) *AccountCreate {
+	if v != nil {
+		_c.SetOauthRefreshAttempts(*v)
+	}
+	return _c
+}
+
+// SetOauthNextRefreshAt sets the "oauth_next_refresh_at" field.
+func (_c *AccountCreate) SetOauthNextRefreshAt(v time.Time) *AccountCreate {
+	_c.mutation.SetOauthNextRefreshAt(v)
+	return _c
+}
+
+// SetNillableOauthNextRefreshAt sets the "oauth_next_refresh_at" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableOauthNextRefreshAt(v *time.Time) *AccountCreate {
+	if v != nil {
+		_c.SetOauthNextRefreshAt(*v)
+	}
+	return _c
+}
+
+// SetOauthLastRefreshAt sets the "oauth_last_refresh_at" field.
+func (_c *AccountCreate) SetOauthLastRefreshAt(v time.Time) *AccountCreate {
+	_c.mutation.SetOauthLastRefreshAt(v)
+	return _c
+}
+
+// SetNillableOauthLastRefreshAt sets the "oauth_last_refresh_at" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableOauthLastRefreshAt(v *time.Time) *AccountCreate {
+	if v != nil {
+		_c.SetOauthLastRefreshAt(*v)
+	}
+	return _c
+}
+
+// SetOauthLastError sets the "oauth_last_error" field.
+func (_c *AccountCreate) SetOauthLastError(v string) *AccountCreate {
+	_c.mutation.SetOauthLastError(v)
+	return _c
+}
+
+// SetNillableOauthLastError sets the "oauth_last_error" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableOauthLastError(v *string) *AccountCreate {
+	if v != nil {
+		_c.SetOauthLastError(*v)
+	}
+	return _c
+}
+
 // SetErrorMessage sets the "error_message" field.
 func (_c *AccountCreate) SetErrorMessage(v string) *AccountCreate {
 	_c.mutation.SetErrorMessage(v)
@@ -451,6 +521,14 @@ func (_c *AccountCreate) defaults() error {
 		v := account.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.OauthStatus(); !ok {
+		v := account.DefaultOauthStatus
+		_c.mutation.SetOauthStatus(v)
+	}
+	if _, ok := _c.mutation.OauthRefreshAttempts(); !ok {
+		v := account.DefaultOauthRefreshAttempts
+		_c.mutation.SetOauthRefreshAttempts(v)
+	}
 	if _, ok := _c.mutation.AutoPauseOnExpired(); !ok {
 		v := account.DefaultAutoPauseOnExpired
 		_c.mutation.SetAutoPauseOnExpired(v)
@@ -516,6 +594,17 @@ func (_c *AccountCreate) check() error {
 		if err := account.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.OauthStatus(); !ok {
+		return &ValidationError{Name: "oauth_status", err: errors.New(`ent: missing required field "Account.oauth_status"`)}
+	}
+	if v, ok := _c.mutation.OauthStatus(); ok {
+		if err := account.OauthStatusValidator(v); err != nil {
+			return &ValidationError{Name: "oauth_status", err: fmt.Errorf(`ent: validator failed for field "Account.oauth_status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.OauthRefreshAttempts(); !ok {
+		return &ValidationError{Name: "oauth_refresh_attempts", err: errors.New(`ent: missing required field "Account.oauth_refresh_attempts"`)}
 	}
 	if _, ok := _c.mutation.AutoPauseOnExpired(); !ok {
 		return &ValidationError{Name: "auto_pause_on_expired", err: errors.New(`ent: missing required field "Account.auto_pause_on_expired"`)}
@@ -606,6 +695,26 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(account.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.OauthStatus(); ok {
+		_spec.SetField(account.FieldOauthStatus, field.TypeString, value)
+		_node.OauthStatus = value
+	}
+	if value, ok := _c.mutation.OauthRefreshAttempts(); ok {
+		_spec.SetField(account.FieldOauthRefreshAttempts, field.TypeInt, value)
+		_node.OauthRefreshAttempts = value
+	}
+	if value, ok := _c.mutation.OauthNextRefreshAt(); ok {
+		_spec.SetField(account.FieldOauthNextRefreshAt, field.TypeTime, value)
+		_node.OauthNextRefreshAt = &value
+	}
+	if value, ok := _c.mutation.OauthLastRefreshAt(); ok {
+		_spec.SetField(account.FieldOauthLastRefreshAt, field.TypeTime, value)
+		_node.OauthLastRefreshAt = &value
+	}
+	if value, ok := _c.mutation.OauthLastError(); ok {
+		_spec.SetField(account.FieldOauthLastError, field.TypeString, value)
+		_node.OauthLastError = &value
 	}
 	if value, ok := _c.mutation.ErrorMessage(); ok {
 		_spec.SetField(account.FieldErrorMessage, field.TypeString, value)
@@ -945,6 +1054,90 @@ func (u *AccountUpsert) SetStatus(v string) *AccountUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *AccountUpsert) UpdateStatus() *AccountUpsert {
 	u.SetExcluded(account.FieldStatus)
+	return u
+}
+
+// SetOauthStatus sets the "oauth_status" field.
+func (u *AccountUpsert) SetOauthStatus(v string) *AccountUpsert {
+	u.Set(account.FieldOauthStatus, v)
+	return u
+}
+
+// UpdateOauthStatus sets the "oauth_status" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateOauthStatus() *AccountUpsert {
+	u.SetExcluded(account.FieldOauthStatus)
+	return u
+}
+
+// SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
+func (u *AccountUpsert) SetOauthRefreshAttempts(v int) *AccountUpsert {
+	u.Set(account.FieldOauthRefreshAttempts, v)
+	return u
+}
+
+// UpdateOauthRefreshAttempts sets the "oauth_refresh_attempts" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateOauthRefreshAttempts() *AccountUpsert {
+	u.SetExcluded(account.FieldOauthRefreshAttempts)
+	return u
+}
+
+// AddOauthRefreshAttempts adds v to the "oauth_refresh_attempts" field.
+func (u *AccountUpsert) AddOauthRefreshAttempts(v int) *AccountUpsert {
+	u.Add(account.FieldOauthRefreshAttempts, v)
+	return u
+}
+
+// SetOauthNextRefreshAt sets the "oauth_next_refresh_at" field.
+func (u *AccountUpsert) SetOauthNextRefreshAt(v time.Time) *AccountUpsert {
+	u.Set(account.FieldOauthNextRefreshAt, v)
+	return u
+}
+
+// UpdateOauthNextRefreshAt sets the "oauth_next_refresh_at" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateOauthNextRefreshAt() *AccountUpsert {
+	u.SetExcluded(account.FieldOauthNextRefreshAt)
+	return u
+}
+
+// ClearOauthNextRefreshAt clears the value of the "oauth_next_refresh_at" field.
+func (u *AccountUpsert) ClearOauthNextRefreshAt() *AccountUpsert {
+	u.SetNull(account.FieldOauthNextRefreshAt)
+	return u
+}
+
+// SetOauthLastRefreshAt sets the "oauth_last_refresh_at" field.
+func (u *AccountUpsert) SetOauthLastRefreshAt(v time.Time) *AccountUpsert {
+	u.Set(account.FieldOauthLastRefreshAt, v)
+	return u
+}
+
+// UpdateOauthLastRefreshAt sets the "oauth_last_refresh_at" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateOauthLastRefreshAt() *AccountUpsert {
+	u.SetExcluded(account.FieldOauthLastRefreshAt)
+	return u
+}
+
+// ClearOauthLastRefreshAt clears the value of the "oauth_last_refresh_at" field.
+func (u *AccountUpsert) ClearOauthLastRefreshAt() *AccountUpsert {
+	u.SetNull(account.FieldOauthLastRefreshAt)
+	return u
+}
+
+// SetOauthLastError sets the "oauth_last_error" field.
+func (u *AccountUpsert) SetOauthLastError(v string) *AccountUpsert {
+	u.Set(account.FieldOauthLastError, v)
+	return u
+}
+
+// UpdateOauthLastError sets the "oauth_last_error" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateOauthLastError() *AccountUpsert {
+	u.SetExcluded(account.FieldOauthLastError)
+	return u
+}
+
+// ClearOauthLastError clears the value of the "oauth_last_error" field.
+func (u *AccountUpsert) ClearOauthLastError() *AccountUpsert {
+	u.SetNull(account.FieldOauthLastError)
 	return u
 }
 
@@ -1400,6 +1593,104 @@ func (u *AccountUpsertOne) SetStatus(v string) *AccountUpsertOne {
 func (u *AccountUpsertOne) UpdateStatus() *AccountUpsertOne {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetOauthStatus sets the "oauth_status" field.
+func (u *AccountUpsertOne) SetOauthStatus(v string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthStatus(v)
+	})
+}
+
+// UpdateOauthStatus sets the "oauth_status" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateOauthStatus() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthStatus()
+	})
+}
+
+// SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
+func (u *AccountUpsertOne) SetOauthRefreshAttempts(v int) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthRefreshAttempts(v)
+	})
+}
+
+// AddOauthRefreshAttempts adds v to the "oauth_refresh_attempts" field.
+func (u *AccountUpsertOne) AddOauthRefreshAttempts(v int) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddOauthRefreshAttempts(v)
+	})
+}
+
+// UpdateOauthRefreshAttempts sets the "oauth_refresh_attempts" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateOauthRefreshAttempts() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthRefreshAttempts()
+	})
+}
+
+// SetOauthNextRefreshAt sets the "oauth_next_refresh_at" field.
+func (u *AccountUpsertOne) SetOauthNextRefreshAt(v time.Time) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthNextRefreshAt(v)
+	})
+}
+
+// UpdateOauthNextRefreshAt sets the "oauth_next_refresh_at" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateOauthNextRefreshAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthNextRefreshAt()
+	})
+}
+
+// ClearOauthNextRefreshAt clears the value of the "oauth_next_refresh_at" field.
+func (u *AccountUpsertOne) ClearOauthNextRefreshAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearOauthNextRefreshAt()
+	})
+}
+
+// SetOauthLastRefreshAt sets the "oauth_last_refresh_at" field.
+func (u *AccountUpsertOne) SetOauthLastRefreshAt(v time.Time) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthLastRefreshAt(v)
+	})
+}
+
+// UpdateOauthLastRefreshAt sets the "oauth_last_refresh_at" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateOauthLastRefreshAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthLastRefreshAt()
+	})
+}
+
+// ClearOauthLastRefreshAt clears the value of the "oauth_last_refresh_at" field.
+func (u *AccountUpsertOne) ClearOauthLastRefreshAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearOauthLastRefreshAt()
+	})
+}
+
+// SetOauthLastError sets the "oauth_last_error" field.
+func (u *AccountUpsertOne) SetOauthLastError(v string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthLastError(v)
+	})
+}
+
+// UpdateOauthLastError sets the "oauth_last_error" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateOauthLastError() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthLastError()
+	})
+}
+
+// ClearOauthLastError clears the value of the "oauth_last_error" field.
+func (u *AccountUpsertOne) ClearOauthLastError() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearOauthLastError()
 	})
 }
 
@@ -2052,6 +2343,104 @@ func (u *AccountUpsertBulk) SetStatus(v string) *AccountUpsertBulk {
 func (u *AccountUpsertBulk) UpdateStatus() *AccountUpsertBulk {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetOauthStatus sets the "oauth_status" field.
+func (u *AccountUpsertBulk) SetOauthStatus(v string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthStatus(v)
+	})
+}
+
+// UpdateOauthStatus sets the "oauth_status" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateOauthStatus() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthStatus()
+	})
+}
+
+// SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
+func (u *AccountUpsertBulk) SetOauthRefreshAttempts(v int) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthRefreshAttempts(v)
+	})
+}
+
+// AddOauthRefreshAttempts adds v to the "oauth_refresh_attempts" field.
+func (u *AccountUpsertBulk) AddOauthRefreshAttempts(v int) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.AddOauthRefreshAttempts(v)
+	})
+}
+
+// UpdateOauthRefreshAttempts sets the "oauth_refresh_attempts" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateOauthRefreshAttempts() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthRefreshAttempts()
+	})
+}
+
+// SetOauthNextRefreshAt sets the "oauth_next_refresh_at" field.
+func (u *AccountUpsertBulk) SetOauthNextRefreshAt(v time.Time) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthNextRefreshAt(v)
+	})
+}
+
+// UpdateOauthNextRefreshAt sets the "oauth_next_refresh_at" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateOauthNextRefreshAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthNextRefreshAt()
+	})
+}
+
+// ClearOauthNextRefreshAt clears the value of the "oauth_next_refresh_at" field.
+func (u *AccountUpsertBulk) ClearOauthNextRefreshAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearOauthNextRefreshAt()
+	})
+}
+
+// SetOauthLastRefreshAt sets the "oauth_last_refresh_at" field.
+func (u *AccountUpsertBulk) SetOauthLastRefreshAt(v time.Time) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthLastRefreshAt(v)
+	})
+}
+
+// UpdateOauthLastRefreshAt sets the "oauth_last_refresh_at" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateOauthLastRefreshAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthLastRefreshAt()
+	})
+}
+
+// ClearOauthLastRefreshAt clears the value of the "oauth_last_refresh_at" field.
+func (u *AccountUpsertBulk) ClearOauthLastRefreshAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearOauthLastRefreshAt()
+	})
+}
+
+// SetOauthLastError sets the "oauth_last_error" field.
+func (u *AccountUpsertBulk) SetOauthLastError(v string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetOauthLastError(v)
+	})
+}
+
+// UpdateOauthLastError sets the "oauth_last_error" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateOauthLastError() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateOauthLastError()
+	})
+}
+
+// ClearOauthLastError clears the value of the "oauth_last_error" field.
+func (u *AccountUpsertBulk) ClearOauthLastError() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearOauthLastError()
 	})
 }
 
