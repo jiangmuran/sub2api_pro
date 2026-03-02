@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -107,6 +108,107 @@ func (r *claudeAccountRepoStub) Update(ctx context.Context, account *Account) er
 		return r.updateErr
 	}
 	r.account = account
+	return nil
+}
+
+func (r *claudeAccountRepoStub) Create(ctx context.Context, account *Account) error { return nil }
+func (r *claudeAccountRepoStub) GetByIDs(ctx context.Context, ids []int64) ([]*Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ExistsByID(ctx context.Context, id int64) (bool, error) {
+	return false, nil
+}
+func (r *claudeAccountRepoStub) GetByCRSAccountID(ctx context.Context, crsAccountID string) (*Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ListCRSAccountIDs(ctx context.Context) (map[string]int64, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) Delete(ctx context.Context, id int64) error { return nil }
+func (r *claudeAccountRepoStub) List(ctx context.Context, params pagination.PaginationParams) ([]Account, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+func (r *claudeAccountRepoStub) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64) ([]Account, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+func (r *claudeAccountRepoStub) ListByGroup(ctx context.Context, groupID int64) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ListActive(ctx context.Context) ([]Account, error) { return nil, nil }
+func (r *claudeAccountRepoStub) ListByPlatform(ctx context.Context, platform string) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) UpdateLastUsed(ctx context.Context, id int64) error { return nil }
+func (r *claudeAccountRepoStub) BatchUpdateLastUsed(ctx context.Context, updates map[int64]time.Time) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) SetError(ctx context.Context, id int64, errorMsg string) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) ClearError(ctx context.Context, id int64) error { return nil }
+func (r *claudeAccountRepoStub) SetSchedulable(ctx context.Context, id int64, schedulable bool) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) AutoPauseExpiredAccounts(ctx context.Context, now time.Time) (int64, error) {
+	return 0, nil
+}
+func (r *claudeAccountRepoStub) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) ListSchedulable(ctx context.Context) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ListSchedulableByGroupID(ctx context.Context, groupID int64) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ListSchedulableByPlatform(ctx context.Context, platform string) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ListSchedulableByPlatforms(ctx context.Context, platforms []string) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) ListSchedulableByGroupIDAndPlatforms(ctx context.Context, groupID int64, platforms []string) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) SetRateLimited(ctx context.Context, id int64, resetAt time.Time) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) SetModelRateLimit(ctx context.Context, id int64, scope string, resetAt time.Time) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) SetOverloaded(ctx context.Context, id int64, until time.Time) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) SetTempUnschedulable(ctx context.Context, id int64, until time.Time, reason string) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) ClearTempUnschedulable(ctx context.Context, id int64) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) ClearRateLimit(ctx context.Context, id int64) error { return nil }
+func (r *claudeAccountRepoStub) ClearAntigravityQuotaScopes(ctx context.Context, id int64) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) ClearModelRateLimits(ctx context.Context, id int64) error { return nil }
+func (r *claudeAccountRepoStub) UpdateSessionWindow(ctx context.Context, id int64, start, end *time.Time, status string) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	return nil
+}
+func (r *claudeAccountRepoStub) BulkUpdate(ctx context.Context, ids []int64, updates AccountBulkUpdate) (int64, error) {
+	return 0, nil
+}
+func (r *claudeAccountRepoStub) ListOpenAIOAuthRefreshCandidates(ctx context.Context, now time.Time, limit int) ([]Account, error) {
+	return nil, nil
+}
+func (r *claudeAccountRepoStub) TrySetOpenAIOAuthRefreshing(ctx context.Context, id int64, now time.Time) (bool, error) {
+	return false, nil
+}
+func (r *claudeAccountRepoStub) UpdateOpenAIOAuthState(ctx context.Context, id int64, update OpenAIOAuthStateUpdate) error {
 	return nil
 }
 

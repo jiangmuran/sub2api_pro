@@ -600,7 +600,7 @@ func TestGeminiOAuthService_GetOAuthConfig(t *testing.T) {
 					OAuth: config.GeminiOAuthConfig{},
 				},
 			},
-			wantEnabled: true,
+			wantEnabled: false,
 		},
 		{
 			name: "仅 ClientID 无 ClientSecret",
@@ -625,7 +625,7 @@ func TestGeminiOAuthService_GetOAuthConfig(t *testing.T) {
 			wantEnabled: false,
 		},
 		{
-			name: "使用内置 Gemini CLI ClientID（不算自定义）",
+			name: "仅使用内置 ClientID 但 Secret 非内置（视为自定义）",
 			cfg: &config.Config{
 				Gemini: config.GeminiConfig{
 					OAuth: config.GeminiOAuthConfig{
@@ -634,7 +634,7 @@ func TestGeminiOAuthService_GetOAuthConfig(t *testing.T) {
 					},
 				},
 			},
-			wantEnabled: false,
+			wantEnabled: true,
 		},
 		{
 			name: "自定义 OAuth 客户端（非内置 ID）",

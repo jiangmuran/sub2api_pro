@@ -57,6 +57,36 @@
       </div>
     </div>
 
+    <!-- OpenAI OAuth Error Indicator -->
+    <div v-if="hasOAuthIssue && account.oauth_last_error" class="group/error relative">
+      <svg
+        class="h-4 w-4 cursor-help text-amber-500 transition-colors hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+      </svg>
+      <div
+        class="invisible absolute left-0 top-full z-[100] mt-1.5 min-w-[200px] max-w-[320px] rounded-lg bg-gray-800 px-3 py-2 text-xs text-white opacity-0 shadow-xl transition-all duration-200 group-hover/error:visible group-hover/error:opacity-100 dark:bg-gray-900"
+      >
+        <div class="whitespace-pre-wrap break-words leading-relaxed text-gray-300">
+          {{ account.oauth_last_error }}
+        </div>
+        <div v-if="account.oauth_next_refresh_at" class="mt-1 text-[11px] text-gray-400">
+          {{ t('admin.accounts.oauthStatus.nextRefreshAt', { time: formatTime(account.oauth_next_refresh_at) }) }}
+        </div>
+        <div
+          class="absolute bottom-full left-3 border-[6px] border-transparent border-b-gray-800 dark:border-b-gray-900"
+        ></div>
+      </div>
+    </div>
+
     <!-- Rate Limit Indicator (429) -->
     <div v-if="isRateLimited" class="group relative">
       <span
@@ -199,6 +229,12 @@ const isTempUnschedulable = computed(() => {
   return new Date(props.account.temp_unschedulable_until) > new Date()
 })
 
+const isOpenAIOAuth = computed(() => props.account.platform === 'openai' && props.account.type === 'oauth')
+
+const oauthStatus = computed(() => (isOpenAIOAuth.value ? props.account.oauth_status || 'active' : ''))
+
+const hasOAuthIssue = computed(() => isOpenAIOAuth.value && oauthStatus.value !== 'active')
+
 // Computed: has error status
 const hasError = computed(() => {
   return props.account.status === 'error'
@@ -222,6 +258,18 @@ const statusClass = computed(() => {
   if (isTempUnschedulable.value) {
     return 'badge-warning'
   }
+  if (hasOAuthIssue.value) {
+    switch (oauthStatus.value) {
+      case 'refreshing':
+        return 'badge-info'
+      case 'cooldown':
+        return 'badge-warning'
+      case 'error_permanent':
+        return 'badge-danger'
+      default:
+        return 'badge-warning'
+    }
+  }
   if (!props.account.schedulable) {
     return 'badge-gray'
   }
@@ -244,6 +292,9 @@ const statusText = computed(() => {
   }
   if (isTempUnschedulable.value) {
     return t('admin.accounts.status.tempUnschedulable')
+  }
+  if (hasOAuthIssue.value) {
+    return t(`admin.accounts.oauthStatus.${oauthStatus.value}`)
   }
   if (!props.account.schedulable) {
     return t('admin.accounts.status.paused')

@@ -46,6 +46,12 @@ type Account struct {
 	SessionWindowEnd    *time.Time
 	SessionWindowStatus string
 
+	OAuthStatus          string
+	OAuthRefreshAttempts int
+	OAuthNextRefreshAt   *time.Time
+	OAuthLastRefreshAt   *time.Time
+	OAuthLastError       string
+
 	Proxy         *Proxy
 	AccountGroups []AccountGroup
 	GroupIDs      []int64
@@ -81,6 +87,9 @@ func (a *Account) IsSchedulable() bool {
 	if !a.IsActive() || !a.Schedulable {
 		return false
 	}
+	if a.IsOpenAIOAuth() && !a.IsOpenAIOAuthActive() {
+		return false
+	}
 	now := time.Now()
 	if a.AutoPauseOnExpired && a.ExpiresAt != nil && !now.Before(*a.ExpiresAt) {
 		return false
@@ -95,6 +104,21 @@ func (a *Account) IsSchedulable() bool {
 		return false
 	}
 	return true
+}
+
+func (a *Account) OpenAIOAuthStatus() string {
+	if a == nil || !a.IsOpenAIOAuth() {
+		return ""
+	}
+	status := strings.TrimSpace(a.OAuthStatus)
+	if status == "" {
+		return domain.OpenAIOAuthStatusActive
+	}
+	return status
+}
+
+func (a *Account) IsOpenAIOAuthActive() bool {
+	return a.OpenAIOAuthStatus() == domain.OpenAIOAuthStatusActive
 }
 
 func (a *Account) IsRateLimited() bool {

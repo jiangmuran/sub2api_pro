@@ -175,6 +175,15 @@ func (m *mockAccountRepoForPlatform) UpdateExtra(ctx context.Context, id int64, 
 func (m *mockAccountRepoForPlatform) BulkUpdate(ctx context.Context, ids []int64, updates AccountBulkUpdate) (int64, error) {
 	return 0, nil
 }
+func (m *mockAccountRepoForPlatform) ListOpenAIOAuthRefreshCandidates(ctx context.Context, now time.Time, limit int) ([]Account, error) {
+	return nil, nil
+}
+func (m *mockAccountRepoForPlatform) TrySetOpenAIOAuthRefreshing(ctx context.Context, id int64, now time.Time) (bool, error) {
+	return false, nil
+}
+func (m *mockAccountRepoForPlatform) UpdateOpenAIOAuthState(ctx context.Context, id int64, update OpenAIOAuthStateUpdate) error {
+	return nil
+}
 
 // Verify interface implementation
 var _ AccountRepository = (*mockAccountRepoForPlatform)(nil)

@@ -35,6 +35,15 @@ const (
 	AccountTypeUpstream   = domain.AccountTypeUpstream   // 上游透传类型账号（通过 Base URL + API Key 连接上游）
 )
 
+// OpenAI OAuth status constants
+const (
+	OpenAIOAuthStatusActive         = domain.OpenAIOAuthStatusActive
+	OpenAIOAuthStatusNeedsRefresh   = domain.OpenAIOAuthStatusNeedsRefresh
+	OpenAIOAuthStatusRefreshing     = domain.OpenAIOAuthStatusRefreshing
+	OpenAIOAuthStatusCooldown       = domain.OpenAIOAuthStatusCooldown
+	OpenAIOAuthStatusErrorPermanent = domain.OpenAIOAuthStatusErrorPermanent
+)
+
 // Redeem type constants
 const (
 	RedeemTypeBalance      = domain.RedeemTypeBalance

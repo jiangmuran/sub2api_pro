@@ -52,6 +52,10 @@ type AccountRepository interface {
 	ListSchedulableByPlatforms(ctx context.Context, platforms []string) ([]Account, error)
 	ListSchedulableByGroupIDAndPlatforms(ctx context.Context, groupID int64, platforms []string) ([]Account, error)
 
+	ListOpenAIOAuthRefreshCandidates(ctx context.Context, now time.Time, limit int) ([]Account, error)
+	TrySetOpenAIOAuthRefreshing(ctx context.Context, id int64, now time.Time) (bool, error)
+	UpdateOpenAIOAuthState(ctx context.Context, id int64, update OpenAIOAuthStateUpdate) error
+
 	SetRateLimited(ctx context.Context, id int64, resetAt time.Time) error
 	SetModelRateLimit(ctx context.Context, id int64, scope string, resetAt time.Time) error
 	SetOverloaded(ctx context.Context, id int64, until time.Time) error
@@ -68,15 +72,26 @@ type AccountRepository interface {
 // AccountBulkUpdate describes the fields that can be updated in a bulk operation.
 // Nil pointers mean "do not change".
 type AccountBulkUpdate struct {
-	Name           *string
-	ProxyID        *int64
-	Concurrency    *int
-	Priority       *int
-	RateMultiplier *float64
-	Status         *string
-	Schedulable    *bool
-	Credentials    map[string]any
-	Extra          map[string]any
+	Name               *string
+	ProxyID            *int64
+	Concurrency        *int
+	Priority           *int
+	RateMultiplier     *float64
+	Status             *string
+	Schedulable        *bool
+	AutoPauseOnExpired *bool
+	Credentials        map[string]any
+	Extra              map[string]any
+}
+
+// OpenAIOAuthStateUpdate describes partial updates for OpenAI OAuth status tracking.
+// Nil pointers mean "do not change"; empty string means clear where applicable.
+type OpenAIOAuthStateUpdate struct {
+	Status          *string
+	RefreshAttempts *int
+	NextRefreshAt   *time.Time
+	LastRefreshAt   *time.Time
+	LastError       *string
 }
 
 // CreateAccountRequest 创建账号请求

@@ -128,6 +128,7 @@ type BulkUpdateAccountsRequest struct {
 	RateMultiplier          *float64       `json:"rate_multiplier"`
 	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive error"`
 	Schedulable             *bool          `json:"schedulable"`
+	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
 	GroupIDs                *[]int64       `json:"group_ids"`
 	Credentials             map[string]any `json:"credentials"`
 	Extra                   map[string]any `json:"extra"`
@@ -902,6 +903,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		req.RateMultiplier != nil ||
 		req.Status != "" ||
 		req.Schedulable != nil ||
+		req.AutoPauseOnExpired != nil ||
 		req.GroupIDs != nil ||
 		len(req.Credentials) > 0 ||
 		len(req.Extra) > 0
@@ -920,6 +922,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		RateMultiplier:        req.RateMultiplier,
 		Status:                req.Status,
 		Schedulable:           req.Schedulable,
+		AutoPauseOnExpired:    req.AutoPauseOnExpired,
 		GroupIDs:              req.GroupIDs,
 		Credentials:           req.Credentials,
 		Extra:                 req.Extra,

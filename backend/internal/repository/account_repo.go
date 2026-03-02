@@ -17,6 +17,7 @@ import (
 	"errors"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -82,6 +83,11 @@ func (r *accountRepository) Create(ctx context.Context, account *service.Account
 		SetConcurrency(account.Concurrency).
 		SetPriority(account.Priority).
 		SetStatus(account.Status).
+		SetOauthStatus(defaultOpenAIOAuthStatus(account.OAuthStatus)).
+		SetOauthRefreshAttempts(account.OAuthRefreshAttempts).
+		SetNillableOauthNextRefreshAt(account.OAuthNextRefreshAt).
+		SetNillableOauthLastRefreshAt(account.OAuthLastRefreshAt).
+		SetNillableOauthLastError(nillableString(account.OAuthLastError)).
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(account.Schedulable).
 		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
@@ -325,6 +331,8 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 		SetConcurrency(account.Concurrency).
 		SetPriority(account.Priority).
 		SetStatus(account.Status).
+		SetOauthStatus(defaultOpenAIOAuthStatus(account.OAuthStatus)).
+		SetOauthRefreshAttempts(account.OAuthRefreshAttempts).
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(account.Schedulable).
 		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
@@ -377,6 +385,21 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 		builder.SetSessionWindowStatus(account.SessionWindowStatus)
 	} else {
 		builder.ClearSessionWindowStatus()
+	}
+	if account.OAuthNextRefreshAt != nil {
+		builder.SetOauthNextRefreshAt(*account.OAuthNextRefreshAt)
+	} else {
+		builder.ClearOauthNextRefreshAt()
+	}
+	if account.OAuthLastRefreshAt != nil {
+		builder.SetOauthLastRefreshAt(*account.OAuthLastRefreshAt)
+	} else {
+		builder.ClearOauthLastRefreshAt()
+	}
+	if account.OAuthLastError != "" {
+		builder.SetOauthLastError(account.OAuthLastError)
+	} else {
+		builder.ClearOauthLastError()
 	}
 	if account.Notes == nil {
 		builder.ClearNotes()
@@ -734,6 +757,7 @@ func (r *accountRepository) ListSchedulable(ctx context.Context) ([]service.Acco
 			dbaccount.SchedulableEQ(true),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
+			openAIOAuthActivePredicate(),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
 			dbaccount.Or(dbaccount.RateLimitResetAtIsNil(), dbaccount.RateLimitResetAtLTE(now)),
 		).
@@ -761,6 +785,7 @@ func (r *accountRepository) ListSchedulableByPlatform(ctx context.Context, platf
 			dbaccount.SchedulableEQ(true),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
+			openAIOAuthActivePredicate(),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
 			dbaccount.Or(dbaccount.RateLimitResetAtIsNil(), dbaccount.RateLimitResetAtLTE(now)),
 		).
@@ -795,6 +820,7 @@ func (r *accountRepository) ListSchedulableByPlatforms(ctx context.Context, plat
 			dbaccount.SchedulableEQ(true),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
+			openAIOAuthActivePredicate(),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
 			dbaccount.Or(dbaccount.RateLimitResetAtIsNil(), dbaccount.RateLimitResetAtLTE(now)),
 		).
@@ -816,6 +842,130 @@ func (r *accountRepository) ListSchedulableByGroupIDAndPlatforms(ctx context.Con
 		schedulable: true,
 		platforms:   platforms,
 	})
+}
+
+func (r *accountRepository) ListOpenAIOAuthRefreshCandidates(ctx context.Context, now time.Time, limit int) ([]service.Account, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	accounts, err := r.client.Account.Query().
+		Where(
+			dbaccount.PlatformEQ(service.PlatformOpenAI),
+			dbaccount.TypeEQ(service.AccountTypeOAuth),
+			dbaccount.StatusEQ(service.StatusActive),
+			dbaccount.OauthStatusIn(service.OpenAIOAuthStatusNeedsRefresh, service.OpenAIOAuthStatusCooldown),
+			dbaccount.Or(
+				dbaccount.OauthNextRefreshAtIsNil(),
+				dbaccount.OauthNextRefreshAtLTE(now),
+			),
+		).
+		Order(
+			dbent.Asc(dbaccount.FieldOauthNextRefreshAt),
+			dbent.Asc(dbaccount.FieldID),
+		).
+		Limit(limit).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return r.accountsToService(ctx, accounts)
+}
+
+func (r *accountRepository) TrySetOpenAIOAuthRefreshing(ctx context.Context, id int64, now time.Time) (bool, error) {
+	result, err := r.sql.ExecContext(ctx, `
+		UPDATE accounts
+		SET oauth_status = $1,
+			oauth_next_refresh_at = NULL,
+			oauth_last_error = NULL,
+			updated_at = NOW()
+		WHERE id = $2
+			AND deleted_at IS NULL
+			AND platform = $3
+			AND type = $4
+			AND status = $5
+			AND oauth_status IN ($6, $7)
+			AND (oauth_next_refresh_at IS NULL OR oauth_next_refresh_at <= $8)
+	`, service.OpenAIOAuthStatusRefreshing, id, service.PlatformOpenAI, service.AccountTypeOAuth, service.StatusActive,
+		service.OpenAIOAuthStatusNeedsRefresh, service.OpenAIOAuthStatusCooldown, now)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if rows > 0 {
+		if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
+			log.Printf("[SchedulerOutbox] enqueue oauth refreshing failed: account=%d err=%v", id, err)
+		}
+		r.syncSchedulerAccountSnapshot(ctx, id)
+	}
+	return rows > 0, nil
+}
+
+func (r *accountRepository) UpdateOpenAIOAuthState(ctx context.Context, id int64, update service.OpenAIOAuthStateUpdate) error {
+	setClauses := make([]string, 0, 6)
+	args := make([]any, 0, 8)
+	idx := 1
+	if update.Status != nil {
+		setClauses = append(setClauses, "oauth_status = $"+itoa(idx))
+		args = append(args, *update.Status)
+		idx++
+	}
+	if update.RefreshAttempts != nil {
+		setClauses = append(setClauses, "oauth_refresh_attempts = $"+itoa(idx))
+		args = append(args, *update.RefreshAttempts)
+		idx++
+	}
+	if update.NextRefreshAt != nil {
+		if update.NextRefreshAt.IsZero() {
+			setClauses = append(setClauses, "oauth_next_refresh_at = NULL")
+		} else {
+			setClauses = append(setClauses, "oauth_next_refresh_at = $"+itoa(idx))
+			args = append(args, *update.NextRefreshAt)
+			idx++
+		}
+	}
+	if update.LastRefreshAt != nil {
+		if update.LastRefreshAt.IsZero() {
+			setClauses = append(setClauses, "oauth_last_refresh_at = NULL")
+		} else {
+			setClauses = append(setClauses, "oauth_last_refresh_at = $"+itoa(idx))
+			args = append(args, *update.LastRefreshAt)
+			idx++
+		}
+	}
+	if update.LastError != nil {
+		if strings.TrimSpace(*update.LastError) == "" {
+			setClauses = append(setClauses, "oauth_last_error = NULL")
+		} else {
+			setClauses = append(setClauses, "oauth_last_error = $"+itoa(idx))
+			args = append(args, *update.LastError)
+			idx++
+		}
+	}
+	if len(setClauses) == 0 {
+		return nil
+	}
+	setClauses = append(setClauses, "updated_at = NOW()")
+	args = append(args, id)
+	query := "UPDATE accounts SET " + joinClauses(setClauses, ", ") + " WHERE id = $" + itoa(idx) + " AND deleted_at IS NULL"
+	result, err := r.sql.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrAccountNotFound
+	}
+	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
+		log.Printf("[SchedulerOutbox] enqueue oauth state update failed: account=%d err=%v", id, err)
+	}
+	r.syncSchedulerAccountSnapshot(ctx, id)
+	return nil
 }
 
 func (r *accountRepository) SetRateLimited(ctx context.Context, id int64, resetAt time.Time) error {
@@ -1147,6 +1297,11 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		args = append(args, *updates.Schedulable)
 		idx++
 	}
+	if updates.AutoPauseOnExpired != nil {
+		setClauses = append(setClauses, "auto_pause_on_expired = $"+itoa(idx))
+		args = append(args, *updates.AutoPauseOnExpired)
+		idx++
+	}
 	// JSONB 需要合并而非覆盖，使用 raw SQL 保持旧行为。
 	if len(updates.Credentials) > 0 {
 		payload, err := json.Marshal(updates.Credentials)
@@ -1230,6 +1385,7 @@ func (r *accountRepository) queryAccountsByGroup(ctx context.Context, groupID in
 			dbaccount.SchedulableEQ(true),
 			tempUnschedulablePredicate(),
 			notExpiredPredicate(now),
+			openAIOAuthActivePredicate(),
 			dbaccount.Or(dbaccount.OverloadUntilIsNil(), dbaccount.OverloadUntilLTE(now)),
 			dbaccount.Or(dbaccount.RateLimitResetAtIsNil(), dbaccount.RateLimitResetAtLTE(now)),
 		)
@@ -1336,6 +1492,19 @@ func tempUnschedulablePredicate() dbpredicate.Account {
 		s.Where(entsql.Or(
 			entsql.IsNull(col),
 			entsql.LTE(col, entsql.Expr("NOW()")),
+		))
+	})
+}
+
+func openAIOAuthActivePredicate() dbpredicate.Account {
+	return dbpredicate.Account(func(s *entsql.Selector) {
+		platformCol := s.C("platform")
+		typeCol := s.C("type")
+		statusCol := s.C("oauth_status")
+		s.Where(entsql.Or(
+			entsql.NEQ(platformCol, service.PlatformOpenAI),
+			entsql.NEQ(typeCol, service.AccountTypeOAuth),
+			entsql.EQ(statusCol, service.OpenAIOAuthStatusActive),
 		))
 	})
 }
@@ -1500,31 +1669,36 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 	rateMultiplier := m.RateMultiplier
 
 	return &service.Account{
-		ID:                  m.ID,
-		Name:                m.Name,
-		Notes:               m.Notes,
-		Platform:            m.Platform,
-		Type:                m.Type,
-		Credentials:         copyJSONMap(m.Credentials),
-		Extra:               copyJSONMap(m.Extra),
-		ProxyID:             m.ProxyID,
-		Concurrency:         m.Concurrency,
-		Priority:            m.Priority,
-		RateMultiplier:      &rateMultiplier,
-		Status:              m.Status,
-		ErrorMessage:        derefString(m.ErrorMessage),
-		LastUsedAt:          m.LastUsedAt,
-		ExpiresAt:           m.ExpiresAt,
-		AutoPauseOnExpired:  m.AutoPauseOnExpired,
-		CreatedAt:           m.CreatedAt,
-		UpdatedAt:           m.UpdatedAt,
-		Schedulable:         m.Schedulable,
-		RateLimitedAt:       m.RateLimitedAt,
-		RateLimitResetAt:    m.RateLimitResetAt,
-		OverloadUntil:       m.OverloadUntil,
-		SessionWindowStart:  m.SessionWindowStart,
-		SessionWindowEnd:    m.SessionWindowEnd,
-		SessionWindowStatus: derefString(m.SessionWindowStatus),
+		ID:                   m.ID,
+		Name:                 m.Name,
+		Notes:                m.Notes,
+		Platform:             m.Platform,
+		Type:                 m.Type,
+		Credentials:          copyJSONMap(m.Credentials),
+		Extra:                copyJSONMap(m.Extra),
+		ProxyID:              m.ProxyID,
+		Concurrency:          m.Concurrency,
+		Priority:             m.Priority,
+		RateMultiplier:       &rateMultiplier,
+		Status:               m.Status,
+		ErrorMessage:         derefString(m.ErrorMessage),
+		LastUsedAt:           m.LastUsedAt,
+		ExpiresAt:            m.ExpiresAt,
+		AutoPauseOnExpired:   m.AutoPauseOnExpired,
+		CreatedAt:            m.CreatedAt,
+		UpdatedAt:            m.UpdatedAt,
+		Schedulable:          m.Schedulable,
+		RateLimitedAt:        m.RateLimitedAt,
+		RateLimitResetAt:     m.RateLimitResetAt,
+		OverloadUntil:        m.OverloadUntil,
+		SessionWindowStart:   m.SessionWindowStart,
+		SessionWindowEnd:     m.SessionWindowEnd,
+		SessionWindowStatus:  derefString(m.SessionWindowStatus),
+		OAuthStatus:          m.OauthStatus,
+		OAuthRefreshAttempts: m.OauthRefreshAttempts,
+		OAuthNextRefreshAt:   m.OauthNextRefreshAt,
+		OAuthLastRefreshAt:   m.OauthLastRefreshAt,
+		OAuthLastError:       derefString(m.OauthLastError),
 	}
 }
 
@@ -1559,4 +1733,19 @@ func joinClauses(clauses []string, sep string) string {
 
 func itoa(v int) string {
 	return strconv.Itoa(v)
+}
+
+func defaultOpenAIOAuthStatus(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return service.OpenAIOAuthStatusActive
+	}
+	return status
+}
+
+func nillableString(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
 }

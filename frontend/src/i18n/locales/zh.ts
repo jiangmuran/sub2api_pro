@@ -1567,6 +1567,14 @@ export default {
         overloadedUntil: '负载过重，重置时间：{time}',
         viewTempUnschedDetails: '查看临时不可调度详情'
       },
+      oauthStatus: {
+        active: 'OAuth 正常',
+        needs_refresh: 'OAuth 待刷新',
+        refreshing: 'OAuth 刷新中',
+        cooldown: 'OAuth 冷却中',
+        error_permanent: 'OAuth 失效',
+        nextRefreshAt: '下次刷新：{time}'
+      },
       tempUnschedulable: {
         title: '临时不可调度',
         statusTitle: '临时不可调度状态',

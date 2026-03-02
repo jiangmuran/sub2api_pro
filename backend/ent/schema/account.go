@@ -113,6 +113,29 @@ func (Account) Fields() []ent.Field {
 			MaxLen(20).
 			Default(domain.StatusActive),
 
+		// oauth_status: OpenAI OAuth 账号状态（仅 openai+oauth 使用）
+		field.String("oauth_status").
+			MaxLen(30).
+			Default(domain.OpenAIOAuthStatusActive),
+		// oauth_refresh_attempts: 连续刷新失败次数（仅 openai+oauth 使用）
+		field.Int("oauth_refresh_attempts").
+			Default(0),
+		// oauth_next_refresh_at: 下次刷新时间（仅 openai+oauth 使用）
+		field.Time("oauth_next_refresh_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		// oauth_last_refresh_at: 最近刷新时间（仅 openai+oauth 使用）
+		field.Time("oauth_last_refresh_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		// oauth_last_error: 最近刷新错误（仅 openai+oauth 使用）
+		field.String("oauth_last_error").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "text"}),
+
 		// error_message: 错误信息，记录账户异常时的详细信息
 		field.String("error_message").
 			Optional().
@@ -213,6 +236,8 @@ func (Account) Indexes() []ent.Index {
 		index.Fields("rate_limited_at"),     // 筛选速率限制账户
 		index.Fields("rate_limit_reset_at"), // 筛选速率限制解除时间
 		index.Fields("overload_until"),      // 筛选过载账户
-		index.Fields("deleted_at"),          // 软删除查询优化
+		index.Fields("oauth_status"),        // 筛选 OpenAI OAuth 状态
+		index.Fields("oauth_next_refresh_at"),
+		index.Fields("deleted_at"), // 软删除查询优化
 	}
 }

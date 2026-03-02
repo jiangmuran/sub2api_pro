@@ -11,6 +11,15 @@ const (
 	StatusRevoked  = "revoked"
 )
 
+// OpenAI OAuth status constants
+const (
+	OpenAIOAuthStatusActive         = "active"
+	OpenAIOAuthStatusNeedsRefresh   = "needs_refresh"
+	OpenAIOAuthStatusRefreshing     = "refreshing"
+	OpenAIOAuthStatusCooldown       = "cooldown"
+	OpenAIOAuthStatusErrorPermanent = "error_permanent"
+)
+
 // Role constants
 const (
 	RoleAdmin = "admin"

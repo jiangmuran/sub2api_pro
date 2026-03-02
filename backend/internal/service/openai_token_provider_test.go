@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -107,6 +108,107 @@ func (r *openAIAccountRepoStub) Update(ctx context.Context, account *Account) er
 		return r.updateErr
 	}
 	r.account = account
+	return nil
+}
+
+func (r *openAIAccountRepoStub) Create(ctx context.Context, account *Account) error { return nil }
+func (r *openAIAccountRepoStub) GetByIDs(ctx context.Context, ids []int64) ([]*Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ExistsByID(ctx context.Context, id int64) (bool, error) {
+	return false, nil
+}
+func (r *openAIAccountRepoStub) GetByCRSAccountID(ctx context.Context, crsAccountID string) (*Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ListCRSAccountIDs(ctx context.Context) (map[string]int64, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) Delete(ctx context.Context, id int64) error { return nil }
+func (r *openAIAccountRepoStub) List(ctx context.Context, params pagination.PaginationParams) ([]Account, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+func (r *openAIAccountRepoStub) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64) ([]Account, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+func (r *openAIAccountRepoStub) ListByGroup(ctx context.Context, groupID int64) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ListActive(ctx context.Context) ([]Account, error) { return nil, nil }
+func (r *openAIAccountRepoStub) ListByPlatform(ctx context.Context, platform string) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) UpdateLastUsed(ctx context.Context, id int64) error { return nil }
+func (r *openAIAccountRepoStub) BatchUpdateLastUsed(ctx context.Context, updates map[int64]time.Time) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) SetError(ctx context.Context, id int64, errorMsg string) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) ClearError(ctx context.Context, id int64) error { return nil }
+func (r *openAIAccountRepoStub) SetSchedulable(ctx context.Context, id int64, schedulable bool) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) AutoPauseExpiredAccounts(ctx context.Context, now time.Time) (int64, error) {
+	return 0, nil
+}
+func (r *openAIAccountRepoStub) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) ListSchedulable(ctx context.Context) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ListSchedulableByGroupID(ctx context.Context, groupID int64) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ListSchedulableByPlatform(ctx context.Context, platform string) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ListSchedulableByGroupIDAndPlatform(ctx context.Context, groupID int64, platform string) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ListSchedulableByPlatforms(ctx context.Context, platforms []string) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) ListSchedulableByGroupIDAndPlatforms(ctx context.Context, groupID int64, platforms []string) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) SetRateLimited(ctx context.Context, id int64, resetAt time.Time) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) SetModelRateLimit(ctx context.Context, id int64, scope string, resetAt time.Time) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) SetOverloaded(ctx context.Context, id int64, until time.Time) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) SetTempUnschedulable(ctx context.Context, id int64, until time.Time, reason string) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) ClearTempUnschedulable(ctx context.Context, id int64) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) ClearRateLimit(ctx context.Context, id int64) error { return nil }
+func (r *openAIAccountRepoStub) ClearAntigravityQuotaScopes(ctx context.Context, id int64) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) ClearModelRateLimits(ctx context.Context, id int64) error { return nil }
+func (r *openAIAccountRepoStub) UpdateSessionWindow(ctx context.Context, id int64, start, end *time.Time, status string) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	return nil
+}
+func (r *openAIAccountRepoStub) BulkUpdate(ctx context.Context, ids []int64, updates AccountBulkUpdate) (int64, error) {
+	return 0, nil
+}
+func (r *openAIAccountRepoStub) ListOpenAIOAuthRefreshCandidates(ctx context.Context, now time.Time, limit int) ([]Account, error) {
+	return nil, nil
+}
+func (r *openAIAccountRepoStub) TrySetOpenAIOAuthRefreshing(ctx context.Context, id int64, now time.Time) (bool, error) {
+	return false, nil
+}
+func (r *openAIAccountRepoStub) UpdateOpenAIOAuthState(ctx context.Context, id int64, update OpenAIOAuthStateUpdate) error {
 	return nil
 }
 

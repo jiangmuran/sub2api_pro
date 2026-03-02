@@ -542,6 +542,36 @@
         </div>
       </div>
 
+      <!-- Auto pause on expired -->
+      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="mb-3 flex items-center justify-between">
+          <label
+            id="bulk-edit-auto-pause-label"
+            class="input-label mb-0"
+            for="bulk-edit-auto-pause-enabled"
+          >
+            {{ t('admin.accounts.autoPauseOnExpired') }}
+          </label>
+          <input
+            v-model="enableAutoPauseOnExpired"
+            id="bulk-edit-auto-pause-enabled"
+            type="checkbox"
+            aria-controls="bulk-edit-auto-pause"
+            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+        <div id="bulk-edit-auto-pause" :class="!enableAutoPauseOnExpired && 'pointer-events-none opacity-50'">
+          <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              v-model="autoPauseOnExpired"
+              type="checkbox"
+              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            {{ t('admin.accounts.autoPauseOnExpiredDesc') }}
+          </label>
+        </div>
+      </div>
+
       <!-- Groups -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -657,6 +687,7 @@ const enableConcurrency = ref(false)
 const enablePriority = ref(false)
 const enableRateMultiplier = ref(false)
 const enableStatus = ref(false)
+const enableAutoPauseOnExpired = ref(false)
 const enableGroups = ref(false)
 
 // State - field values
@@ -672,6 +703,7 @@ const concurrency = ref(1)
 const priority = ref(1)
 const rateMultiplier = ref(1)
 const status = ref<'active' | 'inactive'>('active')
+const autoPauseOnExpired = ref(true)
 const groupIds = ref<number[]>([])
 
 // All models list (combined Anthropic + OpenAI)
@@ -957,6 +989,10 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     updates.status = status.value
   }
 
+  if (enableAutoPauseOnExpired.value) {
+    updates.auto_pause_on_expired = autoPauseOnExpired.value
+  }
+
   if (enableGroups.value) {
     updates.group_ids = groupIds.value
   }
@@ -1019,6 +1055,7 @@ const handleSubmit = async () => {
     enablePriority.value ||
     enableRateMultiplier.value ||
     enableStatus.value ||
+    enableAutoPauseOnExpired.value ||
     enableGroups.value
 
   if (!hasAnyFieldEnabled) {
@@ -1081,6 +1118,7 @@ watch(
       enablePriority.value = false
       enableRateMultiplier.value = false
       enableStatus.value = false
+      enableAutoPauseOnExpired.value = false
       enableGroups.value = false
 
       // Reset all values
@@ -1095,6 +1133,7 @@ watch(
       priority.value = 1
       rateMultiplier.value = 1
       status.value = 'active'
+      autoPauseOnExpired.value = true
       groupIds.value = []
     }
   }

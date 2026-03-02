@@ -187,6 +187,18 @@ func (s *accountRepoStub) BulkUpdate(ctx context.Context, ids []int64, updates A
 	panic("unexpected BulkUpdate call")
 }
 
+func (s *accountRepoStub) ListOpenAIOAuthRefreshCandidates(ctx context.Context, now time.Time, limit int) ([]Account, error) {
+	panic("unexpected ListOpenAIOAuthRefreshCandidates call")
+}
+
+func (s *accountRepoStub) TrySetOpenAIOAuthRefreshing(ctx context.Context, id int64, now time.Time) (bool, error) {
+	panic("unexpected TrySetOpenAIOAuthRefreshing call")
+}
+
+func (s *accountRepoStub) UpdateOpenAIOAuthState(ctx context.Context, id int64, update OpenAIOAuthStateUpdate) error {
+	panic("unexpected UpdateOpenAIOAuthState call")
+}
+
 // TestAccountService_Delete_NotFound 测试删除不存在的账号时返回正确的错误。
 // 预期行为：
 //   - ExistsByID 返回 false（账号不存在）

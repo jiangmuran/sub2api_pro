@@ -46,6 +46,7 @@ type AdminService interface {
 	UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error)
 	DeleteAccount(ctx context.Context, id int64) error
 	RefreshAccountCredentials(ctx context.Context, id int64) (*Account, error)
+	ResetOpenAIOAuthState(ctx context.Context, id int64) (*Account, error)
 	ClearAccountError(ctx context.Context, id int64) (*Account, error)
 	SetAccountError(ctx context.Context, id int64, errorMsg string) error
 	SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error)
@@ -198,17 +199,18 @@ type UpdateAccountInput struct {
 
 // BulkUpdateAccountsInput describes the payload for bulk updating accounts.
 type BulkUpdateAccountsInput struct {
-	AccountIDs     []int64
-	Name           string
-	ProxyID        *int64
-	Concurrency    *int
-	Priority       *int
-	RateMultiplier *float64 // 账号计费倍率（>=0，允许 0）
-	Status         string
-	Schedulable    *bool
-	GroupIDs       *[]int64
-	Credentials    map[string]any
-	Extra          map[string]any
+	AccountIDs         []int64
+	Name               string
+	ProxyID            *int64
+	Concurrency        *int
+	Priority           *int
+	RateMultiplier     *float64 // 账号计费倍率（>=0，允许 0）
+	Status             string
+	Schedulable        *bool
+	AutoPauseOnExpired *bool
+	GroupIDs           *[]int64
+	Credentials        map[string]any
+	Extra              map[string]any
 	// SkipMixedChannelCheck skips the mixed channel risk check when binding groups.
 	// This should only be set when the caller has explicitly confirmed the risk.
 	SkipMixedChannelCheck bool
@@ -1285,6 +1287,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	if input.Schedulable != nil {
 		repoUpdates.Schedulable = input.Schedulable
 	}
+	if input.AutoPauseOnExpired != nil {
+		repoUpdates.AutoPauseOnExpired = input.AutoPauseOnExpired
+	}
 
 	// Run bulk update for column/jsonb fields first.
 	if _, err := s.accountRepo.BulkUpdate(ctx, input.AccountIDs, repoUpdates); err != nil {
@@ -1351,6 +1356,32 @@ func (s *adminServiceImpl) RefreshAccountCredentials(ctx context.Context, id int
 	}
 	// TODO: Implement refresh logic
 	return account, nil
+}
+
+func (s *adminServiceImpl) ResetOpenAIOAuthState(ctx context.Context, id int64) (*Account, error) {
+	account, err := s.accountRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !account.IsOpenAIOAuth() {
+		return account, nil
+	}
+	status := OpenAIOAuthStatusActive
+	attempts := 0
+	zeroTime := time.Time{}
+	lastRefreshAt := time.Now()
+	lastErr := ""
+	update := OpenAIOAuthStateUpdate{
+		Status:          &status,
+		RefreshAttempts: &attempts,
+		NextRefreshAt:   &zeroTime,
+		LastRefreshAt:   &lastRefreshAt,
+		LastError:       &lastErr,
+	}
+	if err := s.accountRepo.UpdateOpenAIOAuthState(ctx, account.ID, update); err != nil {
+		return nil, err
+	}
+	return s.accountRepo.GetByID(ctx, id)
 }
 
 func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Account, error) {

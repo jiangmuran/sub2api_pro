@@ -163,6 +163,11 @@ func (h *OpenAIOAuthHandler) RefreshAccountToken(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	updatedAccount, err = h.adminService.ResetOpenAIOAuthState(c.Request.Context(), accountID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
 	response.Success(c, dto.AccountFromService(updatedAccount))
 }

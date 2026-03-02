@@ -33,6 +33,8 @@ type RateLimitService struct {
 	autoRecoverRunning    bool
 	invalidBearerRuleMu   sync.Mutex
 	invalidBearerRuleID   int64
+	openaiOAuthRuleMu     sync.Mutex
+	openaiOAuthRuleID     int64
 }
 
 type geminiUsageCacheEntry struct {
@@ -149,6 +151,15 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		}
 		// 其他 400 错误（如参数问题）不处理，不禁用账号
 	case 401:
+		if account.IsOpenAIOAuth() && strings.Contains(strings.ToLower(upstreamMsg), "invalid bearer token") {
+			msg := "Authentication failed (401): invalid bearer token"
+			if upstreamMsg != "" {
+				msg = "Authentication failed (401): " + upstreamMsg
+			}
+			s.handleOpenAIOAuthInvalidBearer(ctx, account, msg)
+			shouldDisable = true
+			break
+		}
 		// 对所有 OAuth 账号在 401 错误时调用缓存失效并强制下次刷新
 		if account.Type == AccountTypeOAuth {
 			// 1. 失效缓存
@@ -174,9 +185,6 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		}
 		s.handleAuthError(ctx, account, msg)
 		shouldDisable = true
-		if account.IsOpenAIOAuth() && strings.Contains(strings.ToLower(msg), "invalid bearer token") {
-			s.tryTriggerOpenAIInvalidBearerAutoRecover()
-		}
 	case 402:
 		// 支付要求：余额不足或计费问题，停止调度
 		msg := "Payment required (402): insufficient balance or billing issue"
@@ -244,6 +252,186 @@ func (s *RateLimitService) tryTriggerOpenAIInvalidBearerAutoRecover() {
 	s.autoRecoverMu.Unlock()
 
 	go s.runOpenAIInvalidBearerAutoRecover()
+}
+
+func (s *RateLimitService) handleOpenAIOAuthInvalidBearer(ctx context.Context, account *Account, msg string) {
+	if s == nil || account == nil || s.accountRepo == nil {
+		return
+	}
+	if !account.IsOpenAIOAuth() {
+		return
+	}
+
+	now := time.Now()
+	status := OpenAIOAuthStatusNeedsRefresh
+	update := OpenAIOAuthStateUpdate{
+		Status:        &status,
+		NextRefreshAt: &now,
+		LastError:     &msg,
+	}
+	if account.OpenAIOAuthStatus() == OpenAIOAuthStatusActive {
+		attempts := 0
+		update.RefreshAttempts = &attempts
+	}
+	if err := s.accountRepo.UpdateOpenAIOAuthState(ctx, account.ID, update); err != nil {
+		slog.Warn("openai_oauth_invalid_bearer_state_update_failed", "account_id", account.ID, "error", err)
+	}
+	if s.tokenCacheInvalidator != nil {
+		if err := s.tokenCacheInvalidator.InvalidateToken(ctx, account); err != nil {
+			slog.Warn("openai_oauth_invalid_bearer_cache_invalidate_failed", "account_id", account.ID, "error", err)
+		}
+	}
+	if s.openaiOAuthService == nil {
+		return
+	}
+
+	s.emitOpenAIOAuthRefreshAlert(
+		ctx,
+		"P1",
+		"OpenAI OAuth invalid bearer detected",
+		"OpenAI OAuth account flagged for refresh",
+		map[string]any{
+			"platform":        PlatformOpenAI,
+			"event":           "invalid_bearer_detected",
+			"error_signature": "invalid_bearer_token",
+			"account_id":      account.ID,
+		},
+	)
+
+	go s.refreshOpenAIOAuthAccount(context.Background(), account.ID)
+}
+
+func (s *RateLimitService) refreshOpenAIOAuthAccount(ctx context.Context, accountID int64) {
+	if s == nil || s.openaiOAuthService == nil || s.accountRepo == nil {
+		return
+	}
+
+	now := time.Now()
+	ok, err := s.accountRepo.TrySetOpenAIOAuthRefreshing(ctx, accountID, now)
+	if err != nil {
+		slog.Warn("openai_oauth_refresh_mark_failed", "account_id", accountID, "error", err)
+		return
+	}
+	if !ok {
+		return
+	}
+
+	account, err := s.accountRepo.GetByID(ctx, accountID)
+	if err != nil || account == nil {
+		slog.Warn("openai_oauth_refresh_account_not_found", "account_id", accountID, "error", err)
+		return
+	}
+	if !account.IsOpenAIOAuth() {
+		return
+	}
+
+	tokenInfo, err := s.openaiOAuthService.RefreshAccountToken(ctx, account)
+	if err != nil {
+		s.handleOpenAIOAuthRefreshFailure(ctx, account, err)
+		return
+	}
+
+	newCredentials := s.openaiOAuthService.BuildAccountCredentials(tokenInfo)
+	for k, v := range account.Credentials {
+		if _, exists := newCredentials[k]; !exists {
+			newCredentials[k] = v
+		}
+	}
+	account.Credentials = newCredentials
+	if account.Status == StatusError && isInvalidBearerTokenErrorMessage(account.ErrorMessage) {
+		account.Status = StatusActive
+		account.ErrorMessage = ""
+	}
+	account.OAuthStatus = OpenAIOAuthStatusActive
+	account.OAuthRefreshAttempts = 0
+	account.OAuthNextRefreshAt = nil
+	account.OAuthLastRefreshAt = &now
+	account.OAuthLastError = ""
+	if err := s.accountRepo.Update(ctx, account); err != nil {
+		slog.Warn("openai_oauth_refresh_update_failed", "account_id", account.ID, "error", err)
+		return
+	}
+	if s.tokenCacheInvalidator != nil {
+		if err := s.tokenCacheInvalidator.InvalidateToken(ctx, account); err != nil {
+			slog.Warn("openai_oauth_refresh_cache_invalidate_failed", "account_id", account.ID, "error", err)
+		}
+	}
+
+	s.emitOpenAIOAuthRefreshAlert(
+		ctx,
+		"P1",
+		"OpenAI OAuth refresh succeeded",
+		"OpenAI OAuth account refreshed successfully",
+		map[string]any{
+			"platform":        PlatformOpenAI,
+			"event":           "refresh_success",
+			"account_id":      account.ID,
+			"error_signature": "openai_oauth_refresh",
+		},
+	)
+}
+
+func (s *RateLimitService) handleOpenAIOAuthRefreshFailure(ctx context.Context, account *Account, err error) {
+	if account == nil || s == nil || s.accountRepo == nil {
+		return
+	}
+	attempts := account.OAuthRefreshAttempts + 1
+	lastErr := err.Error()
+	update := OpenAIOAuthStateUpdate{
+		RefreshAttempts: &attempts,
+		LastError:       &lastErr,
+	}
+
+	if attempts > OpenAIOAuthRefreshMaxAttempts {
+		status := OpenAIOAuthStatusErrorPermanent
+		update.Status = &status
+		zeroTime := time.Time{}
+		update.NextRefreshAt = &zeroTime
+		if upErr := s.accountRepo.UpdateOpenAIOAuthState(ctx, account.ID, update); upErr != nil {
+			slog.Warn("openai_oauth_refresh_state_update_failed", "account_id", account.ID, "error", upErr)
+		}
+		setErrMsg := "OpenAI OAuth refresh failed (permanent): " + lastErr
+		if setErr := s.accountRepo.SetError(ctx, account.ID, setErrMsg); setErr != nil {
+			slog.Warn("openai_oauth_refresh_set_error_failed", "account_id", account.ID, "error", setErr)
+		}
+		s.emitOpenAIOAuthRefreshAlert(
+			ctx,
+			"P0",
+			"OpenAI OAuth refresh failed",
+			"OpenAI OAuth refresh failed permanently",
+			map[string]any{
+				"platform":        PlatformOpenAI,
+				"event":           "refresh_failed_permanent",
+				"account_id":      account.ID,
+				"attempts":        attempts,
+				"error_signature": "openai_oauth_refresh",
+			},
+		)
+		return
+	}
+
+	next := time.Now().Add(OpenAIOAuthRefreshCooldown)
+	status := OpenAIOAuthStatusCooldown
+	update.Status = &status
+	update.NextRefreshAt = &next
+	if upErr := s.accountRepo.UpdateOpenAIOAuthState(ctx, account.ID, update); upErr != nil {
+		slog.Warn("openai_oauth_refresh_state_update_failed", "account_id", account.ID, "error", upErr)
+	}
+
+	s.emitOpenAIOAuthRefreshAlert(
+		ctx,
+		"P1",
+		"OpenAI OAuth refresh failed",
+		"OpenAI OAuth refresh failed, entering cooldown",
+		map[string]any{
+			"platform":        PlatformOpenAI,
+			"event":           "refresh_failed_cooldown",
+			"account_id":      account.ID,
+			"attempts":        attempts,
+			"next_refresh_at": next,
+			"error_signature": "openai_oauth_refresh",
+		},
+	)
 }
 
 func (s *RateLimitService) runOpenAIInvalidBearerAutoRecover() {
@@ -417,6 +605,31 @@ func (s *RateLimitService) emitOpenAIInvalidBearerAlert(ctx context.Context, sev
 	}
 }
 
+func (s *RateLimitService) emitOpenAIOAuthRefreshAlert(ctx context.Context, severity, title, description string, dimensions map[string]any) {
+	if s.opsRepo == nil {
+		return
+	}
+	if !s.isOpsMonitoringEnabled(ctx) {
+		return
+	}
+	ruleID := s.getOpenAIOAuthRefreshAlertRuleID(ctx)
+	if ruleID == 0 {
+		return
+	}
+	event := &OpsAlertEvent{
+		RuleID:      ruleID,
+		Severity:    severity,
+		Status:      OpsAlertStatusFiring,
+		Title:       title,
+		Description: description,
+		Dimensions:  dimensions,
+		FiredAt:     time.Now(),
+	}
+	if _, err := s.opsRepo.CreateAlertEvent(ctx, event); err != nil {
+		slog.Warn("openai_oauth_refresh_alert_create_failed", "error", err)
+	}
+}
+
 func (s *RateLimitService) isOpsMonitoringEnabled(ctx context.Context) bool {
 	if s.cfg != nil && !s.cfg.Ops.Enabled {
 		return false
@@ -501,6 +714,75 @@ func (s *RateLimitService) getInvalidBearerAlertRuleID(ctx context.Context) int6
 	}
 
 	s.invalidBearerRuleID = created.ID
+	return created.ID
+}
+
+func (s *RateLimitService) getOpenAIOAuthRefreshAlertRuleID(ctx context.Context) int64 {
+	if s.opsRepo == nil {
+		return 0
+	}
+	s.openaiOAuthRuleMu.Lock()
+	defer s.openaiOAuthRuleMu.Unlock()
+	if s.openaiOAuthRuleID > 0 {
+		return s.openaiOAuthRuleID
+	}
+
+	const ruleNameCN = "OpenAI OAuth 自动刷新"
+	const ruleNameEN = "OpenAI OAuth Auto Refresh"
+	rules, err := s.opsRepo.ListAlertRules(ctx)
+	if err == nil {
+		for _, rule := range rules {
+			if rule == nil {
+				continue
+			}
+			if strings.EqualFold(rule.Name, ruleNameCN) {
+				s.openaiOAuthRuleID = rule.ID
+				return rule.ID
+			}
+			if strings.EqualFold(rule.Name, ruleNameEN) {
+				s.openaiOAuthRuleID = rule.ID
+				return rule.ID
+			}
+		}
+	} else {
+		slog.Warn("openai_oauth_refresh_rule_list_failed", "error", err)
+	}
+
+	newRule := &OpsAlertRule{
+		Name:             ruleNameCN,
+		Description:      "OpenAI OAuth 刷新事件（成功/失败/冷却）记录。",
+		Enabled:          true,
+		Severity:         "P1",
+		MetricType:       "custom_event",
+		Operator:         "gte",
+		Threshold:        1,
+		WindowMinutes:    1,
+		SustainedMinutes: 1,
+		CooldownMinutes:  1,
+		NotifyEmail:      false,
+		Filters: map[string]any{
+			"platform":        PlatformOpenAI,
+			"error_signature": "openai_oauth_refresh",
+		},
+	}
+	created, err := s.opsRepo.CreateAlertRule(ctx, newRule)
+	if err != nil {
+		slog.Warn("openai_oauth_refresh_rule_create_failed", "error", err)
+		if rules, listErr := s.opsRepo.ListAlertRules(ctx); listErr == nil {
+			for _, rule := range rules {
+				if rule == nil {
+					continue
+				}
+				if strings.EqualFold(rule.Name, ruleNameCN) || strings.EqualFold(rule.Name, ruleNameEN) {
+					s.openaiOAuthRuleID = rule.ID
+					return rule.ID
+				}
+			}
+		}
+		return 0
+	}
+
+	s.openaiOAuthRuleID = created.ID
 	return created.ID
 }
 

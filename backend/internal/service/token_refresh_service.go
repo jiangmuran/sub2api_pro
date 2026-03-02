@@ -14,11 +14,12 @@ import (
 // TokenRefreshService OAuth token自动刷新服务
 // 定期检查并刷新即将过期的token
 type TokenRefreshService struct {
-	accountRepo      AccountRepository
-	refreshers       []TokenRefresher
-	cfg              *config.TokenRefreshConfig
-	cacheInvalidator TokenCacheInvalidator
-	schedulerCache   SchedulerCache // 用于同步更新调度器缓存，解决 token 刷新后缓存不一致问题
+	accountRepo        AccountRepository
+	refreshers         []TokenRefresher
+	openaiOAuthService *OpenAIOAuthService
+	cfg                *config.TokenRefreshConfig
+	cacheInvalidator   TokenCacheInvalidator
+	schedulerCache     SchedulerCache // 用于同步更新调度器缓存，解决 token 刷新后缓存不一致问题
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
@@ -36,11 +37,12 @@ func NewTokenRefreshService(
 	cfg *config.Config,
 ) *TokenRefreshService {
 	s := &TokenRefreshService{
-		accountRepo:      accountRepo,
-		cfg:              &cfg.TokenRefresh,
-		cacheInvalidator: cacheInvalidator,
-		schedulerCache:   schedulerCache,
-		stopCh:           make(chan struct{}),
+		accountRepo:        accountRepo,
+		cfg:                &cfg.TokenRefresh,
+		openaiOAuthService: openaiOAuthService,
+		cacheInvalidator:   cacheInvalidator,
+		schedulerCache:     schedulerCache,
+		stopCh:             make(chan struct{}),
 	}
 
 	// 注册平台特定的刷新器
@@ -152,9 +154,113 @@ func (s *TokenRefreshService) processRefresh() {
 		}
 	}
 
+	s.processOpenAIOAuthRecovery(ctx)
+
 	// 始终打印周期日志，便于跟踪服务运行状态
 	log.Printf("[TokenRefresh] Cycle complete: total=%d, oauth=%d, needs_refresh=%d, refreshed=%d, failed=%d",
 		totalAccounts, oauthAccounts, needsRefresh, refreshed, failed)
+}
+
+func (s *TokenRefreshService) processOpenAIOAuthRecovery(ctx context.Context) {
+	if s == nil || s.accountRepo == nil || s.openaiOAuthService == nil {
+		return
+	}
+
+	now := time.Now()
+	accounts, err := s.accountRepo.ListOpenAIOAuthRefreshCandidates(ctx, now, 200)
+	if err != nil {
+		log.Printf("[TokenRefresh] OpenAI OAuth recovery list failed: %v", err)
+		return
+	}
+	if len(accounts) == 0 {
+		return
+	}
+
+	refreshed := 0
+	failed := 0
+	for i := range accounts {
+		account := &accounts[i]
+		ok, err := s.accountRepo.TrySetOpenAIOAuthRefreshing(ctx, account.ID, now)
+		if err != nil {
+			log.Printf("[TokenRefresh] OpenAI OAuth mark refreshing failed: account=%d err=%v", account.ID, err)
+			continue
+		}
+		if !ok {
+			continue
+		}
+
+		tokenInfo, err := s.openaiOAuthService.RefreshAccountToken(ctx, account)
+		if err != nil {
+			s.handleOpenAIOAuthRecoveryFailure(ctx, account, err)
+			failed++
+			continue
+		}
+
+		newCredentials := s.openaiOAuthService.BuildAccountCredentials(tokenInfo)
+		for k, v := range account.Credentials {
+			if _, exists := newCredentials[k]; !exists {
+				newCredentials[k] = v
+			}
+		}
+		account.Credentials = newCredentials
+		account.OAuthStatus = OpenAIOAuthStatusActive
+		account.OAuthRefreshAttempts = 0
+		account.OAuthNextRefreshAt = nil
+		account.OAuthLastRefreshAt = &now
+		account.OAuthLastError = ""
+		if err := s.accountRepo.Update(ctx, account); err != nil {
+			log.Printf("[TokenRefresh] OpenAI OAuth update failed: account=%d err=%v", account.ID, err)
+			failed++
+			continue
+		}
+		if s.cacheInvalidator != nil {
+			if err := s.cacheInvalidator.InvalidateToken(ctx, account); err != nil {
+				log.Printf("[TokenRefresh] OpenAI OAuth cache invalidate failed: account=%d err=%v", account.ID, err)
+			}
+		}
+		if s.schedulerCache != nil {
+			if err := s.schedulerCache.SetAccount(ctx, account); err != nil {
+				log.Printf("[TokenRefresh] OpenAI OAuth scheduler cache sync failed: account=%d err=%v", account.ID, err)
+			}
+		}
+		refreshed++
+	}
+
+	log.Printf("[TokenRefresh] OpenAI OAuth recovery: candidates=%d refreshed=%d failed=%d", len(accounts), refreshed, failed)
+}
+
+func (s *TokenRefreshService) handleOpenAIOAuthRecoveryFailure(ctx context.Context, account *Account, err error) {
+	if account == nil {
+		return
+	}
+	attempts := account.OAuthRefreshAttempts + 1
+	lastErr := err.Error()
+	update := OpenAIOAuthStateUpdate{
+		RefreshAttempts: &attempts,
+		LastError:       &lastErr,
+	}
+	if attempts > OpenAIOAuthRefreshMaxAttempts {
+		status := OpenAIOAuthStatusErrorPermanent
+		update.Status = &status
+		zeroTime := time.Time{}
+		update.NextRefreshAt = &zeroTime
+		if upErr := s.accountRepo.UpdateOpenAIOAuthState(ctx, account.ID, update); upErr != nil {
+			log.Printf("[TokenRefresh] OpenAI OAuth state update failed: account=%d err=%v", account.ID, upErr)
+		}
+		setErrMsg := "OpenAI OAuth refresh failed (permanent): " + lastErr
+		if setErr := s.accountRepo.SetError(ctx, account.ID, setErrMsg); setErr != nil {
+			log.Printf("[TokenRefresh] OpenAI OAuth set error failed: account=%d err=%v", account.ID, setErr)
+		}
+		return
+	}
+
+	next := time.Now().Add(OpenAIOAuthRefreshCooldown)
+	status := OpenAIOAuthStatusCooldown
+	update.Status = &status
+	update.NextRefreshAt = &next
+	if upErr := s.accountRepo.UpdateOpenAIOAuthState(ctx, account.ID, update); upErr != nil {
+		log.Printf("[TokenRefresh] OpenAI OAuth state update failed: account=%d err=%v", account.ID, upErr)
+	}
 }
 
 // listActiveAccounts 获取所有active状态的账号

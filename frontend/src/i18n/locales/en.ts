@@ -1422,6 +1422,14 @@ export default {
         overloadedUntil: 'Overloaded until {time}',
         viewTempUnschedDetails: 'View temp unschedulable details'
       },
+      oauthStatus: {
+        active: 'OAuth Active',
+        needs_refresh: 'OAuth Needs Refresh',
+        refreshing: 'OAuth Refreshing',
+        cooldown: 'OAuth Cooldown',
+        error_permanent: 'OAuth Invalid',
+        nextRefreshAt: 'Next refresh: {time}'
+      },
       columns: {
         name: 'Name',
         platformType: 'Platform/Type',
