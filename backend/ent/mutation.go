@@ -2265,6 +2265,12 @@ type AccountMutation struct {
 	rate_multiplier           *float64
 	addrate_multiplier        *float64
 	status                    *string
+	oauth_status              *string
+	oauth_refresh_attempts    *int
+	addoauth_refresh_attempts *int
+	oauth_next_refresh_at     *time.Time
+	oauth_last_refresh_at     *time.Time
+	oauth_last_error          *string
 	error_message             *string
 	last_used_at              *time.Time
 	expires_at                *time.Time
@@ -2991,6 +2997,244 @@ func (m *AccountMutation) OldStatus(ctx context.Context) (v string, err error) {
 // ResetStatus resets all changes to the "status" field.
 func (m *AccountMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetOauthStatus sets the "oauth_status" field.
+func (m *AccountMutation) SetOauthStatus(s string) {
+	m.oauth_status = &s
+}
+
+// OauthStatus returns the value of the "oauth_status" field in the mutation.
+func (m *AccountMutation) OauthStatus() (r string, exists bool) {
+	v := m.oauth_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOauthStatus returns the old "oauth_status" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldOauthStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOauthStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOauthStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOauthStatus: %w", err)
+	}
+	return oldValue.OauthStatus, nil
+}
+
+// ResetOauthStatus resets all changes to the "oauth_status" field.
+func (m *AccountMutation) ResetOauthStatus() {
+	m.oauth_status = nil
+}
+
+// SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
+func (m *AccountMutation) SetOauthRefreshAttempts(i int) {
+	m.oauth_refresh_attempts = &i
+}
+
+// OauthRefreshAttempts returns the value of the "oauth_refresh_attempts" field in the mutation.
+func (m *AccountMutation) OauthRefreshAttempts() (r int, exists bool) {
+	v := m.oauth_refresh_attempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOauthRefreshAttempts returns the old "oauth_refresh_attempts" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldOauthRefreshAttempts(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOauthRefreshAttempts is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOauthRefreshAttempts requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOauthRefreshAttempts: %w", err)
+	}
+	return oldValue.OauthRefreshAttempts, nil
+}
+
+// AddOauthRefreshAttempts adds i to the "oauth_refresh_attempts" field.
+func (m *AccountMutation) AddOauthRefreshAttempts(i int) {
+	if m.addoauth_refresh_attempts != nil {
+		*m.addoauth_refresh_attempts += i
+	} else {
+		m.addoauth_refresh_attempts = &i
+	}
+}
+
+// AddedOauthRefreshAttempts returns the value that was added to the "oauth_refresh_attempts" field in this mutation.
+func (m *AccountMutation) AddedOauthRefreshAttempts() (r int, exists bool) {
+	v := m.addoauth_refresh_attempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOauthRefreshAttempts resets all changes to the "oauth_refresh_attempts" field.
+func (m *AccountMutation) ResetOauthRefreshAttempts() {
+	m.oauth_refresh_attempts = nil
+	m.addoauth_refresh_attempts = nil
+}
+
+// SetOauthNextRefreshAt sets the "oauth_next_refresh_at" field.
+func (m *AccountMutation) SetOauthNextRefreshAt(t time.Time) {
+	m.oauth_next_refresh_at = &t
+}
+
+// OauthNextRefreshAt returns the value of the "oauth_next_refresh_at" field in the mutation.
+func (m *AccountMutation) OauthNextRefreshAt() (r time.Time, exists bool) {
+	v := m.oauth_next_refresh_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOauthNextRefreshAt returns the old "oauth_next_refresh_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldOauthNextRefreshAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOauthNextRefreshAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOauthNextRefreshAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOauthNextRefreshAt: %w", err)
+	}
+	return oldValue.OauthNextRefreshAt, nil
+}
+
+// ClearOauthNextRefreshAt clears the value of the "oauth_next_refresh_at" field.
+func (m *AccountMutation) ClearOauthNextRefreshAt() {
+	m.oauth_next_refresh_at = nil
+	m.clearedFields[account.FieldOauthNextRefreshAt] = struct{}{}
+}
+
+// OauthNextRefreshAtCleared returns if the "oauth_next_refresh_at" field was cleared in this mutation.
+func (m *AccountMutation) OauthNextRefreshAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldOauthNextRefreshAt]
+	return ok
+}
+
+// ResetOauthNextRefreshAt resets all changes to the "oauth_next_refresh_at" field.
+func (m *AccountMutation) ResetOauthNextRefreshAt() {
+	m.oauth_next_refresh_at = nil
+	delete(m.clearedFields, account.FieldOauthNextRefreshAt)
+}
+
+// SetOauthLastRefreshAt sets the "oauth_last_refresh_at" field.
+func (m *AccountMutation) SetOauthLastRefreshAt(t time.Time) {
+	m.oauth_last_refresh_at = &t
+}
+
+// OauthLastRefreshAt returns the value of the "oauth_last_refresh_at" field in the mutation.
+func (m *AccountMutation) OauthLastRefreshAt() (r time.Time, exists bool) {
+	v := m.oauth_last_refresh_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOauthLastRefreshAt returns the old "oauth_last_refresh_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldOauthLastRefreshAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOauthLastRefreshAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOauthLastRefreshAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOauthLastRefreshAt: %w", err)
+	}
+	return oldValue.OauthLastRefreshAt, nil
+}
+
+// ClearOauthLastRefreshAt clears the value of the "oauth_last_refresh_at" field.
+func (m *AccountMutation) ClearOauthLastRefreshAt() {
+	m.oauth_last_refresh_at = nil
+	m.clearedFields[account.FieldOauthLastRefreshAt] = struct{}{}
+}
+
+// OauthLastRefreshAtCleared returns if the "oauth_last_refresh_at" field was cleared in this mutation.
+func (m *AccountMutation) OauthLastRefreshAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldOauthLastRefreshAt]
+	return ok
+}
+
+// ResetOauthLastRefreshAt resets all changes to the "oauth_last_refresh_at" field.
+func (m *AccountMutation) ResetOauthLastRefreshAt() {
+	m.oauth_last_refresh_at = nil
+	delete(m.clearedFields, account.FieldOauthLastRefreshAt)
+}
+
+// SetOauthLastError sets the "oauth_last_error" field.
+func (m *AccountMutation) SetOauthLastError(s string) {
+	m.oauth_last_error = &s
+}
+
+// OauthLastError returns the value of the "oauth_last_error" field in the mutation.
+func (m *AccountMutation) OauthLastError() (r string, exists bool) {
+	v := m.oauth_last_error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOauthLastError returns the old "oauth_last_error" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldOauthLastError(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOauthLastError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOauthLastError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOauthLastError: %w", err)
+	}
+	return oldValue.OauthLastError, nil
+}
+
+// ClearOauthLastError clears the value of the "oauth_last_error" field.
+func (m *AccountMutation) ClearOauthLastError() {
+	m.oauth_last_error = nil
+	m.clearedFields[account.FieldOauthLastError] = struct{}{}
+}
+
+// OauthLastErrorCleared returns if the "oauth_last_error" field was cleared in this mutation.
+func (m *AccountMutation) OauthLastErrorCleared() bool {
+	_, ok := m.clearedFields[account.FieldOauthLastError]
+	return ok
+}
+
+// ResetOauthLastError resets all changes to the "oauth_last_error" field.
+func (m *AccountMutation) ResetOauthLastError() {
+	m.oauth_last_error = nil
+	delete(m.clearedFields, account.FieldOauthLastError)
 }
 
 // SetErrorMessage sets the "error_message" field.
@@ -3816,6 +4060,21 @@ func (m *AccountMutation) Fields() []string {
 	if m.status != nil {
 		fields = append(fields, account.FieldStatus)
 	}
+	if m.oauth_status != nil {
+		fields = append(fields, account.FieldOauthStatus)
+	}
+	if m.oauth_refresh_attempts != nil {
+		fields = append(fields, account.FieldOauthRefreshAttempts)
+	}
+	if m.oauth_next_refresh_at != nil {
+		fields = append(fields, account.FieldOauthNextRefreshAt)
+	}
+	if m.oauth_last_refresh_at != nil {
+		fields = append(fields, account.FieldOauthLastRefreshAt)
+	}
+	if m.oauth_last_error != nil {
+		fields = append(fields, account.FieldOauthLastError)
+	}
 	if m.error_message != nil {
 		fields = append(fields, account.FieldErrorMessage)
 	}
@@ -3891,6 +4150,16 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.RateMultiplier()
 	case account.FieldStatus:
 		return m.Status()
+	case account.FieldOauthStatus:
+		return m.OauthStatus()
+	case account.FieldOauthRefreshAttempts:
+		return m.OauthRefreshAttempts()
+	case account.FieldOauthNextRefreshAt:
+		return m.OauthNextRefreshAt()
+	case account.FieldOauthLastRefreshAt:
+		return m.OauthLastRefreshAt()
+	case account.FieldOauthLastError:
+		return m.OauthLastError()
 	case account.FieldErrorMessage:
 		return m.ErrorMessage()
 	case account.FieldLastUsedAt:
@@ -3954,6 +4223,16 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldRateMultiplier(ctx)
 	case account.FieldStatus:
 		return m.OldStatus(ctx)
+	case account.FieldOauthStatus:
+		return m.OldOauthStatus(ctx)
+	case account.FieldOauthRefreshAttempts:
+		return m.OldOauthRefreshAttempts(ctx)
+	case account.FieldOauthNextRefreshAt:
+		return m.OldOauthNextRefreshAt(ctx)
+	case account.FieldOauthLastRefreshAt:
+		return m.OldOauthLastRefreshAt(ctx)
+	case account.FieldOauthLastError:
+		return m.OldOauthLastError(ctx)
 	case account.FieldErrorMessage:
 		return m.OldErrorMessage(ctx)
 	case account.FieldLastUsedAt:
@@ -4087,6 +4366,41 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetStatus(v)
 		return nil
+	case account.FieldOauthStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOauthStatus(v)
+		return nil
+	case account.FieldOauthRefreshAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOauthRefreshAttempts(v)
+		return nil
+	case account.FieldOauthNextRefreshAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOauthNextRefreshAt(v)
+		return nil
+	case account.FieldOauthLastRefreshAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOauthLastRefreshAt(v)
+		return nil
+	case account.FieldOauthLastError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOauthLastError(v)
+		return nil
 	case account.FieldErrorMessage:
 		v, ok := value.(string)
 		if !ok {
@@ -4195,6 +4509,9 @@ func (m *AccountMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, account.FieldRateMultiplier)
 	}
+	if m.addoauth_refresh_attempts != nil {
+		fields = append(fields, account.FieldOauthRefreshAttempts)
+	}
 	return fields
 }
 
@@ -4209,6 +4526,8 @@ func (m *AccountMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPriority()
 	case account.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case account.FieldOauthRefreshAttempts:
+		return m.AddedOauthRefreshAttempts()
 	}
 	return nil, false
 }
@@ -4239,6 +4558,13 @@ func (m *AccountMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddRateMultiplier(v)
 		return nil
+	case account.FieldOauthRefreshAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOauthRefreshAttempts(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Account numeric field %s", name)
 }
@@ -4258,6 +4584,15 @@ func (m *AccountMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(account.FieldErrorMessage) {
 		fields = append(fields, account.FieldErrorMessage)
+	}
+	if m.FieldCleared(account.FieldOauthNextRefreshAt) {
+		fields = append(fields, account.FieldOauthNextRefreshAt)
+	}
+	if m.FieldCleared(account.FieldOauthLastRefreshAt) {
+		fields = append(fields, account.FieldOauthLastRefreshAt)
+	}
+	if m.FieldCleared(account.FieldOauthLastError) {
+		fields = append(fields, account.FieldOauthLastError)
 	}
 	if m.FieldCleared(account.FieldLastUsedAt) {
 		fields = append(fields, account.FieldLastUsedAt)
@@ -4314,6 +4649,15 @@ func (m *AccountMutation) ClearField(name string) error {
 		return nil
 	case account.FieldErrorMessage:
 		m.ClearErrorMessage()
+		return nil
+	case account.FieldOauthNextRefreshAt:
+		m.ClearOauthNextRefreshAt()
+		return nil
+	case account.FieldOauthLastRefreshAt:
+		m.ClearOauthLastRefreshAt()
+		return nil
+	case account.FieldOauthLastError:
+		m.ClearOauthLastError()
 		return nil
 	case account.FieldLastUsedAt:
 		m.ClearLastUsedAt()
@@ -4394,6 +4738,21 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case account.FieldOauthStatus:
+		m.ResetOauthStatus()
+		return nil
+	case account.FieldOauthRefreshAttempts:
+		m.ResetOauthRefreshAttempts()
+		return nil
+	case account.FieldOauthNextRefreshAt:
+		m.ResetOauthNextRefreshAt()
+		return nil
+	case account.FieldOauthLastRefreshAt:
+		m.ResetOauthLastRefreshAt()
+		return nil
+	case account.FieldOauthLastError:
+		m.ResetOauthLastError()
 		return nil
 	case account.FieldErrorMessage:
 		m.ResetErrorMessage()
