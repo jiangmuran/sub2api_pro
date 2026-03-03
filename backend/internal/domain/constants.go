@@ -8,6 +8,7 @@ const (
 	StatusUnused   = "unused"
 	StatusUsed     = "used"
 	StatusExpired  = "expired"
+	StatusRevoked  = "revoked"
 )
 
 // OpenAI OAuth status constants

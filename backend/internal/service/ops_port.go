@@ -7,8 +7,10 @@ import (
 
 type OpsRepository interface {
 	InsertErrorLog(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error)
+	InsertRequestLog(ctx context.Context, input *OpsInsertRequestLogInput) (int64, error)
 	ListErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error)
 	GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error)
+	GetRequestLogByRequestID(ctx context.Context, requestID string) (*OpsRequestLogDetail, error)
 	ListRequestDetails(ctx context.Context, filter *OpsRequestDetailFilter) ([]*OpsRequestDetail, int64, error)
 	BatchInsertSystemLogs(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error)
 	ListSystemLogs(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error)
@@ -194,6 +196,9 @@ type OpsInsertSystemMetricsInput struct {
 	MemoryUsedMB       *int64
 	MemoryTotalMB      *int64
 	MemoryUsagePercent *float64
+	DiskUsedMB         *int64
+	DiskTotalMB        *int64
+	DiskUsagePercent   *float64
 
 	DBOK    *bool
 	RedisOK *bool
@@ -207,6 +212,63 @@ type OpsInsertSystemMetricsInput struct {
 
 	GoroutineCount        *int
 	ConcurrencyQueueDepth *int
+}
+
+type OpsInsertRequestLogInput struct {
+	RequestID       string
+	ClientRequestID string
+	UserID          *int64
+	APIKeyID        *int64
+	AccountID       *int64
+	GroupID         *int64
+	ClientIP        *string
+
+	Platform    string
+	Model       string
+	RequestPath string
+	Stream      bool
+	UserAgent   string
+
+	StatusCode            *int
+	DurationMs            *int
+	TimeToFirstTokenMs    *int64
+	RequestBodyJSON       *string
+	RequestBodyTruncated  bool
+	RequestBodyBytes      *int
+	ResponseBody          *string
+	ResponseBodyTruncated bool
+	ResponseBodyBytes     *int
+
+	CreatedAt time.Time
+}
+
+type OpsRequestLogDetail struct {
+	RequestID       string  `json:"request_id"`
+	ClientRequestID string  `json:"client_request_id"`
+	UserID          *int64  `json:"user_id"`
+	APIKeyID        *int64  `json:"api_key_id"`
+	AccountID       *int64  `json:"account_id"`
+	GroupID         *int64  `json:"group_id"`
+	ClientIP        *string `json:"client_ip"`
+
+	Platform    string `json:"platform"`
+	Model       string `json:"model"`
+	RequestPath string `json:"request_path"`
+	Stream      bool   `json:"stream"`
+	UserAgent   string `json:"user_agent"`
+
+	StatusCode         *int   `json:"status_code"`
+	DurationMs         *int   `json:"duration_ms"`
+	TimeToFirstTokenMs *int64 `json:"time_to_first_token_ms"`
+
+	RequestBody           string `json:"request_body"`
+	RequestBodyTruncated  bool   `json:"request_body_truncated"`
+	RequestBodyBytes      *int   `json:"request_body_bytes"`
+	ResponseBody          string `json:"response_body"`
+	ResponseBodyTruncated bool   `json:"response_body_truncated"`
+	ResponseBodyBytes     *int   `json:"response_body_bytes"`
+
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type OpsInsertSystemLogInput struct {

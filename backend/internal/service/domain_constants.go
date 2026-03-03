@@ -10,6 +10,7 @@ const (
 	StatusUnused   = domain.StatusUnused
 	StatusUsed     = domain.StatusUsed
 	StatusExpired  = domain.StatusExpired
+	StatusRevoked  = domain.StatusRevoked
 )
 
 // Role constants
