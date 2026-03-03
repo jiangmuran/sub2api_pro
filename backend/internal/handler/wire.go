@@ -14,6 +14,7 @@ func ProvideAdminHandlers(
 	groupHandler *admin.GroupHandler,
 	accountHandler *admin.AccountHandler,
 	announcementHandler *admin.AnnouncementHandler,
+	dataManagementHandler *admin.DataManagementHandler,
 	oauthHandler *admin.OAuthHandler,
 	openaiOAuthHandler *admin.OpenAIOAuthHandler,
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
@@ -28,8 +29,7 @@ func ProvideAdminHandlers(
 	usageHandler *admin.UsageHandler,
 	userAttributeHandler *admin.UserAttributeHandler,
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
-	securityHandler *admin.SecurityHandler,
-	distributorHandler *admin.DistributorHandler,
+	apiKeyHandler *admin.AdminAPIKeyHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:        dashboardHandler,
@@ -37,6 +37,7 @@ func ProvideAdminHandlers(
 		Group:            groupHandler,
 		Account:          accountHandler,
 		Announcement:     announcementHandler,
+		DataManagement:   dataManagementHandler,
 		OAuth:            oauthHandler,
 		OpenAIOAuth:      openaiOAuthHandler,
 		GeminiOAuth:      geminiOAuthHandler,
@@ -51,14 +52,13 @@ func ProvideAdminHandlers(
 		Usage:            usageHandler,
 		UserAttribute:    userAttributeHandler,
 		ErrorPassthrough: errorPassthroughHandler,
-		Security:         securityHandler,
-		Distributor:      distributorHandler,
+		APIKey:           apiKeyHandler,
 	}
 }
 
 // ProvideSystemHandler creates admin.SystemHandler with UpdateService
-func ProvideSystemHandler(updateService *service.UpdateService) *admin.SystemHandler {
-	return admin.NewSystemHandler(updateService)
+func ProvideSystemHandler(updateService *service.UpdateService, lockService *service.SystemOperationLockService) *admin.SystemHandler {
+	return admin.NewSystemHandler(updateService, lockService)
 }
 
 // ProvideSettingHandler creates SettingHandler with version from BuildInfo
@@ -78,9 +78,12 @@ func ProvideHandlers(
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
 	openaiGatewayHandler *OpenAIGatewayHandler,
+	soraGatewayHandler *SoraGatewayHandler,
+	soraClientHandler *SoraClientHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
-	distributorHandler *DistributorHandler,
+	_ *service.IdempotencyCoordinator,
+	_ *service.IdempotencyCleanupService,
 ) *Handlers {
 	return &Handlers{
 		Auth:          authHandler,
@@ -93,9 +96,10 @@ func ProvideHandlers(
 		Admin:         adminHandlers,
 		Gateway:       gatewayHandler,
 		OpenAIGateway: openaiGatewayHandler,
+		SoraGateway:   soraGatewayHandler,
+		SoraClient:    soraClientHandler,
 		Setting:       settingHandler,
 		Totp:          totpHandler,
-		Distributor:   distributorHandler,
 	}
 }
 
@@ -111,8 +115,8 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementHandler,
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
+	NewSoraGatewayHandler,
 	NewTotpHandler,
-	NewDistributorHandler,
 	ProvideSettingHandler,
 
 	// Admin handlers
@@ -121,6 +125,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewGroupHandler,
 	admin.NewAccountHandler,
 	admin.NewAnnouncementHandler,
+	admin.NewDataManagementHandler,
 	admin.NewOAuthHandler,
 	admin.NewOpenAIOAuthHandler,
 	admin.NewGeminiOAuthHandler,
@@ -135,8 +140,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
-	admin.NewSecurityHandler,
-	admin.NewDistributorHandler,
+	admin.NewAdminAPIKeyHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

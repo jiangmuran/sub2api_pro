@@ -1,3 +1,5 @@
+//go:build unit
+
 package service
 
 import (
@@ -13,8 +15,15 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
+// =====================
+// 保留原有测试
+// =====================
+
 func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
-	t.Parallel()
+	// NOTE: This test sets process env; it must not run in parallel.
+	// The built-in Gemini CLI client secret is not embedded in this repository.
+	// Tests set a dummy secret via env to simulate operator-provided configuration.
+	t.Setenv(geminicli.GeminiCLIOAuthClientSecretEnv, "test-built-in-secret")
 
 	type testCase struct {
 		name          string
@@ -625,7 +634,7 @@ func TestGeminiOAuthService_GetOAuthConfig(t *testing.T) {
 			wantEnabled: false,
 		},
 		{
-			name: "仅使用内置 ClientID 但 Secret 非内置（视为自定义）",
+			name: "使用内置 Gemini CLI ClientID（不算自定义）",
 			cfg: &config.Config{
 				Gemini: config.GeminiConfig{
 					OAuth: config.GeminiOAuthConfig{
@@ -634,7 +643,7 @@ func TestGeminiOAuthService_GetOAuthConfig(t *testing.T) {
 					},
 				},
 			},
-			wantEnabled: true,
+			wantEnabled: false,
 		},
 		{
 			name: "自定义 OAuth 客户端（非内置 ID）",

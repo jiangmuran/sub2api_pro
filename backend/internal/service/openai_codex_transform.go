@@ -2,19 +2,7 @@ package service
 
 import (
 	_ "embed"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
-)
-
-const (
-	opencodeCodexHeaderURL = "https://raw.githubusercontent.com/anomalyco/opencode/dev/packages/opencode/src/session/prompt/codex_header.txt"
-	codexCacheTTL          = 15 * time.Minute
 )
 
 //go:embed prompts/codex_cli_instructions.md
@@ -82,12 +70,6 @@ type codexTransformResult struct {
 	PromptCacheKey  string
 }
 
-type opencodeCacheMetadata struct {
-	ETag        string `json:"etag"`
-	LastFetch   string `json:"lastFetch,omitempty"`
-	LastChecked int64  `json:"lastChecked"`
-}
-
 func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTransformResult {
 	result := codexTransformResult{}
 	// 工具续链需求会影响存储策略与 input 过滤逻辑。
@@ -131,14 +113,6 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTran
 			result.Modified = true
 		}
 	}
-	if _, ok := reqBody["service_tier"]; ok {
-		delete(reqBody, "service_tier")
-		result.Modified = true
-	}
-	if _, ok := reqBody["temperature"]; ok {
-		delete(reqBody, "temperature")
-		result.Modified = true
-	}
 
 	if normalizeCodexTools(reqBody) {
 		result.Modified = true
@@ -154,30 +128,10 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTran
 	}
 
 	// 续链场景保留 item_reference 与 id，避免 call_id 上下文丢失。
-	if input, ok := reqBody["input"]; ok {
-		switch v := input.(type) {
-		case []any:
-			v = filterCodexInput(v, needsToolContinuation)
-			reqBody["input"] = v
-			result.Modified = true
-		case map[string]any:
-			reqBody["input"] = []any{v}
-			result.Modified = true
-		case string:
-			reqBody["input"] = []any{map[string]any{"role": "user", "content": v}}
-			result.Modified = true
-		}
-	} else if messages, ok := reqBody["messages"]; ok {
-		switch v := messages.(type) {
-		case []any:
-			reqBody["input"] = v
-			delete(reqBody, "messages")
-			result.Modified = true
-		case map[string]any:
-			reqBody["input"] = []any{v}
-			delete(reqBody, "messages")
-			result.Modified = true
-		}
+	if input, ok := reqBody["input"].([]any); ok {
+		input = filterCodexInput(input, needsToolContinuation)
+		reqBody["input"] = input
+		result.Modified = true
 	}
 
 	return result
@@ -255,54 +209,9 @@ func getNormalizedCodexModel(modelID string) string {
 	return ""
 }
 
-func getOpenCodeCachedPrompt(url, cacheFileName, metaFileName string) string {
-	cacheDir := codexCachePath("")
-	if cacheDir == "" {
-		return ""
-	}
-	cacheFile := filepath.Join(cacheDir, cacheFileName)
-	metaFile := filepath.Join(cacheDir, metaFileName)
-
-	var cachedContent string
-	if content, ok := readFile(cacheFile); ok {
-		cachedContent = content
-	}
-
-	var meta opencodeCacheMetadata
-	if loadJSON(metaFile, &meta) && meta.LastChecked > 0 && cachedContent != "" {
-		if time.Since(time.UnixMilli(meta.LastChecked)) < codexCacheTTL {
-			return cachedContent
-		}
-	}
-
-	content, etag, status, err := fetchWithETag(url, meta.ETag)
-	if err == nil && status == http.StatusNotModified && cachedContent != "" {
-		return cachedContent
-	}
-	if err == nil && status >= 200 && status < 300 && content != "" {
-		_ = writeFile(cacheFile, content)
-		meta = opencodeCacheMetadata{
-			ETag:        etag,
-			LastFetch:   time.Now().UTC().Format(time.RFC3339),
-			LastChecked: time.Now().UnixMilli(),
-		}
-		_ = writeJSON(metaFile, meta)
-		return content
-	}
-
-	return cachedContent
-}
-
 func getOpenCodeCodexHeader() string {
-	// 优先从 opencode 仓库缓存获取指令。
-	opencodeInstructions := getOpenCodeCachedPrompt(opencodeCodexHeaderURL, "opencode-codex-header.txt", "opencode-codex-header-meta.json")
-
-	// 若 opencode 指令可用，直接返回。
-	if opencodeInstructions != "" {
-		return opencodeInstructions
-	}
-
-	// 否则回退使用本地 Codex CLI 指令。
+	// 兼容保留：历史上这里会从 opencode 仓库拉取 codex_header.txt。
+	// 现在我们与 Codex CLI 一致，直接使用仓库内置的 instructions，避免读写缓存与外网依赖。
 	return getCodexCLIInstructions()
 }
 
@@ -320,23 +229,23 @@ func GetCodexCLIInstructions() string {
 }
 
 // applyInstructions 处理 instructions 字段
-// isCodexCLI=true: 仅补充缺失的 instructions（使用 opencode 指令）
-// isCodexCLI=false: 不注入 instructions
+// isCodexCLI=true: 仅补充缺失的 instructions（使用内置 Codex CLI 指令）
+// isCodexCLI=false: 优先使用内置 Codex CLI 指令覆盖
 func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
-	if !isCodexCLI {
-		return false
+	if isCodexCLI {
+		return applyCodexCLIInstructions(reqBody)
 	}
-	return applyCodexCLIInstructions(reqBody)
+	return applyOpenCodeInstructions(reqBody)
 }
 
 // applyCodexCLIInstructions 为 Codex CLI 请求补充缺失的 instructions
-// 仅在 instructions 为空时添加 opencode 指令
+// 仅在 instructions 为空时添加内置 Codex CLI 指令（不依赖 opencode 缓存/回源）
 func applyCodexCLIInstructions(reqBody map[string]any) bool {
 	if !isInstructionsEmpty(reqBody) {
 		return false // 已有有效 instructions，不修改
 	}
 
-	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
+	instructions := strings.TrimSpace(getCodexCLIInstructions())
 	if instructions != "" {
 		reqBody["instructions"] = instructions
 		return true
@@ -345,8 +254,8 @@ func applyCodexCLIInstructions(reqBody map[string]any) bool {
 	return false
 }
 
-// applyOpenCodeInstructions 为非 Codex CLI 请求应用 opencode 指令
-// 优先使用 opencode 指令覆盖
+// applyOpenCodeInstructions 为非 Codex CLI 请求应用内置 Codex CLI 指令（兼容历史函数名）
+// 优先使用内置 Codex CLI 指令覆盖
 func applyOpenCodeInstructions(reqBody map[string]any) bool {
 	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
 	existingInstructions, _ := reqBody["instructions"].(string)
@@ -527,86 +436,4 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 	}
 
 	return modified
-}
-
-func codexCachePath(filename string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	cacheDir := filepath.Join(home, ".opencode", "cache")
-	if filename == "" {
-		return cacheDir
-	}
-	return filepath.Join(cacheDir, filename)
-}
-
-func readFile(path string) (string, bool) {
-	if path == "" {
-		return "", false
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", false
-	}
-	return string(data), true
-}
-
-func writeFile(path, content string) error {
-	if path == "" {
-		return fmt.Errorf("empty cache path")
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0o644)
-}
-
-func loadJSON(path string, target any) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	if err := json.Unmarshal(data, target); err != nil {
-		return false
-	}
-	return true
-}
-
-func writeJSON(path string, value any) error {
-	if path == "" {
-		return fmt.Errorf("empty json path")
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-func fetchWithETag(url, etag string) (string, string, int, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return "", "", 0, err
-	}
-	req.Header.Set("User-Agent", "sub2api-codex")
-	if etag != "" {
-		req.Header.Set("If-None-Match", etag)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", 0, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", "", resp.StatusCode, err
-	}
-	return string(body), resp.Header.Get("etag"), resp.StatusCode, nil
 }

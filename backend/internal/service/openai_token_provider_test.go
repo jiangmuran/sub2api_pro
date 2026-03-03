@@ -477,7 +477,7 @@ func TestOpenAITokenProvider_WrongPlatform(t *testing.T) {
 
 	token, err := provider.GetAccessToken(context.Background(), account)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not an openai oauth account")
+	require.Contains(t, err.Error(), "not an openai/sora oauth account")
 	require.Empty(t, token)
 }
 
@@ -491,7 +491,7 @@ func TestOpenAITokenProvider_WrongAccountType(t *testing.T) {
 
 	token, err := provider.GetAccessToken(context.Background(), account)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "not an openai oauth account")
+	require.Contains(t, err.Error(), "not an openai/sora oauth account")
 	require.Empty(t, token)
 }
 

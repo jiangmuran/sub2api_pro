@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
 // RateLimitService 处理限流和过载状态管理
@@ -28,11 +29,6 @@ type RateLimitService struct {
 	opsRepo               OpsRepository
 	usageCacheMu          sync.RWMutex
 	usageCache            map[int64]*geminiUsageCacheEntry
-	autoRecoverMu         sync.Mutex
-	autoRecoverBlockedTil time.Time
-	autoRecoverRunning    bool
-	invalidBearerRuleMu   sync.Mutex
-	invalidBearerRuleID   int64
 	openaiOAuthRuleMu     sync.Mutex
 	openaiOAuthRuleID     int64
 }
@@ -41,6 +37,10 @@ type geminiUsageCacheEntry struct {
 	windowStart time.Time
 	cachedAt    time.Time
 	totals      GeminiUsageTotals
+}
+
+type geminiUsageTotalsBatchProvider interface {
+	GetGeminiUsageTotalsBatch(ctx context.Context, accountIDs []int64, startTime, endTime time.Time) (map[int64]GeminiUsageTotals, error)
 }
 
 const geminiPrecheckCacheTTL = time.Minute
@@ -67,18 +67,19 @@ func (s *RateLimitService) SetSettingService(settingService *SettingService) {
 	s.settingService = settingService
 }
 
+// SetOpenAIOAuthService sets OpenAI OAuth service (optional dependency).
+func (s *RateLimitService) SetOpenAIOAuthService(service *OpenAIOAuthService) {
+	s.openaiOAuthService = service
+}
+
+// SetOpsRepository sets ops repository for alert events (optional dependency).
+func (s *RateLimitService) SetOpsRepository(opsRepo OpsRepository) {
+	s.opsRepo = opsRepo
+}
+
 // SetTokenCacheInvalidator 设置 token 缓存清理器（可选依赖）
 func (s *RateLimitService) SetTokenCacheInvalidator(invalidator TokenCacheInvalidator) {
 	s.tokenCacheInvalidator = invalidator
-}
-
-// SetOpenAIOAuthService sets OpenAI OAuth service for pool auto-recovery (optional dependency).
-func (s *RateLimitService) SetOpenAIOAuthService(openaiOAuthService *OpenAIOAuthService) {
-	s.openaiOAuthService = openaiOAuthService
-}
-
-func (s *RateLimitService) SetOpsRepository(opsRepo OpsRepository) {
-	s.opsRepo = opsRepo
 }
 
 // ErrorPolicyResult 表示错误策略检查的结果
@@ -113,24 +114,9 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 	// apikey 类型账号：检查自定义错误码配置
 	// 如果启用且错误码不在列表中，则不处理（不停止调度、不标记限流/过载）
 	customErrorCodesEnabled := account.IsCustomErrorCodesEnabled()
-
-	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
-	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
-	if upstreamMsg != "" {
-		upstreamMsg = truncateForLog([]byte(upstreamMsg), 512)
-	}
-
-	orgDisabled := false
-	if statusCode == 400 {
-		orgDisabled = strings.Contains(strings.ToLower(upstreamMsg), "organization has been disabled")
-	}
-
-	if customErrorCodesEnabled && !account.ShouldHandleErrorCode(statusCode) {
-		// 仍然处理关键鉴权/付费错误，避免错误配置导致账号被持续调度
-		if statusCode != 401 && statusCode != 402 && statusCode != 403 && !orgDisabled {
-			slog.Info("account_error_code_skipped", "account_id", account.ID, "status_code", statusCode)
-			return false
-		}
+	if !account.ShouldHandleErrorCode(statusCode) {
+		slog.Info("account_error_code_skipped", "account_id", account.ID, "status_code", statusCode)
+		return false
 	}
 
 	// 先尝试临时不可调度规则（401除外）
@@ -141,10 +127,16 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		}
 	}
 
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
+	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	if upstreamMsg != "" {
+		upstreamMsg = truncateForLog([]byte(upstreamMsg), 512)
+	}
+
 	switch statusCode {
 	case 400:
 		// 只有当错误信息包含 "organization has been disabled" 时才禁用
-		if orgDisabled {
+		if strings.Contains(strings.ToLower(upstreamMsg), "organization has been disabled") {
 			msg := "Organization disabled (400): " + upstreamMsg
 			s.handleAuthError(ctx, account, msg)
 			shouldDisable = true
@@ -178,13 +170,29 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 			} else {
 				slog.Info("oauth_401_force_refresh_set", "account_id", account.ID, "platform", account.Platform)
 			}
+			// 3. 临时不可调度，替代 SetError（保持 status=active 让刷新服务能拾取）
+			msg := "Authentication failed (401): invalid or expired credentials"
+			if upstreamMsg != "" {
+				msg = "OAuth 401: " + upstreamMsg
+			}
+			cooldownMinutes := s.cfg.RateLimit.OAuth401CooldownMinutes
+			if cooldownMinutes <= 0 {
+				cooldownMinutes = 10
+			}
+			until := time.Now().Add(time.Duration(cooldownMinutes) * time.Minute)
+			if err := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, msg); err != nil {
+				slog.Warn("oauth_401_set_temp_unschedulable_failed", "account_id", account.ID, "error", err)
+			}
+			shouldDisable = true
+		} else {
+			// 非 OAuth 账号（APIKey）：保持原有 SetError 行为
+			msg := "Authentication failed (401): invalid or expired credentials"
+			if upstreamMsg != "" {
+				msg = "Authentication failed (401): " + upstreamMsg
+			}
+			s.handleAuthError(ctx, account, msg)
+			shouldDisable = true
 		}
-		msg := "Authentication failed (401): invalid or expired credentials"
-		if upstreamMsg != "" {
-			msg = "Authentication failed (401): " + upstreamMsg
-		}
-		s.handleAuthError(ctx, account, msg)
-		shouldDisable = true
 	case 402:
 		// 支付要求：余额不足或计费问题，停止调度
 		msg := "Payment required (402): insufficient balance or billing issue"
@@ -199,6 +207,17 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		if upstreamMsg != "" {
 			msg = "Access forbidden (403): " + upstreamMsg
 		}
+		logger.LegacyPrintf(
+			"service.ratelimit",
+			"[HandleUpstreamErrorRaw] account_id=%d platform=%s type=%s status=403 request_id=%s cf_ray=%s upstream_msg=%s raw_body=%s",
+			account.ID,
+			account.Platform,
+			account.Type,
+			strings.TrimSpace(headers.Get("x-request-id")),
+			strings.TrimSpace(headers.Get("cf-ray")),
+			upstreamMsg,
+			truncateForLog(responseBody, 1024),
+		)
 		s.handleAuthError(ctx, account, msg)
 		shouldDisable = true
 	case 429:
@@ -224,34 +243,6 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 	}
 
 	return shouldDisable
-}
-
-func (s *RateLimitService) tryTriggerOpenAIInvalidBearerAutoRecover() {
-	if s == nil {
-		return
-	}
-	if s.openaiOAuthService == nil {
-		return
-	}
-	enabled, _ := s.getOpenAIInvalidBearerAutoRecoverConfig()
-	if !enabled {
-		return
-	}
-
-	now := time.Now()
-	s.autoRecoverMu.Lock()
-	if s.autoRecoverRunning {
-		s.autoRecoverMu.Unlock()
-		return
-	}
-	if now.Before(s.autoRecoverBlockedTil) {
-		s.autoRecoverMu.Unlock()
-		return
-	}
-	s.autoRecoverRunning = true
-	s.autoRecoverMu.Unlock()
-
-	go s.runOpenAIInvalidBearerAutoRecover()
 }
 
 func (s *RateLimitService) handleOpenAIOAuthInvalidBearer(ctx context.Context, account *Account, msg string) {
@@ -319,9 +310,11 @@ func (s *RateLimitService) refreshOpenAIOAuthAccount(ctx context.Context, accoun
 	account, err := s.accountRepo.GetByID(ctx, accountID)
 	if err != nil || account == nil {
 		slog.Warn("openai_oauth_refresh_account_not_found", "account_id", accountID, "error", err)
+		s.rollbackOpenAIOAuthRefreshState(ctx, accountID, fmt.Errorf("account not found"))
 		return
 	}
 	if !account.IsOpenAIOAuth() {
+		s.rollbackOpenAIOAuthRefreshState(ctx, accountID, fmt.Errorf("account not openai oauth"))
 		return
 	}
 
@@ -338,7 +331,7 @@ func (s *RateLimitService) refreshOpenAIOAuthAccount(ctx context.Context, accoun
 		}
 	}
 	account.Credentials = newCredentials
-	if account.Status == StatusError && isInvalidBearerTokenErrorMessage(account.ErrorMessage) {
+	if account.Status == StatusError && strings.Contains(strings.ToLower(account.ErrorMessage), "invalid bearer token") {
 		account.Status = StatusActive
 		account.ErrorMessage = ""
 	}
@@ -349,6 +342,7 @@ func (s *RateLimitService) refreshOpenAIOAuthAccount(ctx context.Context, accoun
 	account.OAuthLastError = ""
 	if err := s.accountRepo.Update(ctx, account); err != nil {
 		slog.Warn("openai_oauth_refresh_update_failed", "account_id", account.ID, "error", err)
+		s.rollbackOpenAIOAuthRefreshState(ctx, account.ID, err)
 		return
 	}
 	if s.tokenCacheInvalidator != nil {
@@ -369,6 +363,23 @@ func (s *RateLimitService) refreshOpenAIOAuthAccount(ctx context.Context, accoun
 			"error_signature": "openai_oauth_refresh",
 		},
 	)
+}
+
+func (s *RateLimitService) rollbackOpenAIOAuthRefreshState(ctx context.Context, accountID int64, err error) {
+	if s == nil || s.accountRepo == nil || err == nil {
+		return
+	}
+	status := OpenAIOAuthStatusNeedsRefresh
+	next := time.Now()
+	msg := "OpenAI OAuth refresh save failed: " + err.Error()
+	update := OpenAIOAuthStateUpdate{
+		Status:        &status,
+		NextRefreshAt: &next,
+		LastError:     &msg,
+	}
+	if upErr := s.accountRepo.UpdateOpenAIOAuthState(ctx, accountID, update); upErr != nil {
+		slog.Warn("openai_oauth_refresh_rollback_failed", "account_id", accountID, "error", upErr)
+	}
 }
 
 func (s *RateLimitService) handleOpenAIOAuthRefreshFailure(ctx context.Context, account *Account, err error) {
@@ -434,182 +445,8 @@ func (s *RateLimitService) handleOpenAIOAuthRefreshFailure(ctx context.Context, 
 	)
 }
 
-func (s *RateLimitService) runOpenAIInvalidBearerAutoRecover() {
-	ctx := context.Background()
-	start := time.Now()
-	defer func() {
-		s.autoRecoverMu.Lock()
-		s.autoRecoverRunning = false
-		s.autoRecoverMu.Unlock()
-	}()
-
-	accounts, err := s.listOpenAIOAuthAccounts(ctx)
-	if err != nil {
-		slog.Warn("openai_invalid_bearer_auto_recover_list_failed", "error", err)
-		return
-	}
-	if len(accounts) == 0 {
-		return
-	}
-
-	invalidCount := 0
-	for i := range accounts {
-		acc := &accounts[i]
-		if acc.Status == StatusError && isInvalidBearerTokenErrorMessage(acc.ErrorMessage) {
-			invalidCount++
-		}
-	}
-	if !shouldTriggerInvalidBearerRecover(invalidCount, len(accounts)) {
-		return
-	}
-
-	_, cooldown := s.getOpenAIInvalidBearerAutoRecoverConfig()
-	s.autoRecoverMu.Lock()
-	s.autoRecoverBlockedTil = time.Now().Add(cooldown)
-	s.autoRecoverMu.Unlock()
-
-	severityRatio := calcInvalidBearerRatio(invalidCount, len(accounts))
-	s.emitOpenAIInvalidBearerAlert(
-		ctx,
-		"P0",
-		"OpenAI invalid bearer token surge",
-		buildInvalidBearerAlertDescription(invalidCount, len(accounts), severityRatio, 0, 0, 0),
-		map[string]any{
-			"platform":        PlatformOpenAI,
-			"invalid_count":   invalidCount,
-			"total_count":     len(accounts),
-			"invalid_ratio":   severityRatio,
-			"event":           "auto_recover_start",
-			"error_signature": "invalid_bearer_token",
-		},
-	)
-
-	slog.Warn("openai_invalid_bearer_auto_recover_started", "accounts", len(accounts), "invalid", invalidCount)
-	refreshed := 0
-	failed := 0
-	for i := range accounts {
-		if err := s.refreshAndResetOpenAIOAuthAccount(ctx, &accounts[i]); err != nil {
-			failed++
-			slog.Warn(
-				"openai_invalid_bearer_auto_recover_account_failed",
-				"account_id", accounts[i].ID,
-				"account_name", accounts[i].Name,
-				"error", err,
-			)
-			continue
-		}
-		refreshed++
-	}
-
-	duration := time.Since(start)
-	if failed == 0 {
-		s.emitOpenAIInvalidBearerAlert(
-			ctx,
-			"P1",
-			"OpenAI invalid bearer recovered",
-			buildInvalidBearerAlertDescription(invalidCount, len(accounts), severityRatio, refreshed, failed, duration),
-			map[string]any{
-				"platform":        PlatformOpenAI,
-				"invalid_count":   invalidCount,
-				"total_count":     len(accounts),
-				"invalid_ratio":   severityRatio,
-				"refreshed":       refreshed,
-				"failed":          failed,
-				"duration_ms":     duration.Milliseconds(),
-				"event":           "auto_recover_success",
-				"error_signature": "invalid_bearer_token",
-			},
-		)
-	} else {
-		s.emitOpenAIInvalidBearerAlert(
-			ctx,
-			"P0",
-			"OpenAI invalid bearer recovery failed",
-			buildInvalidBearerAlertDescription(invalidCount, len(accounts), severityRatio, refreshed, failed, duration),
-			map[string]any{
-				"platform":        PlatformOpenAI,
-				"invalid_count":   invalidCount,
-				"total_count":     len(accounts),
-				"invalid_ratio":   severityRatio,
-				"refreshed":       refreshed,
-				"failed":          failed,
-				"duration_ms":     duration.Milliseconds(),
-				"event":           "auto_recover_failed",
-				"error_signature": "invalid_bearer_token",
-			},
-		)
-	}
-
-	slog.Warn(
-		"openai_invalid_bearer_auto_recover_finished",
-		"total", len(accounts),
-		"refreshed", refreshed,
-		"failed", failed,
-	)
-}
-
-func shouldTriggerInvalidBearerRecover(invalidCount, totalCount int) bool {
-	if totalCount == 0 {
-		return false
-	}
-	if invalidCount == 0 {
-		return false
-	}
-	return calcInvalidBearerRatio(invalidCount, totalCount) >= 0.9
-}
-
-func calcInvalidBearerRatio(invalidCount, totalCount int) float64 {
-	if totalCount == 0 {
-		return 0
-	}
-	return float64(invalidCount) / float64(totalCount)
-}
-
-func buildInvalidBearerAlertDescription(invalidCount, totalCount int, ratio float64, refreshed, failed int, duration time.Duration) string {
-	if totalCount == 0 {
-		return "No OpenAI OAuth accounts found"
-	}
-	if refreshed == 0 && failed == 0 {
-		return "Invalid bearer token detected on " + strconv.Itoa(invalidCount) + "/" + strconv.Itoa(totalCount) +
-			" accounts (ratio: " + strconv.FormatFloat(ratio*100, 'f', 1, 64) + "%)"
-	}
-	return "Invalid bearer token recovery: " +
-		"invalid=" + strconv.Itoa(invalidCount) + "/" + strconv.Itoa(totalCount) +
-		", refreshed=" + strconv.Itoa(refreshed) +
-		", failed=" + strconv.Itoa(failed) +
-		", duration=" + duration.Truncate(time.Millisecond).String()
-}
-
-func (s *RateLimitService) emitOpenAIInvalidBearerAlert(ctx context.Context, severity, title, description string, dimensions map[string]any) {
-	if s.opsRepo == nil {
-		return
-	}
-	if !s.isOpsMonitoringEnabled(ctx) {
-		return
-	}
-	ruleID := s.getInvalidBearerAlertRuleID(ctx)
-	if ruleID == 0 {
-		return
-	}
-	event := &OpsAlertEvent{
-		RuleID:      ruleID,
-		Severity:    severity,
-		Status:      OpsAlertStatusFiring,
-		Title:       title,
-		Description: description,
-		Dimensions:  dimensions,
-		FiredAt:     time.Now(),
-	}
-	if _, err := s.opsRepo.CreateAlertEvent(ctx, event); err != nil {
-		slog.Warn("openai_invalid_bearer_alert_create_failed", "error", err)
-	}
-}
-
 func (s *RateLimitService) emitOpenAIOAuthRefreshAlert(ctx context.Context, severity, title, description string, dimensions map[string]any) {
 	if s.opsRepo == nil {
-		return
-	}
-	if !s.isOpsMonitoringEnabled(ctx) {
 		return
 	}
 	ruleID := s.getOpenAIOAuthRefreshAlertRuleID(ctx)
@@ -630,93 +467,6 @@ func (s *RateLimitService) emitOpenAIOAuthRefreshAlert(ctx context.Context, seve
 	}
 }
 
-func (s *RateLimitService) isOpsMonitoringEnabled(ctx context.Context) bool {
-	if s.cfg != nil && !s.cfg.Ops.Enabled {
-		return false
-	}
-	if s.settingService == nil {
-		return true
-	}
-	settings, err := s.settingService.GetAllSettings(ctx)
-	if err != nil || settings == nil {
-		return true
-	}
-	return settings.OpsMonitoringEnabled
-}
-
-func (s *RateLimitService) getInvalidBearerAlertRuleID(ctx context.Context) int64 {
-	if s.opsRepo == nil {
-		return 0
-	}
-	s.invalidBearerRuleMu.Lock()
-	defer s.invalidBearerRuleMu.Unlock()
-	if s.invalidBearerRuleID > 0 {
-		return s.invalidBearerRuleID
-	}
-
-	const ruleNameCN = "OpenAI 失效令牌自动恢复"
-	const ruleNameEN = "OpenAI Invalid Bearer Auto Recovery"
-	rules, err := s.opsRepo.ListAlertRules(ctx)
-	if err == nil {
-		for _, rule := range rules {
-			if rule == nil {
-				continue
-			}
-			if strings.EqualFold(rule.Name, ruleNameCN) {
-				s.invalidBearerRuleID = rule.ID
-				return rule.ID
-			}
-			if strings.EqualFold(rule.Name, ruleNameEN) {
-				if s.updateInvalidBearerRuleLocalization(ctx, rule, ruleNameCN) {
-					s.invalidBearerRuleID = rule.ID
-					return rule.ID
-				}
-				s.invalidBearerRuleID = rule.ID
-				return rule.ID
-			}
-		}
-	} else {
-		slog.Warn("openai_invalid_bearer_rule_list_failed", "error", err)
-	}
-
-	newRule := &OpsAlertRule{
-		Name:             ruleNameCN,
-		Description:      "OpenAI 失效令牌占比>=90%时触发自动恢复并记录结果。",
-		Enabled:          true,
-		Severity:         "P0",
-		MetricType:       "custom_event",
-		Operator:         "gte",
-		Threshold:        1,
-		WindowMinutes:    1,
-		SustainedMinutes: 1,
-		CooldownMinutes:  1,
-		NotifyEmail:      true,
-		Filters: map[string]any{
-			"platform":        PlatformOpenAI,
-			"error_signature": "invalid_bearer_token",
-		},
-	}
-	created, err := s.opsRepo.CreateAlertRule(ctx, newRule)
-	if err != nil {
-		slog.Warn("openai_invalid_bearer_rule_create_failed", "error", err)
-		if rules, listErr := s.opsRepo.ListAlertRules(ctx); listErr == nil {
-			for _, rule := range rules {
-				if rule == nil {
-					continue
-				}
-				if strings.EqualFold(rule.Name, ruleNameCN) || strings.EqualFold(rule.Name, ruleNameEN) {
-					s.invalidBearerRuleID = rule.ID
-					return rule.ID
-				}
-			}
-		}
-		return 0
-	}
-
-	s.invalidBearerRuleID = created.ID
-	return created.ID
-}
-
 func (s *RateLimitService) getOpenAIOAuthRefreshAlertRuleID(ctx context.Context) int64 {
 	if s.opsRepo == nil {
 		return 0
@@ -735,11 +485,7 @@ func (s *RateLimitService) getOpenAIOAuthRefreshAlertRuleID(ctx context.Context)
 			if rule == nil {
 				continue
 			}
-			if strings.EqualFold(rule.Name, ruleNameCN) {
-				s.openaiOAuthRuleID = rule.ID
-				return rule.ID
-			}
-			if strings.EqualFold(rule.Name, ruleNameEN) {
+			if strings.EqualFold(rule.Name, ruleNameCN) || strings.EqualFold(rule.Name, ruleNameEN) {
 				s.openaiOAuthRuleID = rule.ID
 				return rule.ID
 			}
@@ -786,107 +532,6 @@ func (s *RateLimitService) getOpenAIOAuthRefreshAlertRuleID(ctx context.Context)
 	return created.ID
 }
 
-func (s *RateLimitService) updateInvalidBearerRuleLocalization(ctx context.Context, rule *OpsAlertRule, newName string) bool {
-	if s.opsRepo == nil || rule == nil {
-		return false
-	}
-	updated := &OpsAlertRule{
-		ID:               rule.ID,
-		Name:             newName,
-		Description:      rule.Description,
-		Enabled:          rule.Enabled,
-		Severity:         rule.Severity,
-		MetricType:       rule.MetricType,
-		Operator:         rule.Operator,
-		Threshold:        rule.Threshold,
-		WindowMinutes:    rule.WindowMinutes,
-		SustainedMinutes: rule.SustainedMinutes,
-		CooldownMinutes:  rule.CooldownMinutes,
-		NotifyEmail:      rule.NotifyEmail,
-		Filters:          rule.Filters,
-	}
-	if strings.TrimSpace(updated.Description) == "" {
-		updated.Description = "OpenAI 失效令牌占比>=90%时触发自动恢复并记录结果。"
-	}
-	if _, err := s.opsRepo.UpdateAlertRule(ctx, updated); err != nil {
-		slog.Warn("openai_invalid_bearer_rule_update_failed", "error", err)
-		return false
-	}
-	return true
-}
-
-func (s *RateLimitService) getOpenAIInvalidBearerAutoRecoverConfig() (bool, time.Duration) {
-	enabled := true
-	cooldownMinutes := 5
-	if s.settingService != nil {
-		settings, err := s.settingService.GetAllSettings(context.Background())
-		if err == nil && settings != nil {
-			enabled = settings.OpenAIInvalidBearerAutoRecoverEnabled
-			cooldownMinutes = settings.OpenAIInvalidBearerAutoRecoverCooldownMinutes
-		}
-	}
-	if cooldownMinutes < 1 {
-		cooldownMinutes = 1
-	}
-	if cooldownMinutes > 1440 {
-		cooldownMinutes = 1440
-	}
-	return enabled, time.Duration(cooldownMinutes) * time.Minute
-}
-
-func (s *RateLimitService) listOpenAIOAuthAccounts(ctx context.Context) ([]Account, error) {
-	params := pagination.PaginationParams{Page: 1, PageSize: 100}
-	all := make([]Account, 0, 32)
-	for {
-		accounts, pg, err := s.accountRepo.ListWithFilters(ctx, params, PlatformOpenAI, AccountTypeOAuth, "", "", 0)
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, accounts...)
-		if pg == nil || params.Page >= pg.Pages || len(accounts) == 0 {
-			break
-		}
-		params.Page++
-	}
-	return all, nil
-}
-
-func (s *RateLimitService) refreshAndResetOpenAIOAuthAccount(ctx context.Context, account *Account) error {
-	if account == nil {
-		return nil
-	}
-	tokenInfo, err := s.openaiOAuthService.RefreshAccountToken(ctx, account)
-	if err != nil {
-		return err
-	}
-
-	newCredentials := s.openaiOAuthService.BuildAccountCredentials(tokenInfo)
-	for k, v := range account.Credentials {
-		if _, exists := newCredentials[k]; !exists {
-			newCredentials[k] = v
-		}
-	}
-	account.Credentials = newCredentials
-	if err := s.accountRepo.Update(ctx, account); err != nil {
-		return err
-	}
-	if err := s.accountRepo.ClearError(ctx, account.ID); err != nil {
-		return err
-	}
-	if s.tokenCacheInvalidator != nil {
-		_ = s.tokenCacheInvalidator.InvalidateToken(ctx, account)
-	}
-	return nil
-}
-
-func isInvalidBearerTokenErrorMessage(msg string) bool {
-	if strings.TrimSpace(msg) == "" {
-		return false
-	}
-	norm := strings.ToLower(msg)
-	return strings.Contains(norm, "invalid bearer token")
-}
-
 // PreCheckUsage proactively checks local quota before dispatching a request.
 // Returns false when the account should be skipped.
 func (s *RateLimitService) PreCheckUsage(ctx context.Context, account *Account, requestedModel string) (bool, error) {
@@ -923,7 +568,7 @@ func (s *RateLimitService) PreCheckUsage(ctx context.Context, account *Account, 
 			start := geminiDailyWindowStart(now)
 			totals, ok := s.getGeminiUsageTotals(account.ID, start, now)
 			if !ok {
-				stats, err := s.usageRepo.GetModelStatsWithFilters(ctx, start, now, 0, 0, account.ID, 0, nil, nil)
+				stats, err := s.usageRepo.GetModelStatsWithFilters(ctx, start, now, 0, 0, account.ID, 0, nil, nil, nil)
 				if err != nil {
 					return true, err
 				}
@@ -970,7 +615,7 @@ func (s *RateLimitService) PreCheckUsage(ctx context.Context, account *Account, 
 
 		if limit > 0 {
 			start := now.Truncate(time.Minute)
-			stats, err := s.usageRepo.GetModelStatsWithFilters(ctx, start, now, 0, 0, account.ID, 0, nil, nil)
+			stats, err := s.usageRepo.GetModelStatsWithFilters(ctx, start, now, 0, 0, account.ID, 0, nil, nil, nil)
 			if err != nil {
 				return true, err
 			}
@@ -998,6 +643,218 @@ func (s *RateLimitService) PreCheckUsage(ctx context.Context, account *Account, 
 	}
 
 	return true, nil
+}
+
+// PreCheckUsageBatch performs quota precheck for multiple accounts in one request.
+// Returned map value=false means the account should be skipped.
+func (s *RateLimitService) PreCheckUsageBatch(ctx context.Context, accounts []*Account, requestedModel string) (map[int64]bool, error) {
+	result := make(map[int64]bool, len(accounts))
+	for _, account := range accounts {
+		if account == nil {
+			continue
+		}
+		result[account.ID] = true
+	}
+
+	if len(accounts) == 0 || requestedModel == "" {
+		return result, nil
+	}
+	if s.usageRepo == nil || s.geminiQuotaService == nil {
+		return result, nil
+	}
+
+	modelClass := geminiModelClassFromName(requestedModel)
+	now := time.Now()
+	dailyStart := geminiDailyWindowStart(now)
+	minuteStart := now.Truncate(time.Minute)
+
+	type quotaAccount struct {
+		account *Account
+		quota   GeminiQuota
+	}
+	quotaAccounts := make([]quotaAccount, 0, len(accounts))
+	for _, account := range accounts {
+		if account == nil || account.Platform != PlatformGemini {
+			continue
+		}
+		quota, ok := s.geminiQuotaService.QuotaForAccount(ctx, account)
+		if !ok {
+			continue
+		}
+		quotaAccounts = append(quotaAccounts, quotaAccount{
+			account: account,
+			quota:   quota,
+		})
+	}
+	if len(quotaAccounts) == 0 {
+		return result, nil
+	}
+
+	// 1) Daily precheck (cached + batch DB fallback)
+	dailyTotalsByID := make(map[int64]GeminiUsageTotals, len(quotaAccounts))
+	dailyMissIDs := make([]int64, 0, len(quotaAccounts))
+	for _, item := range quotaAccounts {
+		limit := geminiDailyLimit(item.quota, modelClass)
+		if limit <= 0 {
+			continue
+		}
+		accountID := item.account.ID
+		if totals, ok := s.getGeminiUsageTotals(accountID, dailyStart, now); ok {
+			dailyTotalsByID[accountID] = totals
+			continue
+		}
+		dailyMissIDs = append(dailyMissIDs, accountID)
+	}
+	if len(dailyMissIDs) > 0 {
+		totalsBatch, err := s.getGeminiUsageTotalsBatch(ctx, dailyMissIDs, dailyStart, now)
+		if err != nil {
+			return result, err
+		}
+		for _, accountID := range dailyMissIDs {
+			totals := totalsBatch[accountID]
+			dailyTotalsByID[accountID] = totals
+			s.setGeminiUsageTotals(accountID, dailyStart, now, totals)
+		}
+	}
+	for _, item := range quotaAccounts {
+		limit := geminiDailyLimit(item.quota, modelClass)
+		if limit <= 0 {
+			continue
+		}
+		accountID := item.account.ID
+		used := geminiUsedRequests(item.quota, modelClass, dailyTotalsByID[accountID], true)
+		if used >= limit {
+			resetAt := geminiDailyResetTime(now)
+			slog.Info("gemini_precheck_daily_quota_reached_batch", "account_id", accountID, "used", used, "limit", limit, "reset_at", resetAt)
+			result[accountID] = false
+		}
+	}
+
+	// 2) Minute precheck (batch DB)
+	minuteIDs := make([]int64, 0, len(quotaAccounts))
+	for _, item := range quotaAccounts {
+		accountID := item.account.ID
+		if !result[accountID] {
+			continue
+		}
+		if geminiMinuteLimit(item.quota, modelClass) <= 0 {
+			continue
+		}
+		minuteIDs = append(minuteIDs, accountID)
+	}
+	if len(minuteIDs) == 0 {
+		return result, nil
+	}
+
+	minuteTotalsByID, err := s.getGeminiUsageTotalsBatch(ctx, minuteIDs, minuteStart, now)
+	if err != nil {
+		return result, err
+	}
+	for _, item := range quotaAccounts {
+		accountID := item.account.ID
+		if !result[accountID] {
+			continue
+		}
+
+		limit := geminiMinuteLimit(item.quota, modelClass)
+		if limit <= 0 {
+			continue
+		}
+
+		used := geminiUsedRequests(item.quota, modelClass, minuteTotalsByID[accountID], false)
+		if used >= limit {
+			resetAt := minuteStart.Add(time.Minute)
+			slog.Info("gemini_precheck_minute_quota_reached_batch", "account_id", accountID, "used", used, "limit", limit, "reset_at", resetAt)
+			result[accountID] = false
+		}
+	}
+
+	return result, nil
+}
+
+func (s *RateLimitService) getGeminiUsageTotalsBatch(ctx context.Context, accountIDs []int64, start, end time.Time) (map[int64]GeminiUsageTotals, error) {
+	result := make(map[int64]GeminiUsageTotals, len(accountIDs))
+	if len(accountIDs) == 0 {
+		return result, nil
+	}
+
+	ids := make([]int64, 0, len(accountIDs))
+	seen := make(map[int64]struct{}, len(accountIDs))
+	for _, accountID := range accountIDs {
+		if accountID <= 0 {
+			continue
+		}
+		if _, ok := seen[accountID]; ok {
+			continue
+		}
+		seen[accountID] = struct{}{}
+		ids = append(ids, accountID)
+	}
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	if batchReader, ok := s.usageRepo.(geminiUsageTotalsBatchProvider); ok {
+		stats, err := batchReader.GetGeminiUsageTotalsBatch(ctx, ids, start, end)
+		if err != nil {
+			return nil, err
+		}
+		for _, accountID := range ids {
+			result[accountID] = stats[accountID]
+		}
+		return result, nil
+	}
+
+	for _, accountID := range ids {
+		stats, err := s.usageRepo.GetModelStatsWithFilters(ctx, start, end, 0, 0, accountID, 0, nil, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		result[accountID] = geminiAggregateUsage(stats)
+	}
+	return result, nil
+}
+
+func geminiDailyLimit(quota GeminiQuota, modelClass geminiModelClass) int64 {
+	if quota.SharedRPD > 0 {
+		return quota.SharedRPD
+	}
+	switch modelClass {
+	case geminiModelFlash:
+		return quota.FlashRPD
+	default:
+		return quota.ProRPD
+	}
+}
+
+func geminiMinuteLimit(quota GeminiQuota, modelClass geminiModelClass) int64 {
+	if quota.SharedRPM > 0 {
+		return quota.SharedRPM
+	}
+	switch modelClass {
+	case geminiModelFlash:
+		return quota.FlashRPM
+	default:
+		return quota.ProRPM
+	}
+}
+
+func geminiUsedRequests(quota GeminiQuota, modelClass geminiModelClass, totals GeminiUsageTotals, daily bool) int64 {
+	if daily {
+		if quota.SharedRPD > 0 {
+			return totals.ProRequests + totals.FlashRequests
+		}
+	} else {
+		if quota.SharedRPM > 0 {
+			return totals.ProRequests + totals.FlashRequests
+		}
+	}
+	switch modelClass {
+	case geminiModelFlash:
+		return totals.FlashRequests
+	default:
+		return totals.ProRequests
+	}
 }
 
 func (s *RateLimitService) getGeminiUsageTotals(accountID int64, windowStart, now time.Time) (GeminiUsageTotals, bool) {

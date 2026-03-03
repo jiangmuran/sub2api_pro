@@ -209,6 +209,9 @@ func (s *APIKeyService) snapshotFromAPIKey(apiKey *APIKey) *APIKeyAuthSnapshot {
 		Quota:       apiKey.Quota,
 		QuotaUsed:   apiKey.QuotaUsed,
 		ExpiresAt:   apiKey.ExpiresAt,
+		RateLimit5h: apiKey.RateLimit5h,
+		RateLimit1d: apiKey.RateLimit1d,
+		RateLimit7d: apiKey.RateLimit7d,
 		User: APIKeyAuthUserSnapshot{
 			ID:          apiKey.User.ID,
 			Status:      apiKey.User.Status,
@@ -231,6 +234,10 @@ func (s *APIKeyService) snapshotFromAPIKey(apiKey *APIKey) *APIKeyAuthSnapshot {
 			ImagePrice1K:                    apiKey.Group.ImagePrice1K,
 			ImagePrice2K:                    apiKey.Group.ImagePrice2K,
 			ImagePrice4K:                    apiKey.Group.ImagePrice4K,
+			SoraImagePrice360:               apiKey.Group.SoraImagePrice360,
+			SoraImagePrice540:               apiKey.Group.SoraImagePrice540,
+			SoraVideoPricePerRequest:        apiKey.Group.SoraVideoPricePerRequest,
+			SoraVideoPricePerRequestHD:      apiKey.Group.SoraVideoPricePerRequestHD,
 			ClaudeCodeOnly:                  apiKey.Group.ClaudeCodeOnly,
 			FallbackGroupID:                 apiKey.Group.FallbackGroupID,
 			FallbackGroupIDOnInvalidRequest: apiKey.Group.FallbackGroupIDOnInvalidRequest,
@@ -258,6 +265,9 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		Quota:       snapshot.Quota,
 		QuotaUsed:   snapshot.QuotaUsed,
 		ExpiresAt:   snapshot.ExpiresAt,
+		RateLimit5h: snapshot.RateLimit5h,
+		RateLimit1d: snapshot.RateLimit1d,
+		RateLimit7d: snapshot.RateLimit7d,
 		User: &User{
 			ID:          snapshot.User.ID,
 			Status:      snapshot.User.Status,
@@ -281,6 +291,10 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			ImagePrice1K:                    snapshot.Group.ImagePrice1K,
 			ImagePrice2K:                    snapshot.Group.ImagePrice2K,
 			ImagePrice4K:                    snapshot.Group.ImagePrice4K,
+			SoraImagePrice360:               snapshot.Group.SoraImagePrice360,
+			SoraImagePrice540:               snapshot.Group.SoraImagePrice540,
+			SoraVideoPricePerRequest:        snapshot.Group.SoraVideoPricePerRequest,
+			SoraVideoPricePerRequestHD:      snapshot.Group.SoraVideoPricePerRequestHD,
 			ClaudeCodeOnly:                  snapshot.Group.ClaudeCodeOnly,
 			FallbackGroupID:                 snapshot.Group.FallbackGroupID,
 			FallbackGroupIDOnInvalidRequest: snapshot.Group.FallbackGroupIDOnInvalidRequest,
@@ -290,5 +304,6 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			SupportedModelScopes:            snapshot.Group.SupportedModelScopes,
 		}
 	}
+	s.compileAPIKeyIPRules(apiKey)
 	return apiKey
 }

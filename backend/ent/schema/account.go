@@ -187,6 +187,19 @@ func (Account) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
+		// temp_unschedulable_until: 临时不可调度状态解除时间
+		// 当命中临时不可调度规则时设置，在此时间前调度器应跳过该账号
+		field.Time("temp_unschedulable_until").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+
+		// temp_unschedulable_reason: 临时不可调度原因，便于排障审计
+		field.String("temp_unschedulable_reason").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "text"}),
+
 		// session_window_*: 会话窗口相关字段
 		// 用于管理某些需要会话时间窗口的 API（如 Claude Pro）
 		field.Time("session_window_start").
@@ -238,6 +251,9 @@ func (Account) Indexes() []ent.Index {
 		index.Fields("overload_until"),      // 筛选过载账户
 		index.Fields("oauth_status"),        // 筛选 OpenAI OAuth 状态
 		index.Fields("oauth_next_refresh_at"),
+		// 调度热路径复合索引（线上由 SQL 迁移创建部分索引，schema 仅用于模型可读性对齐）
+		index.Fields("platform", "priority"),
+		index.Fields("priority", "status"),
 		index.Fields("deleted_at"), // 软删除查询优化
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,9 +14,14 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+// 编译期接口断言
+var _ AccountRepository = (*stubOpenAIAccountRepo)(nil)
+var _ GatewayCache = (*stubGatewayCache)(nil)
 
 type stubOpenAIAccountRepo struct {
 	AccountRepository
@@ -49,6 +55,10 @@ func (r stubOpenAIAccountRepo) ListSchedulableByPlatform(ctx context.Context, pl
 		}
 	}
 	return result, nil
+}
+
+func (r stubOpenAIAccountRepo) ListSchedulableUngroupedByPlatform(ctx context.Context, platform string) ([]Account, error) {
+	return r.ListSchedulableByPlatform(ctx, platform)
 }
 
 type stubConcurrencyCache struct {
@@ -125,17 +135,19 @@ func TestOpenAIGatewayService_GenerateSessionHash_Priority(t *testing.T) {
 
 	svc := &OpenAIGatewayService{}
 
+	bodyWithKey := []byte(`{"prompt_cache_key":"ses_aaa"}`)
+
 	// 1) session_id header wins
 	c.Request.Header.Set("session_id", "sess-123")
 	c.Request.Header.Set("conversation_id", "conv-456")
-	h1 := svc.GenerateSessionHash(c, map[string]any{"prompt_cache_key": "ses_aaa"})
+	h1 := svc.GenerateSessionHash(c, bodyWithKey)
 	if h1 == "" {
 		t.Fatalf("expected non-empty hash")
 	}
 
 	// 2) conversation_id used when session_id absent
 	c.Request.Header.Del("session_id")
-	h2 := svc.GenerateSessionHash(c, map[string]any{"prompt_cache_key": "ses_aaa"})
+	h2 := svc.GenerateSessionHash(c, bodyWithKey)
 	if h2 == "" {
 		t.Fatalf("expected non-empty hash")
 	}
@@ -145,7 +157,7 @@ func TestOpenAIGatewayService_GenerateSessionHash_Priority(t *testing.T) {
 
 	// 3) prompt_cache_key used when both headers absent
 	c.Request.Header.Del("conversation_id")
-	h3 := svc.GenerateSessionHash(c, map[string]any{"prompt_cache_key": "ses_aaa"})
+	h3 := svc.GenerateSessionHash(c, bodyWithKey)
 	if h3 == "" {
 		t.Fatalf("expected non-empty hash")
 	}
@@ -154,10 +166,58 @@ func TestOpenAIGatewayService_GenerateSessionHash_Priority(t *testing.T) {
 	}
 
 	// 4) empty when no signals
-	h4 := svc.GenerateSessionHash(c, map[string]any{})
+	h4 := svc.GenerateSessionHash(c, []byte(`{}`))
 	if h4 != "" {
 		t.Fatalf("expected empty hash when no signals")
 	}
+}
+
+func TestOpenAIGatewayService_GenerateSessionHash_UsesXXHash64(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+
+	c.Request.Header.Set("session_id", "sess-fixed-value")
+	svc := &OpenAIGatewayService{}
+
+	got := svc.GenerateSessionHash(c, nil)
+	want := fmt.Sprintf("%016x", xxhash.Sum64String("sess-fixed-value"))
+	require.Equal(t, want, got)
+}
+
+func TestOpenAIGatewayService_GenerateSessionHash_AttachesLegacyHashToContext(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+
+	c.Request.Header.Set("session_id", "sess-legacy-check")
+	svc := &OpenAIGatewayService{}
+
+	sessionHash := svc.GenerateSessionHash(c, nil)
+	require.NotEmpty(t, sessionHash)
+	require.NotNil(t, c.Request)
+	require.NotNil(t, c.Request.Context())
+	require.NotEmpty(t, openAILegacySessionHashFromContext(c.Request.Context()))
+}
+
+func TestOpenAIGatewayService_GenerateSessionHashWithFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+
+	svc := &OpenAIGatewayService{}
+	seed := "openai_ws_ingress:9:100:200"
+
+	got := svc.GenerateSessionHashWithFallback(c, []byte(`{}`), seed)
+	want := fmt.Sprintf("%016x", xxhash.Sum64String(seed))
+	require.Equal(t, want, got)
+	require.NotEmpty(t, openAILegacySessionHashFromContext(c.Request.Context()))
+
+	empty := svc.GenerateSessionHashWithFallback(c, []byte(`{}`), "   ")
+	require.Equal(t, "", empty)
 }
 
 func (c stubConcurrencyCache) GetAccountWaitingCount(ctx context.Context, accountID int64) (int, error) {

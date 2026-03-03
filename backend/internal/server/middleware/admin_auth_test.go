@@ -19,7 +19,7 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	cfg := &config.Config{JWT: config.JWTConfig{Secret: "test-secret", ExpireHour: 1}}
-	authService := service.NewAuthService(nil, nil, nil, cfg, nil, nil, nil, nil, nil)
+	authService := service.NewAuthService(nil, nil, nil, cfg, nil, nil, nil, nil, nil, nil)
 
 	admin := &service.User{
 		ID:           1,
@@ -39,7 +39,7 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 			return &clone, nil
 		},
 	}
-	userService := service.NewUserService(userRepo, nil)
+	userService := service.NewUserService(userRepo, nil, nil)
 
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAdminAuthMiddleware(authService, userService, nil)))
@@ -179,6 +179,10 @@ func (s *stubUserRepo) ExistsByEmail(ctx context.Context, email string) (bool, e
 
 func (s *stubUserRepo) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
 	panic("unexpected RemoveGroupFromAllowedGroups call")
+}
+
+func (s *stubUserRepo) AddGroupToAllowedGroups(ctx context.Context, userID int64, groupID int64) error {
+	panic("unexpected AddGroupToAllowedGroups call")
 }
 
 func (s *stubUserRepo) UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error {

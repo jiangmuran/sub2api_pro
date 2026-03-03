@@ -2,12 +2,15 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -16,13 +19,15 @@ import (
 
 // RedeemHandler handles admin redeem code management
 type RedeemHandler struct {
-	adminService service.AdminService
+	adminService  service.AdminService
+	redeemService *service.RedeemService
 }
 
 // NewRedeemHandler creates a new admin redeem handler
-func NewRedeemHandler(adminService service.AdminService) *RedeemHandler {
+func NewRedeemHandler(adminService service.AdminService, redeemService *service.RedeemService) *RedeemHandler {
 	return &RedeemHandler{
-		adminService: adminService,
+		adminService:  adminService,
+		redeemService: redeemService,
 	}
 }
 
@@ -31,10 +36,17 @@ type GenerateRedeemCodesRequest struct {
 	Count        int     `json:"count" binding:"required,min=1,max=100"`
 	Type         string  `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
 	Value        float64 `json:"value" binding:"min=0"`
-	Notes        string  `json:"notes" binding:"omitempty,max=500"`
-	Category     string  `json:"category" binding:"omitempty,max=64"`
 	GroupID      *int64  `json:"group_id"`                                    // 订阅类型必填
 	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // 订阅类型使用，默认30天，最大100年
+}
+
+// CreateAndRedeemCodeRequest represents creating a fixed code and redeeming it for a target user.
+type CreateAndRedeemCodeRequest struct {
+	Code   string  `json:"code" binding:"required,min=3,max=128"`
+	Type   string  `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
+	Value  float64 `json:"value" binding:"required,gt=0"`
+	UserID int64   `json:"user_id" binding:"required,gt=0"`
+	Notes  string  `json:"notes"`
 }
 
 // List handles listing all redeem codes with pagination
@@ -44,14 +56,13 @@ func (h *RedeemHandler) List(c *gin.Context) {
 	codeType := c.Query("type")
 	status := c.Query("status")
 	search := c.Query("search")
-	category := strings.TrimSpace(c.Query("category"))
 	// 标准化和验证 search 参数
 	search = strings.TrimSpace(search)
 	if len(search) > 100 {
 		search = search[:100]
 	}
 
-	codes, total, err := h.adminService.ListRedeemCodes(c.Request.Context(), page, pageSize, codeType, status, search, category)
+	codes, total, err := h.adminService.ListRedeemCodes(c.Request.Context(), page, pageSize, codeType, status, search)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -91,25 +102,99 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	codes, err := h.adminService.GenerateRedeemCodes(c.Request.Context(), &service.GenerateRedeemCodesInput{
-		Count:        req.Count,
-		Type:         req.Type,
-		Value:        req.Value,
-		Notes:        strings.TrimSpace(req.Notes),
-		Category:     strings.TrimSpace(req.Category),
-		GroupID:      req.GroupID,
-		ValidityDays: req.ValidityDays,
+	executeAdminIdempotentJSON(c, "admin.redeem_codes.generate", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+		codes, execErr := h.adminService.GenerateRedeemCodes(ctx, &service.GenerateRedeemCodesInput{
+			Count:        req.Count,
+			Type:         req.Type,
+			Value:        req.Value,
+			GroupID:      req.GroupID,
+			ValidityDays: req.ValidityDays,
+		})
+		if execErr != nil {
+			return nil, execErr
+		}
+
+		out := make([]dto.AdminRedeemCode, 0, len(codes))
+		for i := range codes {
+			out = append(out, *dto.RedeemCodeFromServiceAdmin(&codes[i]))
+		}
+		return out, nil
 	})
-	if err != nil {
-		response.ErrorFrom(c, err)
+}
+
+// CreateAndRedeem creates a fixed redeem code and redeems it for a target user in one step.
+// POST /api/v1/admin/redeem-codes/create-and-redeem
+func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
+	if h.redeemService == nil {
+		response.InternalError(c, "redeem service not configured")
 		return
 	}
 
-	out := make([]dto.AdminRedeemCode, 0, len(codes))
-	for i := range codes {
-		out = append(out, *dto.RedeemCodeFromServiceAdmin(&codes[i]))
+	var req CreateAndRedeemCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
 	}
-	response.Success(c, out)
+	req.Code = strings.TrimSpace(req.Code)
+
+	executeAdminIdempotentJSON(c, "admin.redeem_codes.create_and_redeem", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+		existing, err := h.redeemService.GetByCode(ctx, req.Code)
+		if err == nil {
+			return h.resolveCreateAndRedeemExisting(ctx, existing, req.UserID)
+		}
+		if !errors.Is(err, service.ErrRedeemCodeNotFound) {
+			return nil, err
+		}
+
+		createErr := h.redeemService.CreateCode(ctx, &service.RedeemCode{
+			Code:   req.Code,
+			Type:   req.Type,
+			Value:  req.Value,
+			Status: service.StatusUnused,
+			Notes:  req.Notes,
+		})
+		if createErr != nil {
+			// Unique code race: if code now exists, use idempotent semantics by used_by.
+			existingAfterCreateErr, getErr := h.redeemService.GetByCode(ctx, req.Code)
+			if getErr == nil {
+				return h.resolveCreateAndRedeemExisting(ctx, existingAfterCreateErr, req.UserID)
+			}
+			return nil, createErr
+		}
+
+		redeemed, redeemErr := h.redeemService.Redeem(ctx, req.UserID, req.Code)
+		if redeemErr != nil {
+			return nil, redeemErr
+		}
+		return gin.H{"redeem_code": dto.RedeemCodeFromServiceAdmin(redeemed)}, nil
+	})
+}
+
+func (h *RedeemHandler) resolveCreateAndRedeemExisting(ctx context.Context, existing *service.RedeemCode, userID int64) (any, error) {
+	if existing == nil {
+		return nil, infraerrors.Conflict("REDEEM_CODE_CONFLICT", "redeem code conflict")
+	}
+
+	// If previous run created the code but crashed before redeem, redeem it now.
+	if existing.CanUse() {
+		redeemed, err := h.redeemService.Redeem(ctx, userID, existing.Code)
+		if err == nil {
+			return gin.H{"redeem_code": dto.RedeemCodeFromServiceAdmin(redeemed)}, nil
+		}
+		if !errors.Is(err, service.ErrRedeemCodeUsed) {
+			return nil, err
+		}
+		latest, getErr := h.redeemService.GetByCode(ctx, existing.Code)
+		if getErr == nil {
+			existing = latest
+		}
+	}
+
+	if existing.UsedBy != nil && *existing.UsedBy == userID {
+		return gin.H{"redeem_code": dto.RedeemCodeFromServiceAdmin(existing)}, nil
+	}
+
+	return nil, infraerrors.Conflict("REDEEM_CODE_CONFLICT", "redeem code already used by another user")
 }
 
 // Delete handles deleting a redeem code
@@ -174,19 +259,18 @@ func (h *RedeemHandler) Expire(c *gin.Context) {
 // GetStats handles getting redeem code statistics
 // GET /api/v1/admin/redeem-codes/stats
 func (h *RedeemHandler) GetStats(c *gin.Context) {
-	stats, err := h.adminService.GetRedeemCodeStats(c.Request.Context())
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
+	// Return mock data for now
 	response.Success(c, gin.H{
-		"total_codes":             stats.TotalCodes,
-		"active_codes":            stats.ActiveCodes,
-		"used_codes":              stats.UsedCodes,
-		"expired_codes":           stats.ExpiredCodes,
-		"total_value_distributed": stats.TotalValueDistributed,
-		"by_type":                 stats.ByType,
-		"by_category":             stats.ByCategory,
+		"total_codes":             0,
+		"active_codes":            0,
+		"used_codes":              0,
+		"expired_codes":           0,
+		"total_value_distributed": 0.0,
+		"by_type": gin.H{
+			"balance":     0,
+			"concurrency": 0,
+			"trial":       0,
+		},
 	})
 }
 
@@ -195,10 +279,9 @@ func (h *RedeemHandler) GetStats(c *gin.Context) {
 func (h *RedeemHandler) Export(c *gin.Context) {
 	codeType := c.Query("type")
 	status := c.Query("status")
-	category := strings.TrimSpace(c.Query("category"))
 
 	// Get all codes without pagination (use large page size)
-	codes, _, err := h.adminService.ListRedeemCodes(c.Request.Context(), 1, 10000, codeType, status, "", category)
+	codes, _, err := h.adminService.ListRedeemCodes(c.Request.Context(), 1, 10000, codeType, status, "")
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -209,7 +292,7 @@ func (h *RedeemHandler) Export(c *gin.Context) {
 	writer := csv.NewWriter(&buf)
 
 	// Write header
-	if err := writer.Write([]string{"id", "code", "type", "value", "status", "category", "notes", "used_by", "used_by_email", "used_at", "created_at"}); err != nil {
+	if err := writer.Write([]string{"id", "code", "type", "value", "status", "used_by", "used_by_email", "used_at", "created_at"}); err != nil {
 		response.InternalError(c, "Failed to export redeem codes: "+err.Error())
 		return
 	}
@@ -234,8 +317,6 @@ func (h *RedeemHandler) Export(c *gin.Context) {
 			code.Type,
 			fmt.Sprintf("%.2f", code.Value),
 			code.Status,
-			code.Category,
-			code.Notes,
 			usedBy,
 			usedByEmail,
 			usedAt,

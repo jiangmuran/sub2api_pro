@@ -10,7 +10,6 @@ const (
 	StatusUnused   = domain.StatusUnused
 	StatusUsed     = domain.StatusUsed
 	StatusExpired  = domain.StatusExpired
-	StatusRevoked  = domain.StatusRevoked
 )
 
 // Role constants
@@ -25,6 +24,7 @@ const (
 	PlatformOpenAI      = domain.PlatformOpenAI
 	PlatformGemini      = domain.PlatformGemini
 	PlatformAntigravity = domain.PlatformAntigravity
+	PlatformSora        = domain.PlatformSora
 )
 
 // Account type constants
@@ -113,6 +113,7 @@ const (
 	SettingKeyLinuxDoConnectRedirectURL  = "linuxdo_connect_redirect_url"
 
 	// OEM设置
+	SettingKeySoraClientEnabled           = "sora_client_enabled"           // 是否启用 Sora 客户端（管理员手动控制）
 	SettingKeySiteName                    = "site_name"                     // 网站名称
 	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
 	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
@@ -121,15 +122,14 @@ const (
 	SettingKeyDocURL                      = "doc_url"                       // 文档链接
 	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
 	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
-	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示“购买订阅”页面入口
-	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // “购买订阅”页面 URL（作为 iframe src）
+	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示"购买订阅"页面入口
+	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // "购买订阅"页面 URL（作为 iframe src）
+	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
 
 	// 默认配置
-	SettingKeyDefaultConcurrency    = "default_concurrency"      // 新用户默认并发量
-	SettingKeyDefaultBalance        = "default_balance"          // 新用户默认余额
-	SettingKeyDailyCheckinEnabled   = "daily_checkin_enabled"    // 是否启用每日签到奖励
-	SettingKeyDailyCheckinRewardMin = "daily_checkin_reward_min" // 每日签到最小奖励金额
-	SettingKeyDailyCheckinRewardMax = "daily_checkin_reward_max" // 每日签到最大奖励金额
+	SettingKeyDefaultConcurrency   = "default_concurrency"   // 新用户默认并发量
+	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
+	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
 
 	// 管理员 API Key
 	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）
@@ -147,14 +147,6 @@ const (
 	// Request identity patch (Claude -> Gemini systemInstruction injection)
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
-
-	// Security chat log retention (days)
-	SettingKeySecurityChatRetentionDays    = "security_chat_retention_days"
-	SettingKeySecurityChatAIEnabled        = "security_chat_ai_enabled"
-	SettingKeySecurityChatAIBaseURL        = "security_chat_ai_base_url"
-	SettingKeySecurityChatAIModel          = "security_chat_ai_model"
-	SettingKeySecurityChatExcludedUsers    = "security_chat_excluded_users"
-	SettingKeySecurityChatWhitelistEnabled = "security_chat_whitelist_enabled"
 
 	// =========================
 	// Ops Monitoring (vNext)
@@ -181,6 +173,9 @@ const (
 	// SettingKeyOpsAdvancedSettings stores JSON config for ops advanced settings (data retention, aggregation).
 	SettingKeyOpsAdvancedSettings = "ops_advanced_settings"
 
+	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
+	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
+
 	// =========================
 	// Stream Timeout Handling
 	// =========================
@@ -189,15 +184,35 @@ const (
 	SettingKeyStreamTimeoutSettings = "stream_timeout_settings"
 
 	// =========================
-	// OpenAI Invalid Bearer Auto Recover
+	// Sora S3 存储配置
 	// =========================
 
-	// SettingKeyOpenAIInvalidBearerAutoRecoverEnabled controls automatic pool recovery when all OpenAI OAuth
-	// accounts fail with "Invalid bearer token".
-	SettingKeyOpenAIInvalidBearerAutoRecoverEnabled = "openai_invalid_bearer_auto_recover_enabled"
+	SettingKeySoraS3Enabled         = "sora_s3_enabled"           // 是否启用 Sora S3 存储
+	SettingKeySoraS3Endpoint        = "sora_s3_endpoint"          // S3 端点地址
+	SettingKeySoraS3Region          = "sora_s3_region"            // S3 区域
+	SettingKeySoraS3Bucket          = "sora_s3_bucket"            // S3 存储桶名称
+	SettingKeySoraS3AccessKeyID     = "sora_s3_access_key_id"     // S3 Access Key ID
+	SettingKeySoraS3SecretAccessKey = "sora_s3_secret_access_key" // S3 Secret Access Key（加密存储）
+	SettingKeySoraS3Prefix          = "sora_s3_prefix"            // S3 对象键前缀
+	SettingKeySoraS3ForcePathStyle  = "sora_s3_force_path_style"  // 是否强制 Path Style（兼容 MinIO 等）
+	SettingKeySoraS3CDNURL          = "sora_s3_cdn_url"           // CDN 加速 URL（可选）
+	SettingKeySoraS3Profiles        = "sora_s3_profiles"          // Sora S3 多配置（JSON）
 
-	// SettingKeyOpenAIInvalidBearerAutoRecoverCooldownMinutes controls cooldown after one automatic recovery run.
-	SettingKeyOpenAIInvalidBearerAutoRecoverCooldownMinutes = "openai_invalid_bearer_auto_recover_cooldown_minutes"
+	// =========================
+	// Sora 用户存储配额
+	// =========================
+
+	SettingKeySoraDefaultStorageQuotaBytes = "sora_default_storage_quota_bytes" // 新用户默认 Sora 存储配额（字节）
+
+	// =========================
+	// Claude Code Version Check
+	// =========================
+
+	// SettingKeyMinClaudeCodeVersion 最低 Claude Code 版本号要求 (semver, 如 "2.1.0"，空值=不检查)
+	SettingKeyMinClaudeCodeVersion = "min_claude_code_version"
+
+	// SettingKeyAllowUngroupedKeyScheduling 允许未分组 API Key 调度（默认 false：未分组 Key 返回 403）
+	SettingKeyAllowUngroupedKeyScheduling = "allow_ungrouped_key_scheduling"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

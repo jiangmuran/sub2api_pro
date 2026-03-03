@@ -8,7 +8,6 @@ import (
 
 func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 	// 续链场景：保留 item_reference 与 id，但不再强制 store=true。
-	setupCodexCache(t)
 
 	reqBody := map[string]any{
 		"model": "gpt-5.2",
@@ -44,7 +43,6 @@ func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 
 func TestApplyCodexOAuthTransform_ExplicitStoreFalsePreserved(t *testing.T) {
 	// 续链场景：显式 store=false 不再强制为 true，保持 false。
-	setupCodexCache(t)
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -64,7 +62,6 @@ func TestApplyCodexOAuthTransform_ExplicitStoreFalsePreserved(t *testing.T) {
 
 func TestApplyCodexOAuthTransform_ExplicitStoreTrueForcedFalse(t *testing.T) {
 	// 显式 store=true 也会强制为 false。
-	setupCodexCache(t)
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -84,7 +81,6 @@ func TestApplyCodexOAuthTransform_ExplicitStoreTrueForcedFalse(t *testing.T) {
 
 func TestApplyCodexOAuthTransform_NonContinuationDefaultsStoreFalseAndStripsIDs(t *testing.T) {
 	// 非续链场景：未设置 store 时默认 false，并移除 input 中的 id。
-	setupCodexCache(t)
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -126,8 +122,6 @@ func TestFilterCodexInput_RemovesItemReferenceWhenNotPreserved(t *testing.T) {
 }
 
 func TestApplyCodexOAuthTransform_NormalizeCodexTools_PreservesResponsesFunctionTools(t *testing.T) {
-	setupCodexCache(t)
-
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
 		"tools": []any{
@@ -158,7 +152,6 @@ func TestApplyCodexOAuthTransform_NormalizeCodexTools_PreservesResponsesFunction
 
 func TestApplyCodexOAuthTransform_EmptyInput(t *testing.T) {
 	// 空 input 应保持为空且不触发异常。
-	setupCodexCache(t)
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -186,68 +179,27 @@ func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 	for input, expected := range cases {
 		require.Equal(t, expected, normalizeCodexModel(input))
 	}
-
 }
 
 func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *testing.T) {
-	// Codex CLI 场景：已有 instructions 时保持不变
-	setupCodexCache(t)
+	// Codex CLI 场景：已有 instructions 时不修改
 
 	reqBody := map[string]any{
 		"model":        "gpt-5.1",
-		"instructions": "user custom instructions",
-		"input":        []any{},
+		"instructions": "existing instructions",
 	}
 
-	result := applyCodexOAuthTransform(reqBody, true)
+	result := applyCodexOAuthTransform(reqBody, true) // isCodexCLI=true
 
 	instructions, ok := reqBody["instructions"].(string)
 	require.True(t, ok)
-	require.Equal(t, "user custom instructions", instructions)
-	// instructions 未变，但其他字段（如 store、stream）可能被修改
-	require.True(t, result.Modified)
-}
-
-func TestApplyCodexOAuthTransform_CodexCLI_AddsInstructionsWhenEmpty(t *testing.T) {
-	// Codex CLI 场景：无 instructions 时补充内置指令
-	setupCodexCache(t)
-
-	reqBody := map[string]any{
-		"model": "gpt-5.1",
-		"input": []any{},
-	}
-
-	result := applyCodexOAuthTransform(reqBody, true)
-
-	instructions, ok := reqBody["instructions"].(string)
-	require.True(t, ok)
-	require.NotEmpty(t, instructions)
-	require.True(t, result.Modified)
-}
-
-func TestApplyCodexOAuthTransform_NonCodexCLI_DoesNotInjectInstructions(t *testing.T) {
-	// 非 Codex CLI 场景：不注入 instructions
-	setupCodexCache(t)
-
-	reqBody := map[string]any{
-		"model": "gpt-5.1",
-		"input": []any{},
-	}
-
-	result := applyCodexOAuthTransform(reqBody, false)
-
-	_, ok := reqBody["instructions"]
-	require.False(t, ok)
-	require.True(t, result.Modified)
-}
-
-func setupCodexCache(t *testing.T) {
-	t.Helper()
+	require.Equal(t, "existing instructions", instructions)
+	// Modified 仍可能为 true（因为其他字段被修改），但 instructions 应保持不变
+	_ = result
 }
 
 func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T) {
 	// Codex CLI 场景：无 instructions 时补充默认值
-	setupCodexCache(t)
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -263,8 +215,7 @@ func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T
 }
 
 func TestApplyCodexOAuthTransform_NonCodexCLI_OverridesInstructions(t *testing.T) {
-	// 非 Codex CLI 场景：使用内置指令覆盖
-	setupCodexCache(t)
+	// 非 Codex CLI 场景：使用内置 Codex CLI 指令覆盖
 
 	reqBody := map[string]any{
 		"model":        "gpt-5.1",
@@ -275,7 +226,7 @@ func TestApplyCodexOAuthTransform_NonCodexCLI_OverridesInstructions(t *testing.T
 
 	instructions, ok := reqBody["instructions"].(string)
 	require.True(t, ok)
-	require.Equal(t, "old instructions", instructions)
+	require.NotEqual(t, "old instructions", instructions)
 	require.True(t, result.Modified)
 }
 

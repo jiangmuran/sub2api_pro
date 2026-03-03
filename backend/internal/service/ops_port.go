@@ -7,11 +7,13 @@ import (
 
 type OpsRepository interface {
 	InsertErrorLog(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error)
-	InsertRequestLog(ctx context.Context, input *OpsInsertRequestLogInput) (int64, error)
 	ListErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error)
 	GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error)
 	ListRequestDetails(ctx context.Context, filter *OpsRequestDetailFilter) ([]*OpsRequestDetail, int64, error)
-	GetRequestLogByRequestID(ctx context.Context, requestID string) (*OpsRequestLogDetail, error)
+	BatchInsertSystemLogs(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error)
+	ListSystemLogs(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error)
+	DeleteSystemLogs(ctx context.Context, filter *OpsSystemLogCleanupFilter) (int64, error)
+	InsertSystemLogCleanupAudit(ctx context.Context, input *OpsSystemLogCleanupAudit) error
 
 	InsertRetryAttempt(ctx context.Context, input *OpsInsertRetryAttemptInput) (int64, error)
 	UpdateRetryAttempt(ctx context.Context, input *OpsUpdateRetryAttemptInput) error
@@ -29,6 +31,7 @@ type OpsRepository interface {
 	GetLatencyHistogram(ctx context.Context, filter *OpsDashboardFilter) (*OpsLatencyHistogramResponse, error)
 	GetErrorTrend(ctx context.Context, filter *OpsDashboardFilter, bucketSeconds int) (*OpsErrorTrendResponse, error)
 	GetErrorDistribution(ctx context.Context, filter *OpsDashboardFilter) (*OpsErrorDistributionResponse, error)
+	GetOpenAITokenStats(ctx context.Context, filter *OpsOpenAITokenStatsFilter) (*OpsOpenAITokenStatsResponse, error)
 
 	InsertSystemMetrics(ctx context.Context, input *OpsInsertSystemMetricsInput) error
 	GetLatestSystemMetrics(ctx context.Context, windowMinutes int) (*OpsSystemMetricsSnapshot, error)
@@ -117,68 +120,6 @@ type OpsInsertErrorLogInput struct {
 	CreatedAt time.Time
 }
 
-type OpsInsertRequestLogInput struct {
-	RequestID       string
-	ClientRequestID string
-
-	UserID    *int64
-	APIKeyID  *int64
-	AccountID *int64
-	GroupID   *int64
-	ClientIP  *string
-
-	Platform    string
-	Model       string
-	RequestPath string
-	Stream      bool
-	UserAgent   string
-
-	StatusCode        int
-	DurationMs        *int
-	TimeToFirstTokenMs *int64
-
-	RequestBodyJSON      *string
-	RequestBodyTruncated bool
-	RequestBodyBytes     *int
-
-	ResponseBody          *string
-	ResponseBodyTruncated bool
-	ResponseBodyBytes     *int
-
-	CreatedAt time.Time
-}
-
-type OpsRequestLogDetail struct {
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	RequestID string    `json:"request_id"`
-
-	ClientRequestID *string `json:"client_request_id,omitempty"`
-	UserID          *int64  `json:"user_id,omitempty"`
-	APIKeyID        *int64  `json:"api_key_id,omitempty"`
-	AccountID       *int64  `json:"account_id,omitempty"`
-	GroupID         *int64  `json:"group_id,omitempty"`
-	ClientIP        *string `json:"client_ip,omitempty"`
-
-	Platform    *string `json:"platform,omitempty"`
-	Model       *string `json:"model,omitempty"`
-	RequestPath *string `json:"request_path,omitempty"`
-	Stream      bool    `json:"stream"`
-	UserAgent   *string `json:"user_agent,omitempty"`
-
-	StatusCode        *int   `json:"status_code,omitempty"`
-	DurationMs        *int   `json:"duration_ms,omitempty"`
-	TimeToFirstTokenMs *int64 `json:"time_to_first_token_ms,omitempty"`
-
-	RequestBody          *string `json:"request_body,omitempty"`
-	RequestBodyTruncated bool    `json:"request_body_truncated"`
-	RequestBodyBytes     *int    `json:"request_body_bytes,omitempty"`
-
-	ResponseBody          *string `json:"response_body,omitempty"`
-	ResponseBodyTruncated bool    `json:"response_body_truncated"`
-	ResponseBodyBytes     *int    `json:"response_body_bytes,omitempty"`
-}
-
 type OpsInsertRetryAttemptInput struct {
 	RequestedByUserID int64
 	SourceErrorID     int64
@@ -253,9 +194,6 @@ type OpsInsertSystemMetricsInput struct {
 	MemoryUsedMB       *int64
 	MemoryTotalMB      *int64
 	MemoryUsagePercent *float64
-	DiskUsedMB         *int64
-	DiskTotalMB        *int64
-	DiskUsagePercent   *float64
 
 	DBOK    *bool
 	RedisOK *bool
@@ -271,6 +209,69 @@ type OpsInsertSystemMetricsInput struct {
 	ConcurrencyQueueDepth *int
 }
 
+type OpsInsertSystemLogInput struct {
+	CreatedAt       time.Time
+	Level           string
+	Component       string
+	Message         string
+	RequestID       string
+	ClientRequestID string
+	UserID          *int64
+	AccountID       *int64
+	Platform        string
+	Model           string
+	ExtraJSON       string
+}
+
+type OpsSystemLogFilter struct {
+	StartTime *time.Time
+	EndTime   *time.Time
+
+	Level     string
+	Component string
+
+	RequestID       string
+	ClientRequestID string
+	UserID          *int64
+	AccountID       *int64
+	Platform        string
+	Model           string
+	Query           string
+
+	Page     int
+	PageSize int
+}
+
+type OpsSystemLogCleanupFilter struct {
+	StartTime *time.Time
+	EndTime   *time.Time
+
+	Level     string
+	Component string
+
+	RequestID       string
+	ClientRequestID string
+	UserID          *int64
+	AccountID       *int64
+	Platform        string
+	Model           string
+	Query           string
+}
+
+type OpsSystemLogList struct {
+	Logs     []*OpsSystemLog `json:"logs"`
+	Total    int             `json:"total"`
+	Page     int             `json:"page"`
+	PageSize int             `json:"page_size"`
+}
+
+type OpsSystemLogCleanupAudit struct {
+	CreatedAt   time.Time
+	OperatorID  int64
+	Conditions  string
+	DeletedRows int64
+}
+
 type OpsSystemMetricsSnapshot struct {
 	ID            int64     `json:"id"`
 	CreatedAt     time.Time `json:"created_at"`
@@ -280,9 +281,6 @@ type OpsSystemMetricsSnapshot struct {
 	MemoryUsedMB       *int64   `json:"memory_used_mb"`
 	MemoryTotalMB      *int64   `json:"memory_total_mb"`
 	MemoryUsagePercent *float64 `json:"memory_usage_percent"`
-	DiskUsedMB         *int64   `json:"disk_used_mb"`
-	DiskTotalMB        *int64   `json:"disk_total_mb"`
-	DiskUsagePercent   *float64 `json:"disk_usage_percent"`
 
 	DBOK    *bool `json:"db_ok"`
 	RedisOK *bool `json:"redis_ok"`

@@ -6,8 +6,10 @@ import (
 	"log"
 	"math/rand/v2"
 	"strconv"
+	"strings"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -23,16 +25,17 @@ var MaxExpiresAt = time.Date(2099, 12, 31, 23, 59, 59, 0, time.UTC)
 const MaxValidityDays = 36500
 
 var (
-	ErrSubscriptionNotFound      = infraerrors.NotFound("SUBSCRIPTION_NOT_FOUND", "subscription not found")
-	ErrSubscriptionExpired       = infraerrors.Forbidden("SUBSCRIPTION_EXPIRED", "subscription has expired")
-	ErrSubscriptionSuspended     = infraerrors.Forbidden("SUBSCRIPTION_SUSPENDED", "subscription is suspended")
-	ErrSubscriptionAlreadyExists = infraerrors.Conflict("SUBSCRIPTION_ALREADY_EXISTS", "subscription already exists for this user and group")
-	ErrGroupNotSubscriptionType  = infraerrors.BadRequest("GROUP_NOT_SUBSCRIPTION_TYPE", "group is not a subscription type")
-	ErrDailyLimitExceeded        = infraerrors.TooManyRequests("DAILY_LIMIT_EXCEEDED", "daily usage limit exceeded")
-	ErrWeeklyLimitExceeded       = infraerrors.TooManyRequests("WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
-	ErrMonthlyLimitExceeded      = infraerrors.TooManyRequests("MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
-	ErrSubscriptionNilInput      = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
-	ErrAdjustWouldExpire         = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
+	ErrSubscriptionNotFound       = infraerrors.NotFound("SUBSCRIPTION_NOT_FOUND", "subscription not found")
+	ErrSubscriptionExpired        = infraerrors.Forbidden("SUBSCRIPTION_EXPIRED", "subscription has expired")
+	ErrSubscriptionSuspended      = infraerrors.Forbidden("SUBSCRIPTION_SUSPENDED", "subscription is suspended")
+	ErrSubscriptionAlreadyExists  = infraerrors.Conflict("SUBSCRIPTION_ALREADY_EXISTS", "subscription already exists for this user and group")
+	ErrSubscriptionAssignConflict = infraerrors.Conflict("SUBSCRIPTION_ASSIGN_CONFLICT", "subscription exists but request conflicts with existing assignment semantics")
+	ErrGroupNotSubscriptionType   = infraerrors.BadRequest("GROUP_NOT_SUBSCRIPTION_TYPE", "group is not a subscription type")
+	ErrDailyLimitExceeded         = infraerrors.TooManyRequests("DAILY_LIMIT_EXCEEDED", "daily usage limit exceeded")
+	ErrWeeklyLimitExceeded        = infraerrors.TooManyRequests("WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
+	ErrMonthlyLimitExceeded       = infraerrors.TooManyRequests("MONTHLY_LIMIT_EXCEEDED", "monthly usage limit exceeded")
+	ErrSubscriptionNilInput       = infraerrors.BadRequest("SUBSCRIPTION_NIL_INPUT", "subscription input cannot be nil")
+	ErrAdjustWouldExpire          = infraerrors.BadRequest("ADJUST_WOULD_EXPIRE", "adjustment would result in expired subscription (remaining days must be > 0)")
 )
 
 // SubscriptionService 订阅服务
@@ -40,23 +43,49 @@ type SubscriptionService struct {
 	groupRepo           GroupRepository
 	userSubRepo         UserSubscriptionRepository
 	billingCacheService *BillingCacheService
+	entClient           *dbent.Client
 
 	// L1 缓存：加速中间件热路径的订阅查询
 	subCacheL1     *ristretto.Cache
 	subCacheGroup  singleflight.Group
 	subCacheTTL    time.Duration
 	subCacheJitter int // 抖动百分比
+
+	maintenanceQueue *SubscriptionMaintenanceQueue
 }
 
 // NewSubscriptionService 创建订阅服务
-func NewSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscriptionRepository, billingCacheService *BillingCacheService, cfg *config.Config) *SubscriptionService {
+func NewSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscriptionRepository, billingCacheService *BillingCacheService, entClient *dbent.Client, cfg *config.Config) *SubscriptionService {
 	svc := &SubscriptionService{
 		groupRepo:           groupRepo,
 		userSubRepo:         userSubRepo,
 		billingCacheService: billingCacheService,
+		entClient:           entClient,
 	}
 	svc.initSubCache(cfg)
+	svc.initMaintenanceQueue(cfg)
 	return svc
+}
+
+func (s *SubscriptionService) initMaintenanceQueue(cfg *config.Config) {
+	if cfg == nil {
+		return
+	}
+	mc := cfg.SubscriptionMaintenance
+	if mc.WorkerCount <= 0 || mc.QueueSize <= 0 {
+		return
+	}
+	s.maintenanceQueue = NewSubscriptionMaintenanceQueue(mc.WorkerCount, mc.QueueSize)
+}
+
+// Stop stops the maintenance worker pool.
+func (s *SubscriptionService) Stop() {
+	if s == nil {
+		return
+	}
+	if s.maintenanceQueue != nil {
+		s.maintenanceQueue.Stop()
+	}
 }
 
 // initSubCache 初始化订阅 L1 缓存
@@ -123,40 +152,10 @@ type AssignSubscriptionInput struct {
 
 // AssignSubscription 分配订阅给用户（不允许重复分配）
 func (s *SubscriptionService) AssignSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, error) {
-	// 检查分组是否存在且为订阅类型
-	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
-	if err != nil {
-		return nil, fmt.Errorf("group not found: %w", err)
-	}
-	if !group.IsSubscriptionType() {
-		return nil, ErrGroupNotSubscriptionType
-	}
-
-	// 检查是否已存在订阅
-	exists, err := s.userSubRepo.ExistsByUserIDAndGroupID(ctx, input.UserID, input.GroupID)
+	sub, _, err := s.assignSubscriptionWithReuse(ctx, input)
 	if err != nil {
 		return nil, err
 	}
-	if exists {
-		return nil, ErrSubscriptionAlreadyExists
-	}
-
-	sub, err := s.createSubscription(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-
-	// 失效订阅缓存
-	s.InvalidateSubCache(input.UserID, input.GroupID)
-	if s.billingCacheService != nil {
-		userID, groupID := input.UserID, input.GroupID
-		go func() {
-			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
-		}()
-	}
-
 	return sub, nil
 }
 
@@ -191,7 +190,7 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 		validityDays = MaxValidityDays
 	}
 
-	// 已有订阅，执行续期
+	// 已有订阅，执行续期（在事务中完成所有更新）
 	if existingSub != nil {
 		now := time.Now()
 		var newExpiresAt time.Time
@@ -209,14 +208,23 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 			newExpiresAt = MaxExpiresAt
 		}
 
+		// 开启事务：ExtendExpiry + UpdateStatus + UpdateNotes 在同一事务中完成
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, false, fmt.Errorf("begin transaction: %w", err)
+		}
+		txCtx := dbent.NewTxContext(ctx, tx)
+
 		// 更新过期时间
-		if err := s.userSubRepo.ExtendExpiry(ctx, existingSub.ID, newExpiresAt); err != nil {
+		if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
+			_ = tx.Rollback()
 			return nil, false, fmt.Errorf("extend subscription: %w", err)
 		}
 
 		// 如果订阅已过期或被暂停，恢复为active状态
 		if existingSub.Status != SubscriptionStatusActive {
-			if err := s.userSubRepo.UpdateStatus(ctx, existingSub.ID, SubscriptionStatusActive); err != nil {
+			if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
+				_ = tx.Rollback()
 				return nil, false, fmt.Errorf("update subscription status: %w", err)
 			}
 		}
@@ -228,9 +236,15 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 				newNotes += "\n"
 			}
 			newNotes += input.Notes
-			if err := s.userSubRepo.UpdateNotes(ctx, existingSub.ID, newNotes); err != nil {
-				log.Printf("update subscription notes failed: sub_id=%d err=%v", existingSub.ID, err)
+			if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, newNotes); err != nil {
+				_ = tx.Rollback()
+				return nil, false, fmt.Errorf("update subscription notes: %w", err)
 			}
+		}
+
+		// 提交事务
+		if err := tx.Commit(); err != nil {
+			return nil, false, fmt.Errorf("commit transaction: %w", err)
 		}
 
 		// 失效订阅缓存
@@ -321,9 +335,12 @@ type BulkAssignSubscriptionInput struct {
 // BulkAssignResult 批量分配结果
 type BulkAssignResult struct {
 	SuccessCount  int
+	CreatedCount  int
+	ReusedCount   int
 	FailedCount   int
 	Subscriptions []UserSubscription
 	Errors        []string
+	Statuses      map[int64]string
 }
 
 // BulkAssignSubscription 批量分配订阅
@@ -331,10 +348,11 @@ func (s *SubscriptionService) BulkAssignSubscription(ctx context.Context, input 
 	result := &BulkAssignResult{
 		Subscriptions: make([]UserSubscription, 0),
 		Errors:        make([]string, 0),
+		Statuses:      make(map[int64]string),
 	}
 
 	for _, userID := range input.UserIDs {
-		sub, err := s.AssignSubscription(ctx, &AssignSubscriptionInput{
+		sub, reused, err := s.assignSubscriptionWithReuse(ctx, &AssignSubscriptionInput{
 			UserID:       userID,
 			GroupID:      input.GroupID,
 			ValidityDays: input.ValidityDays,
@@ -344,13 +362,103 @@ func (s *SubscriptionService) BulkAssignSubscription(ctx context.Context, input 
 		if err != nil {
 			result.FailedCount++
 			result.Errors = append(result.Errors, fmt.Sprintf("user %d: %v", userID, err))
+			result.Statuses[userID] = "failed"
 		} else {
 			result.SuccessCount++
 			result.Subscriptions = append(result.Subscriptions, *sub)
+			if reused {
+				result.ReusedCount++
+				result.Statuses[userID] = "reused"
+			} else {
+				result.CreatedCount++
+				result.Statuses[userID] = "created"
+			}
 		}
 	}
 
 	return result, nil
+}
+
+func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
+	// 检查分组是否存在且为订阅类型
+	group, err := s.groupRepo.GetByID(ctx, input.GroupID)
+	if err != nil {
+		return nil, false, fmt.Errorf("group not found: %w", err)
+	}
+	if !group.IsSubscriptionType() {
+		return nil, false, ErrGroupNotSubscriptionType
+	}
+
+	// 检查是否已存在订阅；若已存在，则按幂等成功返回现有订阅
+	exists, err := s.userSubRepo.ExistsByUserIDAndGroupID(ctx, input.UserID, input.GroupID)
+	if err != nil {
+		return nil, false, err
+	}
+	if exists {
+		sub, getErr := s.userSubRepo.GetByUserIDAndGroupID(ctx, input.UserID, input.GroupID)
+		if getErr != nil {
+			return nil, false, getErr
+		}
+		if conflictReason, conflict := detectAssignSemanticConflict(sub, input); conflict {
+			return nil, false, ErrSubscriptionAssignConflict.WithMetadata(map[string]string{
+				"conflict_reason": conflictReason,
+			})
+		}
+		return sub, true, nil
+	}
+
+	sub, err := s.createSubscription(ctx, input)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// 失效订阅缓存
+	s.InvalidateSubCache(input.UserID, input.GroupID)
+	if s.billingCacheService != nil {
+		userID, groupID := input.UserID, input.GroupID
+		go func() {
+			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
+		}()
+	}
+
+	return sub, false, nil
+}
+
+func detectAssignSemanticConflict(existing *UserSubscription, input *AssignSubscriptionInput) (string, bool) {
+	if existing == nil || input == nil {
+		return "", false
+	}
+
+	normalizedDays := normalizeAssignValidityDays(input.ValidityDays)
+	if !existing.StartsAt.IsZero() {
+		expectedExpiresAt := existing.StartsAt.AddDate(0, 0, normalizedDays)
+		if expectedExpiresAt.After(MaxExpiresAt) {
+			expectedExpiresAt = MaxExpiresAt
+		}
+		if !existing.ExpiresAt.Equal(expectedExpiresAt) {
+			return "validity_days_mismatch", true
+		}
+	}
+
+	existingNotes := strings.TrimSpace(existing.Notes)
+	inputNotes := strings.TrimSpace(input.Notes)
+	if existingNotes != inputNotes {
+		return "notes_mismatch", true
+	}
+
+	return "", false
+}
+
+func normalizeAssignValidityDays(days int) int {
+	if days <= 0 {
+		days = 30
+	}
+	if days > MaxValidityDays {
+		days = MaxValidityDays
+	}
+	return days
 }
 
 // RevokeSubscription 撤销订阅
@@ -471,7 +579,7 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 	value, err, _ := s.subCacheGroup.Do(key, func() (any, error) {
 		sub, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, userID, groupID)
 		if err != nil {
-			return nil, ErrSubscriptionNotFound
+			return nil, err // 直接透传 repo 已翻译的错误（NotFound → ErrSubscriptionNotFound，其他错误原样返回）
 		}
 		// 写入 L1 缓存
 		if s.subCacheL1 != nil {
@@ -483,7 +591,11 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 		return nil, err
 	}
 	// singleflight 返回的也是缓存指针，需要浅拷贝
-	cp := *value.(*UserSubscription)
+	sub, ok := value.(*UserSubscription)
+	if !ok || sub == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	cp := *sub
 	return &cp, nil
 }
 
@@ -698,6 +810,23 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 // 而 IsExpired()=true 的订阅在 ValidateAndCheckLimits 中已被拦截返回错误，
 // 因此进入此方法的订阅一定未过期，无需处理过期状态同步。
 func (s *SubscriptionService) DoWindowMaintenance(sub *UserSubscription) {
+	if s == nil {
+		return
+	}
+	if s.maintenanceQueue != nil {
+		err := s.maintenanceQueue.TryEnqueue(func() {
+			s.doWindowMaintenance(sub)
+		})
+		if err != nil {
+			log.Printf("Subscription maintenance enqueue failed: %v", err)
+		}
+		return
+	}
+
+	s.doWindowMaintenance(sub)
+}
+
+func (s *SubscriptionService) doWindowMaintenance(sub *UserSubscription) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -759,6 +888,11 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 		}
 	}
 
+	return s.calculateProgress(sub, group), nil
+}
+
+// calculateProgress 根据已加载的订阅和分组数据计算使用进度（纯内存计算，无 DB 查询）
+func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Group) *SubscriptionProgress {
 	progress := &SubscriptionProgress{
 		ID:            sub.ID,
 		GroupName:     group.Name,
@@ -838,23 +972,25 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 		}
 	}
 
-	return progress, nil
+	return progress
 }
 
 // GetUserSubscriptionsWithProgress 获取用户所有订阅及进度
 func (s *SubscriptionService) GetUserSubscriptionsWithProgress(ctx context.Context, userID int64) ([]SubscriptionProgress, error) {
+	// ListActiveByUserID 已使用 .WithGroup() eager-load Group 关联，1 次查询获取所有数据
 	subs, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
 	progresses := make([]SubscriptionProgress, 0, len(subs))
-	for _, sub := range subs {
-		progress, err := s.GetSubscriptionProgress(ctx, sub.ID)
-		if err != nil {
+	for i := range subs {
+		sub := &subs[i]
+		group := sub.Group
+		if group == nil {
 			continue
 		}
-		progresses = append(progresses, *progress)
+		progresses = append(progresses, *s.calculateProgress(sub, group))
 	}
 
 	return progresses, nil

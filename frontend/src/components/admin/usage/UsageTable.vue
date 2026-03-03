@@ -1,7 +1,7 @@
 <template>
   <div class="card overflow-hidden">
     <div class="overflow-auto">
-      <DataTable :columns="cols" :data="data" :loading="loading">
+      <DataTable :columns="columns" :data="data" :loading="loading">
         <template #cell-user="{ row }">
           <div class="text-sm">
             <span class="font-medium text-gray-900 dark:text-white">{{ row.user?.email || '-' }}</span>
@@ -35,8 +35,8 @@
         </template>
 
         <template #cell-stream="{ row }">
-          <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="row.stream ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'">
-            {{ row.stream ? t('usage.stream') : t('usage.sync') }}
+          <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getRequestTypeBadgeClass(row)">
+            {{ getRequestTypeLabel(row) }}
           </span>
         </template>
 
@@ -123,7 +123,7 @@
         </template>
 
         <template #cell-user_agent="{ row }">
-          <span v-if="row.user_agent" class="text-sm text-gray-600 dark:text-gray-400 max-w-[150px] truncate block" :title="row.user_agent">{{ formatUserAgent(row.user_agent) }}</span>
+          <span v-if="row.user_agent" class="text-sm text-gray-600 dark:text-gray-400 block max-w-[320px] truncate" :title="row.user_agent">{{ formatUserAgent(row.user_agent) }}</span>
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
         </template>
 
@@ -268,15 +268,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
+import { resolveUsageRequestType } from '@/utils/usageRequestType'
 import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { AdminUsageLog } from '@/types'
 
-defineProps(['data', 'loading'])
+defineProps(['data', 'loading', 'columns'])
 const { t } = useI18n()
 
 // Tooltip state - cost
@@ -289,23 +290,21 @@ const tokenTooltipVisible = ref(false)
 const tokenTooltipPosition = ref({ x: 0, y: 0 })
 const tokenTooltipData = ref<AdminUsageLog | null>(null)
 
-const cols = computed(() => [
-  { key: 'user', label: t('admin.usage.user'), sortable: false },
-  { key: 'api_key', label: t('usage.apiKeyFilter'), sortable: false },
-  { key: 'account', label: t('admin.usage.account'), sortable: false },
-  { key: 'model', label: t('usage.model'), sortable: true },
-  { key: 'reasoning_effort', label: t('usage.reasoningEffort'), sortable: false },
-  { key: 'group', label: t('admin.usage.group'), sortable: false },
-  { key: 'stream', label: t('usage.type'), sortable: false },
-  { key: 'tokens', label: t('usage.tokens'), sortable: false },
-  { key: 'cost', label: t('usage.cost'), sortable: false },
-  { key: 'first_token', label: t('usage.firstToken'), sortable: false },
-  { key: 'duration', label: t('usage.duration'), sortable: false },
-  { key: 'created_at', label: t('usage.time'), sortable: true },
-  { key: 'user_agent', label: t('usage.userAgent'), sortable: false },
-  { key: 'ip_address', label: t('admin.usage.ipAddress'), sortable: false }
-])
+const getRequestTypeLabel = (row: AdminUsageLog): string => {
+  const requestType = resolveUsageRequestType(row)
+  if (requestType === 'ws_v2') return t('usage.ws')
+  if (requestType === 'stream') return t('usage.stream')
+  if (requestType === 'sync') return t('usage.sync')
+  return t('usage.unknown')
+}
 
+const getRequestTypeBadgeClass = (row: AdminUsageLog): string => {
+  const requestType = resolveUsageRequestType(row)
+  if (requestType === 'ws_v2') return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200'
+  if (requestType === 'stream') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+  if (requestType === 'sync') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+  return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+}
 const formatCacheTokens = (tokens: number): string => {
   if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`
   if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`
@@ -313,16 +312,7 @@ const formatCacheTokens = (tokens: number): string => {
 }
 
 const formatUserAgent = (ua: string): string => {
-  // 提取主要客户端标识
-  if (ua.includes('claude-cli')) return ua.match(/claude-cli\/[\d.]+/)?.[0] || 'Claude CLI'
-  if (ua.includes('Cursor')) return 'Cursor'
-  if (ua.includes('VSCode') || ua.includes('vscode')) return 'VS Code'
-  if (ua.includes('Continue')) return 'Continue'
-  if (ua.includes('Cline')) return 'Cline'
-  if (ua.includes('OpenAI')) return 'OpenAI SDK'
-  if (ua.includes('anthropic')) return 'Anthropic SDK'
-  // 截断过长的 UA
-  return ua.length > 30 ? ua.substring(0, 30) + '...' : ua
+  return ua
 }
 
 const formatDuration = (ms: number | null | undefined): string => {
