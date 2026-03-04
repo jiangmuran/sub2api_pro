@@ -2755,7 +2755,6 @@ export default {
         search: '搜索兑换码'
       },
       generating: '生成中...',
-      copyCode: '复制',
       copied: '已复制！',
       disableCode: '禁用',
       enableCode: '启用',
