@@ -1589,20 +1589,18 @@ watch(
         if (existingMappings && typeof existingMappings === 'object') {
           const entries = Object.entries(existingMappings)
 
-          // Detect if this is whitelist mode (all from === to) or mapping mode
-          const isWhitelistMode = entries.length > 0 && entries.every(([from, to]) => from === to)
+          // 支持白名单与映射并存：
+          // - from===to 视为白名单
+          // - from!==to 视为映射规则
+          allowedModels.value = entries
+            .filter(([from, to]) => from === to)
+            .map(([from]) => from)
+          modelMappings.value = entries
+            .filter(([from, to]) => from !== to)
+            .map(([from, to]) => ({ from, to }))
 
-          if (isWhitelistMode) {
-            // Whitelist mode: populate allowedModels
-            modelRestrictionMode.value = 'whitelist'
-            allowedModels.value = entries.map(([from]) => from)
-            modelMappings.value = []
-          } else {
-            // Mapping mode: populate modelMappings
-            modelRestrictionMode.value = 'mapping'
-            modelMappings.value = entries.map(([from, to]) => ({ from, to }))
-            allowedModels.value = []
-          }
+          // 默认切到有内容的面板；两者并存时优先映射面板。
+          modelRestrictionMode.value = modelMappings.value.length > 0 ? 'mapping' : 'whitelist'
         } else {
           // No mappings: default to whitelist mode with empty selection (allow all)
           modelRestrictionMode.value = 'whitelist'

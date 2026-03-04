@@ -406,38 +406,37 @@ export function isValidWildcardPattern(pattern: string): boolean {
 }
 
 export function buildModelMappingObject(
-  mode: 'whitelist' | 'mapping',
+  _mode: 'whitelist' | 'mapping',
   allowedModels: string[],
   modelMappings: { from: string; to: string }[]
 ): Record<string, string> | null {
   const mapping: Record<string, string> = {}
 
-  if (mode === 'whitelist') {
-    for (const model of allowedModels) {
-      // whitelist 模式的本意是"精确模型列表"，如果用户输入了通配符（如 claude-*），
-      // 写入 model_mapping 会导致 GetMappedModel() 把真实模型映射成 "claude-*"，从而转发失败。
-      // 因此这里跳过包含通配符的条目。
-      if (!model.includes('*')) {
-        mapping[model] = model
-      }
+  // 白名单始终生效：写为 key=value，作为支持列表。
+  // 注意：包含通配符的 whitelist 条目不能写入 model_mapping，否则会被当作目标模型名。
+  for (const model of allowedModels) {
+    if (!model.includes('*')) {
+      mapping[model] = model
     }
-  } else {
-    for (const m of modelMappings) {
-      const from = m.from.trim()
-      const to = m.to.trim()
-      if (!from || !to) continue
-      // 校验通配符格式：* 只能放在末尾
-      if (!isValidWildcardPattern(from)) {
-        console.warn(`[buildModelMappingObject] 无效的通配符格式，跳过: ${from}`)
-        continue
-      }
-      // to 不允许包含通配符
-      if (to.includes('*')) {
-        console.warn(`[buildModelMappingObject] 目标模型不能包含通配符，跳过: ${from} -> ${to}`)
-        continue
-      }
-      mapping[from] = to
+  }
+
+  // 映射规则也始终生效：允许与白名单并存。
+  // 同 key 时以映射规则覆盖白名单（例如 gpt-4o -> gpt-4.1）。
+  for (const m of modelMappings) {
+    const from = m.from.trim()
+    const to = m.to.trim()
+    if (!from || !to) continue
+    // 校验通配符格式：* 只能放在末尾
+    if (!isValidWildcardPattern(from)) {
+      console.warn(`[buildModelMappingObject] 无效的通配符格式，跳过: ${from}`)
+      continue
     }
+    // to 不允许包含通配符
+    if (to.includes('*')) {
+      console.warn(`[buildModelMappingObject] 目标模型不能包含通配符，跳过: ${from} -> ${to}`)
+      continue
+    }
+    mapping[from] = to
   }
 
   return Object.keys(mapping).length > 0 ? mapping : null
