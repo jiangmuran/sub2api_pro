@@ -75,6 +75,11 @@ func NormalizeOpenAIResponsesBody(body []byte) ([]byte, bool, error) {
 		}
 	}
 
+	if _, exists := payload["stream_options"]; exists {
+		delete(payload, "stream_options")
+		changed = true
+	}
+
 	if !changed {
 		return body, false, nil
 	}
@@ -126,6 +131,10 @@ func ConvertOpenAILegacyRequestBody(body []byte, protocol string) ([]byte, error
 			payload["max_output_tokens"] = v
 		}
 		delete(payload, "max_tokens")
+	}
+
+	if _, exists := payload["stream_options"]; exists {
+		delete(payload, "stream_options")
 	}
 
 	converted, err := json.Marshal(payload)

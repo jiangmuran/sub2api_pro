@@ -164,7 +164,7 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamKeepsToolNameAndBodyNormali
 	c.Request.Header.Set("Proxy-Authorization", "Basic abc")
 	c.Request.Header.Set("X-Test", "keep")
 
-	originalBody := []byte(`{"model":"gpt-5.2","stream":true,"store":true,"instructions":"local-test-instructions","input":[{"type":"text","text":"hi"}]}`)
+	originalBody := []byte(`{"model":"gpt-5.2","stream":true,"store":true,"service_tier":"auto","stream_options":{"include_usage":true},"metadata":{"user_id":"session_abc"},"instructions":"local-test-instructions","input":[{"type":"text","text":"hi"}]}`)
 
 	upstreamSSE := strings.Join([]string{
 		`data: {"type":"response.output_item.added","item":{"type":"tool_call","tool_calls":[{"function":{"name":"apply_patch"}}]}}`,
@@ -215,6 +215,9 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamKeepsToolNameAndBodyNormali
 	// 其余关键字段保持原值。
 	require.Equal(t, "gpt-5.2", gjson.GetBytes(upstream.lastBody, "model").String())
 	require.Equal(t, "hi", gjson.GetBytes(upstream.lastBody, "input.0.text").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "stream_options").Exists())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "service_tier").Exists())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "metadata").Exists())
 
 	// 2) only auth is replaced; inbound auth/cookie are not forwarded
 	require.Equal(t, "Bearer oauth-token", upstream.lastReq.Header.Get("Authorization"))

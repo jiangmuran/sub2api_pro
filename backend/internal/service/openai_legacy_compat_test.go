@@ -38,6 +38,20 @@ func TestNormalizeOpenAIResponsesBody_UsesMessages(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIResponsesBody_RemovesStreamOptions(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"input_text","text":"hi"}],"stream_options":{"include_usage":true}}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "stream_options").Exists() {
+		t.Fatalf("expected stream_options removed")
+	}
+}
+
 func TestConvertOpenAILegacyRequestBody_Chat(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64}`)
 	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
@@ -52,6 +66,17 @@ func TestConvertOpenAILegacyRequestBody_Chat(t *testing.T) {
 	}
 	if gjson.GetBytes(converted, "max_output_tokens").Int() != 64 {
 		t.Fatalf("expected max_output_tokens=64")
+	}
+}
+
+func TestConvertOpenAILegacyRequestBody_RemovesStreamOptions(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"stream_options":{"include_usage":true}}`)
+	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
+	if err != nil {
+		t.Fatalf("ConvertOpenAILegacyRequestBody error: %v", err)
+	}
+	if gjson.GetBytes(converted, "stream_options").Exists() {
+		t.Fatalf("expected stream_options removed")
 	}
 }
 

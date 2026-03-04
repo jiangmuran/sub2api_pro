@@ -1650,7 +1650,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		// Remove unsupported fields (not supported by upstream OpenAI API)
-		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier"}
+		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier", "stream_options"}
 		for _, unsupportedField := range unsupportedFields {
 			if _, has := reqBody[unsupportedField]; has {
 				delete(reqBody, unsupportedField)
@@ -3817,7 +3817,7 @@ func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, p
 }
 
 // normalizeOpenAIPassthroughOAuthBody 将透传 OAuth 请求体收敛为旧链路关键行为：
-// 1) store=false 2) stream=true
+// 1) store=false 2) stream=true 3) 移除上游不支持字段（如 stream_options/service_tier=auto/metadata）
 func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 	if len(body) == 0 {
 		return body, false, nil
@@ -3839,6 +3839,33 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 		next, err := sjson.SetBytes(normalized, "stream", true)
 		if err != nil {
 			return body, false, fmt.Errorf("normalize passthrough body stream=true: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
+	if gjson.GetBytes(normalized, "stream_options").Exists() {
+		next, err := sjson.DeleteBytes(normalized, "stream_options")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body delete stream_options: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
+	if serviceTier := strings.TrimSpace(gjson.GetBytes(normalized, "service_tier").String()); strings.EqualFold(serviceTier, "auto") {
+		next, err := sjson.DeleteBytes(normalized, "service_tier")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body delete service_tier: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
+	if gjson.GetBytes(normalized, "metadata").Exists() {
+		next, err := sjson.DeleteBytes(normalized, "metadata")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body delete metadata: %w", err)
 		}
 		normalized = next
 		changed = true
