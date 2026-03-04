@@ -1659,11 +1659,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 		}
 
-		if v, ok := reqBody["service_tier"].(string); ok && strings.EqualFold(strings.TrimSpace(v), "auto") {
-			delete(reqBody, "service_tier")
-			bodyModified = true
-			markPatchDelete("service_tier")
-		}
+	}
+
+	if v, ok := reqBody["service_tier"].(string); ok && strings.EqualFold(strings.TrimSpace(v), "auto") {
+		delete(reqBody, "service_tier")
+		bodyModified = true
+		markPatchDelete("service_tier")
 	}
 
 	// 仅在 WSv2 模式保留 previous_response_id，其他模式（HTTP/WSv1）统一过滤。
@@ -2892,7 +2893,8 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		}
 	}
 
-	needModelReplace := originalModel != mappedModel
+	legacyProtocol := GetOpenAILegacyProtocol(c)
+	needModelReplace := legacyProtocol == "" && originalModel != mappedModel
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
 	}
@@ -2933,20 +2935,31 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 		// Extract data from SSE line (supports both "data: " and "data:" formats)
 		if data, ok := extractOpenAISSEDataLine(line); ok {
+			usageData := data
+			if legacyProtocol != "" {
+				if converted, ok := ConvertOpenAIResponsesSSEToLegacy(data, legacyProtocol, originalModel); ok {
+					if converted == "[DONE]" {
+						line = "data: [DONE]"
+					} else {
+						line = "data: " + converted
+					}
+					data = converted
+				} else {
+					s.parseSSEUsageBytes([]byte(usageData), usage)
+					return
+				}
+			} else {
+				// Replace model in response if needed.
+				// Fast path: most events do not contain model field values.
+				if needModelReplace && mappedModel != "" && strings.Contains(data, mappedModel) {
+					line = s.replaceModelInSSELine(line, mappedModel, originalModel)
+				}
 
-			// Replace model in response if needed.
-			// Fast path: most events do not contain model field values.
-			if needModelReplace && mappedModel != "" && strings.Contains(data, mappedModel) {
-				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
-			}
-
-			dataBytes := []byte(data)
-
-			// Correct Codex tool calls if needed (apply_patch -> edit, etc.)
-			if correctedData, corrected := s.toolCorrector.CorrectToolCallsInSSEBytes(dataBytes); corrected {
-				dataBytes = correctedData
-				data = string(correctedData)
-				line = "data: " + data
+				// Correct Codex tool calls if needed (apply_patch -> edit, etc.)
+				if correctedData, corrected := s.toolCorrector.CorrectToolCallsInSSEBytes([]byte(data)); corrected {
+					data = string(correctedData)
+					line = "data: " + data
+				}
 			}
 
 			// 写入客户端（客户端断开后继续 drain 上游）
@@ -2975,7 +2988,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
 			}
-			s.parseSSEUsageBytes(dataBytes, usage)
+			s.parseSSEUsageBytes([]byte(usageData), usage)
 			return
 		}
 
@@ -3202,10 +3215,11 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		return nil, err
 	}
 
+	legacyProtocol := GetOpenAILegacyProtocol(c)
 	if account.Type == AccountTypeOAuth {
 		bodyLooksLikeSSE := bytes.Contains(body, []byte("data:")) || bytes.Contains(body, []byte("event:"))
 		if isEventStreamResponse(resp.Header) || bodyLooksLikeSSE {
-			return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel)
+			return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel, legacyProtocol)
 		}
 	}
 
@@ -3216,7 +3230,11 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 	usage := &usageValue
 
 	// Replace model in response if needed
-	if originalModel != mappedModel {
+	if legacyProtocol != "" {
+		if legacyBody, err := ConvertOpenAIResponsesToLegacy(body, legacyProtocol, originalModel); err == nil {
+			body = legacyBody
+		}
+	} else if originalModel != mappedModel {
 		body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
 	}
 
@@ -3239,7 +3257,7 @@ func isEventStreamResponse(header http.Header) bool {
 	return strings.Contains(contentType, "text/event-stream")
 }
 
-func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel, mappedModel string) (*OpenAIUsage, error) {
+func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel, mappedModel, legacyProtocol string) (*OpenAIUsage, error) {
 	bodyText := string(body)
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
 
@@ -3249,7 +3267,11 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 			*usage = parsedUsage
 		}
 		body = finalResponse
-		if originalModel != mappedModel {
+		if legacyProtocol != "" {
+			if legacyBody, err := ConvertOpenAIResponsesToLegacy(body, legacyProtocol, originalModel); err == nil {
+				body = legacyBody
+			}
+		} else if originalModel != mappedModel {
 			body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
 		}
 		// Correct tool calls in final response

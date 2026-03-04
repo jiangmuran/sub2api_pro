@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -119,6 +121,13 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	if !gjson.ValidBytes(body) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
+	}
+
+	if normalized, changed, err := service.NormalizeOpenAIResponsesBody(body); err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	} else if changed {
+		body = normalized
 	}
 
 	// 使用 gjson 只读提取字段做校验，避免完整 Unmarshal
@@ -338,6 +347,51 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		)
 		return
 	}
+}
+
+// ChatCompletions handles OpenAI legacy /v1/chat/completions endpoint.
+func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
+	h.handleLegacyCompletions(c, service.OpenAILegacyProtocolChat)
+}
+
+// Completions handles OpenAI legacy /v1/completions endpoint.
+func (h *OpenAIGatewayHandler) Completions(c *gin.Context) {
+	h.handleLegacyCompletions(c, service.OpenAILegacyProtocolCompletions)
+}
+
+func (h *OpenAIGatewayHandler) handleLegacyCompletions(c *gin.Context, protocol string) {
+	setOpenAIClientTransportHTTP(c)
+	service.SetOpenAILegacyProtocol(c, protocol)
+
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		if maxErr, ok := extractMaxBytesError(err); ok {
+			h.errorResponse(c, http.StatusRequestEntityTooLarge, "invalid_request_error", buildBodyTooLargeMessage(maxErr.Limit))
+			return
+		}
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+	if len(body) == 0 {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
+		return
+	}
+	if !gjson.ValidBytes(body) {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	}
+
+	converted, err := service.ConvertOpenAILegacyRequestBody(body, protocol)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	}
+
+	c.Request.Body = io.NopCloser(bytes.NewReader(converted))
+	c.Request.ContentLength = int64(len(converted))
+	c.Request.Header.Set("Content-Length", strconv.Itoa(len(converted)))
+
+	h.Responses(c)
 }
 
 func (h *OpenAIGatewayHandler) validateFunctionCallOutputRequest(c *gin.Context, body []byte, reqLog *zap.Logger) bool {
