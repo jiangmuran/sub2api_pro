@@ -80,6 +80,10 @@ func NormalizeOpenAIResponsesBody(body []byte) ([]byte, bool, error) {
 		changed = true
 	}
 
+	if normalizeOpenAICompatibilityPayload(payload) {
+		changed = true
+	}
+
 	if !changed {
 		return body, false, nil
 	}
@@ -137,11 +141,86 @@ func ConvertOpenAILegacyRequestBody(body []byte, protocol string) ([]byte, error
 		delete(payload, "stream_options")
 	}
 
+	_ = normalizeOpenAICompatibilityPayload(payload)
+
 	converted, err := json.Marshal(payload)
 	if err != nil {
 		return body, fmt.Errorf("serialize request: %w", err)
 	}
 	return converted, nil
+}
+
+func normalizeOpenAICompatibilityPayload(payload map[string]any) bool {
+	if payload == nil {
+		return false
+	}
+
+	changed := false
+
+	if _, exists := payload["stream_options"]; exists {
+		delete(payload, "stream_options")
+		changed = true
+	}
+
+	if rawEffort, exists := payload["reasoning_effort"]; exists {
+		effort := ""
+		if s, ok := rawEffort.(string); ok {
+			effort = normalizeOpenAIReasoningEffort(s)
+		}
+		if effort != "" {
+			reasoning, _ := payload["reasoning"].(map[string]any)
+			if reasoning == nil {
+				reasoning = map[string]any{}
+				payload["reasoning"] = reasoning
+			}
+			if _, has := reasoning["effort"]; !has {
+				reasoning["effort"] = effort
+				changed = true
+			}
+		}
+		delete(payload, "reasoning_effort")
+		changed = true
+	}
+
+	if input, ok := payload["input"].([]any); ok {
+		if normalizeOpenAIInputRoles(input) {
+			changed = true
+		}
+	}
+
+	return changed
+}
+
+func normalizeOpenAIInputRoles(input []any) bool {
+	changed := false
+	for _, item := range input {
+		msg, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		role, ok := msg["role"].(string)
+		if !ok || !strings.EqualFold(strings.TrimSpace(role), "tool") {
+			continue
+		}
+
+		msg["role"] = "user"
+		changed = true
+
+		toolCallID, _ := msg["tool_call_id"].(string)
+		if content, ok := msg["content"].(string); ok {
+			trimmedID := strings.TrimSpace(toolCallID)
+			if trimmedID != "" {
+				msg["content"] = fmt.Sprintf("[tool:%s] %s", trimmedID, content)
+				changed = true
+			}
+		}
+
+		if _, has := msg["tool_call_id"]; has {
+			delete(msg, "tool_call_id")
+			changed = true
+		}
+	}
+	return changed
 }
 
 func ConvertOpenAIResponsesToLegacy(body []byte, protocol string, fallbackModel string) ([]byte, error) {

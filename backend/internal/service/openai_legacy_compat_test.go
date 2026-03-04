@@ -52,6 +52,43 @@ func TestNormalizeOpenAIResponsesBody_RemovesStreamOptions(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIResponsesBody_ConvertsReasoningEffort(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"input_text","text":"hi"}],"reasoning_effort":"high"}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "reasoning_effort").Exists() {
+		t.Fatalf("expected reasoning_effort removed")
+	}
+	if gjson.GetBytes(normalized, "reasoning.effort").String() != "high" {
+		t.Fatalf("expected reasoning.effort=high")
+	}
+}
+
+func TestNormalizeOpenAIResponsesBody_ConvertsToolRole(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"role":"tool","tool_call_id":"call_123","content":"result"}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "input.0.role").String() != "user" {
+		t.Fatalf("expected role converted to user")
+	}
+	if gjson.GetBytes(normalized, "input.0.tool_call_id").Exists() {
+		t.Fatalf("expected tool_call_id removed")
+	}
+	if gjson.GetBytes(normalized, "input.0.content").String() != "[tool:call_123] result" {
+		t.Fatalf("unexpected converted content")
+	}
+}
+
 func TestConvertOpenAILegacyRequestBody_Chat(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64}`)
 	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
@@ -77,6 +114,23 @@ func TestConvertOpenAILegacyRequestBody_RemovesStreamOptions(t *testing.T) {
 	}
 	if gjson.GetBytes(converted, "stream_options").Exists() {
 		t.Fatalf("expected stream_options removed")
+	}
+}
+
+func TestConvertOpenAILegacyRequestBody_ConvertsToolRoleAndReasoning(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"tool","content":"ok","tool_call_id":"call_9"}],"reasoning_effort":"medium"}`)
+	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
+	if err != nil {
+		t.Fatalf("ConvertOpenAILegacyRequestBody error: %v", err)
+	}
+	if gjson.GetBytes(converted, "input.0.role").String() != "user" {
+		t.Fatalf("expected role converted to user")
+	}
+	if gjson.GetBytes(converted, "reasoning_effort").Exists() {
+		t.Fatalf("expected reasoning_effort removed")
+	}
+	if gjson.GetBytes(converted, "reasoning.effort").String() != "medium" {
+		t.Fatalf("expected reasoning.effort=medium")
 	}
 }
 
