@@ -1667,6 +1667,16 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		markPatchDelete("service_tier")
 	}
 
+	// Codex OAuth upstream (chatgpt.com/backend-api/codex/responses) may reject metadata.
+	// Keep API-key accounts unchanged to avoid altering OpenAI native behavior there.
+	if account.Type == AccountTypeOAuth {
+		if _, has := reqBody["metadata"]; has {
+			delete(reqBody, "metadata")
+			bodyModified = true
+			markPatchDelete("metadata")
+		}
+	}
+
 	// 仅在 WSv2 模式保留 previous_response_id，其他模式（HTTP/WSv1）统一过滤。
 	// 注意：该规则同样适用于 Codex CLI 请求，避免 WSv1 向上游透传不支持字段。
 	if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
@@ -2284,6 +2294,9 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	requestBody []byte,
 ) error {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if normalized, changed := normalizeOpenAIPassthroughErrorBody(resp.StatusCode, body); changed {
+		body = normalized
+	}
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -2321,6 +2334,39 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 		return fmt.Errorf("upstream error: %d", resp.StatusCode)
 	}
 	return fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+}
+
+func normalizeOpenAIPassthroughErrorBody(statusCode int, body []byte) ([]byte, bool) {
+	if statusCode != http.StatusBadRequest || len(body) == 0 || !gjson.ValidBytes(body) {
+		return body, false
+	}
+
+	detail := strings.TrimSpace(gjson.GetBytes(body, "detail").String())
+	if detail == "" {
+		detail = strings.TrimSpace(gjson.GetBytes(body, "error.message").String())
+	}
+	if detail == "" {
+		return body, false
+	}
+	if !strings.Contains(strings.ToLower(detail), "unsupported parameter") {
+		return body, false
+	}
+
+	currentType := strings.TrimSpace(gjson.GetBytes(body, "type").String())
+	if currentType != "" && !strings.EqualFold(currentType, "authentication_error") {
+		return body, false
+	}
+
+	next, err := sjson.SetBytes(body, "type", "invalid_request_error")
+	if err != nil {
+		return body, false
+	}
+	if gjson.GetBytes(next, "error.type").Exists() {
+		if replaced, setErr := sjson.SetBytes(next, "error.type", "invalid_request_error"); setErr == nil {
+			next = replaced
+		}
+	}
+	return next, true
 }
 
 func isOpenAIPassthroughAllowedRequestHeader(lowerKey string, allowTimeoutHeaders bool) bool {
