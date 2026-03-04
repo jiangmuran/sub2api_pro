@@ -6,13 +6,16 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"log"
 	"math/big"
+	"net"
 	"net/smtp"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -148,6 +151,17 @@ func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) 
 
 // SendEmailWithConfig 使用指定配置发送邮件
 func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body string) error {
+	if config == nil {
+		return fmt.Errorf("smtp config is nil")
+	}
+	host := normalizeSMTPHost(config.Host)
+	if host == "" {
+		return fmt.Errorf("smtp host is empty")
+	}
+	if config.Port <= 0 {
+		config.Port = 587
+	}
+
 	from := config.From
 	if config.FromName != "" {
 		from = fmt.Sprintf("%s <%s>", config.FromName, config.From)
@@ -156,18 +170,17 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
 		from, to, subject, body)
 
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
+	addr := fmt.Sprintf("%s:%d", host, config.Port)
 
 	if config.UseTLS {
-		return s.sendMailTLS(addr, auth, config.From, to, []byte(msg), config.Host)
+		return s.sendMailTLS(addr, config.From, to, []byte(msg), host, config.Username, config.Password)
 	}
 
-	return smtp.SendMail(addr, auth, config.From, []string{to}, []byte(msg))
+	return s.sendMailWithSTARTTLS(addr, config.From, to, []byte(msg), host, config.Username, config.Password)
 }
 
 // sendMailTLS 使用TLS发送邮件
-func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
+func (s *EmailService) sendMailTLS(addr, from, to string, msg []byte, host, username, password string) error {
 	tlsConfig := &tls.Config{
 		ServerName: host,
 		// 强制 TLS 1.2+，避免协议降级导致的弱加密风险。
@@ -186,7 +199,7 @@ func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string,
 	}
 	defer func() { _ = client.Close() }()
 
-	if err = client.Auth(auth); err != nil {
+	if err = smtpAuthenticate(client, host, username, password); err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
 
@@ -217,6 +230,106 @@ func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string,
 	// Some SMTP servers return non-standard responses on QUIT
 	_ = client.Quit()
 	return nil
+}
+
+func (s *EmailService) sendMailWithSTARTTLS(addr, from, to string, msg []byte, host, username, password string) error {
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("smtp dial: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsConfig := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
+		if err := client.StartTLS(tlsConfig); err != nil {
+			return fmt.Errorf("smtp starttls: %w", err)
+		}
+	}
+
+	if err := smtpAuthenticate(client, host, username, password); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("smtp mail: %w", err)
+	}
+	if err := client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp rcpt: %w", err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err = w.Write(msg); err != nil {
+		return fmt.Errorf("write msg: %w", err)
+	}
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("close writer: %w", err)
+	}
+	_ = client.Quit()
+	return nil
+}
+
+func smtpAuthenticate(client *smtp.Client, host, username, password string) error {
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
+	if username == "" || password == "" {
+		return nil
+	}
+
+	plainErr := client.Auth(smtp.PlainAuth("", username, password, host))
+	if plainErr == nil {
+		return nil
+	}
+	loginErr := client.Auth(LoginAuth(username, password))
+	if loginErr == nil {
+		return nil
+	}
+	return errors.Join(plainErr, loginErr)
+}
+
+type loginAuth struct {
+	username string
+	password string
+}
+
+func LoginAuth(username, password string) smtp.Auth {
+	return &loginAuth{username: username, password: password}
+}
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", []byte(a.username), nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	prompt := strings.ToLower(strings.TrimSpace(string(fromServer)))
+	if strings.Contains(prompt, "username") {
+		return []byte(a.username), nil
+	}
+	if strings.Contains(prompt, "password") {
+		return []byte(a.password), nil
+	}
+	return nil, fmt.Errorf("unexpected smtp login challenge: %s", prompt)
+}
+
+func normalizeSMTPHost(host string) string {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return ""
+	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		return strings.TrimSpace(parsedHost)
+	}
+	if strings.Count(host, ":") == 1 {
+		parts := strings.SplitN(host, ":", 2)
+		if strings.TrimSpace(parts[0]) != "" {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	return host
 }
 
 // GenerateVerifyCode 生成6位数字验证码
@@ -349,11 +462,21 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
 
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
 func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	if config == nil {
+		return fmt.Errorf("smtp config is nil")
+	}
+	host := normalizeSMTPHost(config.Host)
+	if host == "" {
+		return fmt.Errorf("smtp host is empty")
+	}
+	if config.Port <= 0 {
+		config.Port = 587
+	}
+	addr := fmt.Sprintf("%s:%d", host, config.Port)
 
 	if config.UseTLS {
 		tlsConfig := &tls.Config{
-			ServerName: config.Host,
+			ServerName: host,
 			// 与发送逻辑一致，显式要求 TLS 1.2+。
 			MinVersion: tls.VersionTLS12,
 		}
@@ -363,14 +486,13 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 		}
 		defer func() { _ = conn.Close() }()
 
-		client, err := smtp.NewClient(conn, config.Host)
+		client, err := smtp.NewClient(conn, host)
 		if err != nil {
 			return fmt.Errorf("smtp client creation failed: %w", err)
 		}
 		defer func() { _ = client.Close() }()
 
-		auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-		if err = client.Auth(auth); err != nil {
+		if err = smtpAuthenticate(client, host, config.Username, config.Password); err != nil {
 			return fmt.Errorf("smtp authentication failed: %w", err)
 		}
 
@@ -384,8 +506,14 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 	}
 	defer func() { _ = client.Close() }()
 
-	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	if err = client.Auth(auth); err != nil {
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsConfig := &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
+		if err = client.StartTLS(tlsConfig); err != nil {
+			return fmt.Errorf("smtp starttls failed: %w", err)
+		}
+	}
+
+	if err = smtpAuthenticate(client, host, config.Username, config.Password); err != nil {
 		return fmt.Errorf("smtp authentication failed: %w", err)
 	}
 
