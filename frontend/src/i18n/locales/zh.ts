@@ -3952,6 +3952,9 @@ export default {
         fromEmailPlaceholder: "noreply{'@'}example.com",
         fromName: '发件人名称',
         fromNamePlaceholder: 'Sub2API',
+        proxy: 'SMTP 代理',
+        proxyDirect: '直连',
+        proxyHint: '可选：通过 SOCKS5 代理发送 SMTP',
         useTls: '使用 TLS',
         useTlsHint: '为 SMTP 连接启用 TLS 加密'
       },

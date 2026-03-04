@@ -976,6 +976,20 @@
               </div>
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.smtp.proxy') }}
+                </label>
+                <select v-model="form.smtp_proxy_url" class="input">
+                  <option value="">{{ t('admin.settings.smtp.proxyDirect') }}</option>
+                  <option v-for="option in smtpProxyOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.smtp.proxyHint') }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('admin.settings.smtp.username') }}
                 </label>
                 <input
@@ -1353,7 +1367,7 @@ import type {
   UpdateSettingsRequest,
   DefaultSubscriptionSetting
 } from '@/api/admin/settings'
-import type { AdminGroup } from '@/types'
+import type { AdminGroup, Proxy } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
@@ -1381,6 +1395,7 @@ const adminApiKeyMasked = ref('')
 const adminApiKeyOperating = ref(false)
 const newAdminApiKey = ref('')
 const subscriptionGroups = ref<AdminGroup[]>([])
+const smtpProxyOptions = ref<Array<{ value: string; label: string }>>([])
 
 // Stream Timeout 状态
 const streamTimeoutLoading = ref(true)
@@ -1440,6 +1455,7 @@ const form = reactive<SettingsForm>({
   smtp_from_email: '',
   smtp_from_name: '',
   smtp_use_tls: true,
+  smtp_proxy_url: '',
   // Cloudflare Turnstile
   turnstile_enabled: false,
   turnstile_site_key: '',
@@ -1568,6 +1584,32 @@ async function loadSubscriptionGroups() {
   }
 }
 
+async function loadSmtpProxies() {
+  try {
+    const proxies = await adminAPI.proxies.getAll()
+    smtpProxyOptions.value = proxies
+      .filter((item: Proxy) => item.protocol === 'socks5' || item.protocol === 'socks5h')
+      .map((item: Proxy) => ({
+        value: buildSmtpProxyURL(item),
+        label: `${item.name} (${item.protocol}://${item.host}:${item.port})`
+      }))
+  } catch (error) {
+    console.error('Failed to load SMTP proxy options:', error)
+    smtpProxyOptions.value = []
+  }
+}
+
+function buildSmtpProxyURL(proxy: Proxy): string {
+  const username = (proxy.username || '').trim()
+  const password = (proxy.password || '').trim()
+  if (username === '') {
+    return `${proxy.protocol}://${proxy.host}:${proxy.port}`
+  }
+  const encodedUsername = encodeURIComponent(username)
+  const encodedPassword = encodeURIComponent(password)
+  return `${proxy.protocol}://${encodedUsername}:${encodedPassword}@${proxy.host}:${proxy.port}`
+}
+
 function addDefaultSubscription() {
   if (subscriptionGroups.value.length === 0) return
   const existing = new Set(form.default_subscriptions.map((item) => item.group_id))
@@ -1639,6 +1681,7 @@ async function saveSettings() {
       smtp_from_email: form.smtp_from_email,
       smtp_from_name: form.smtp_from_name,
       smtp_use_tls: form.smtp_use_tls,
+      smtp_proxy_url: form.smtp_proxy_url || undefined,
       turnstile_enabled: form.turnstile_enabled,
       turnstile_site_key: form.turnstile_site_key,
       turnstile_secret_key: form.turnstile_secret_key || undefined,
@@ -1681,7 +1724,8 @@ async function testSmtpConnection() {
       smtp_port: form.smtp_port,
       smtp_username: form.smtp_username,
       smtp_password: form.smtp_password,
-      smtp_use_tls: form.smtp_use_tls
+      smtp_use_tls: form.smtp_use_tls,
+      smtp_proxy_url: form.smtp_proxy_url || undefined
     })
     // API returns { message: "..." } on success, errors are thrown as exceptions
     appStore.showSuccess(result.message || t('admin.settings.smtpConnectionSuccess'))
@@ -1710,7 +1754,8 @@ async function sendTestEmail() {
       smtp_password: form.smtp_password,
       smtp_from_email: form.smtp_from_email,
       smtp_from_name: form.smtp_from_name,
-      smtp_use_tls: form.smtp_use_tls
+      smtp_use_tls: form.smtp_use_tls,
+      smtp_proxy_url: form.smtp_proxy_url || undefined
     })
     // API returns { message: "..." } on success, errors are thrown as exceptions
     appStore.showSuccess(result.message || t('admin.settings.testEmailSent'))
@@ -1821,6 +1866,7 @@ async function saveStreamTimeoutSettings() {
 onMounted(() => {
   loadSettings()
   loadSubscriptionGroups()
+  loadSmtpProxies()
   loadAdminApiKey()
   loadStreamTimeoutSettings()
 })

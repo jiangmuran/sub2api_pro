@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -89,6 +90,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		SMTPFrom:                             settings.SMTPFrom,
 		SMTPFromName:                         settings.SMTPFromName,
 		SMTPUseTLS:                           settings.SMTPUseTLS,
+		SMTPProxyURL:                         settings.SMTPProxyURL,
 		TurnstileEnabled:                     settings.TurnstileEnabled,
 		TurnstileSiteKey:                     settings.TurnstileSiteKey,
 		TurnstileSecretKeyConfigured:         settings.TurnstileSecretKeyConfigured,
@@ -145,6 +147,7 @@ type UpdateSettingsRequest struct {
 	SMTPFrom     string `json:"smtp_from_email"`
 	SMTPFromName string `json:"smtp_from_name"`
 	SMTPUseTLS   bool   `json:"smtp_use_tls"`
+	SMTPProxyURL string `json:"smtp_proxy_url"`
 
 	// Cloudflare Turnstile 设置
 	TurnstileEnabled   bool   `json:"turnstile_enabled"`
@@ -225,6 +228,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		req.SMTPPort = 587
 	}
 	req.DefaultSubscriptions = normalizeDefaultSubscriptions(req.DefaultSubscriptions)
+	req.SMTPProxyURL = strings.TrimSpace(req.SMTPProxyURL)
+	if req.SMTPProxyURL != "" {
+		_, parsed, err := proxyurl.Parse(req.SMTPProxyURL)
+		if err != nil {
+			response.BadRequest(c, "SMTP proxy URL is invalid")
+			return
+		}
+		if parsed.Scheme != "socks5" && parsed.Scheme != "socks5h" {
+			response.BadRequest(c, "SMTP proxy must use socks5 or socks5h")
+			return
+		}
+	}
 
 	// Turnstile 参数验证
 	if req.TurnstileEnabled {
@@ -439,6 +454,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SMTPFrom:                    req.SMTPFrom,
 		SMTPFromName:                req.SMTPFromName,
 		SMTPUseTLS:                  req.SMTPUseTLS,
+		SMTPProxyURL:                req.SMTPProxyURL,
 		TurnstileEnabled:            req.TurnstileEnabled,
 		TurnstileSiteKey:            req.TurnstileSiteKey,
 		TurnstileSecretKey:          req.TurnstileSecretKey,
@@ -532,6 +548,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		SMTPFrom:                             updatedSettings.SMTPFrom,
 		SMTPFromName:                         updatedSettings.SMTPFromName,
 		SMTPUseTLS:                           updatedSettings.SMTPUseTLS,
+		SMTPProxyURL:                         updatedSettings.SMTPProxyURL,
 		TurnstileEnabled:                     updatedSettings.TurnstileEnabled,
 		TurnstileSiteKey:                     updatedSettings.TurnstileSiteKey,
 		TurnstileSecretKeyConfigured:         updatedSettings.TurnstileSecretKeyConfigured,
@@ -624,6 +641,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.SMTPUseTLS != after.SMTPUseTLS {
 		changed = append(changed, "smtp_use_tls")
+	}
+	if before.SMTPProxyURL != after.SMTPProxyURL {
+		changed = append(changed, "smtp_proxy_url")
 	}
 	if before.TurnstileEnabled != after.TurnstileEnabled {
 		changed = append(changed, "turnstile_enabled")
@@ -766,6 +786,7 @@ type TestSMTPRequest struct {
 	SMTPUsername string `json:"smtp_username"`
 	SMTPPassword string `json:"smtp_password"`
 	SMTPUseTLS   bool   `json:"smtp_use_tls"`
+	SMTPProxyURL string `json:"smtp_proxy_url"`
 }
 
 // TestSMTPConnection 测试SMTP连接
@@ -783,10 +804,14 @@ func (h *SettingHandler) TestSMTPConnection(c *gin.Context) {
 
 	// 如果未提供密码，从数据库获取已保存的密码
 	password := req.SMTPPassword
+	proxyURL := req.SMTPProxyURL
 	if password == "" {
 		savedConfig, err := h.emailService.GetSMTPConfig(c.Request.Context())
 		if err == nil && savedConfig != nil {
 			password = savedConfig.Password
+			if proxyURL == "" {
+				proxyURL = savedConfig.ProxyURL
+			}
 		}
 	}
 
@@ -796,6 +821,7 @@ func (h *SettingHandler) TestSMTPConnection(c *gin.Context) {
 		Username: req.SMTPUsername,
 		Password: password,
 		UseTLS:   req.SMTPUseTLS,
+		ProxyURL: proxyURL,
 	}
 
 	err := h.emailService.TestSMTPConnectionWithConfig(config)
@@ -817,6 +843,7 @@ type SendTestEmailRequest struct {
 	SMTPFrom     string `json:"smtp_from_email"`
 	SMTPFromName string `json:"smtp_from_name"`
 	SMTPUseTLS   bool   `json:"smtp_use_tls"`
+	SMTPProxyURL string `json:"smtp_proxy_url"`
 }
 
 // SendTestEmail 发送测试邮件
@@ -834,10 +861,14 @@ func (h *SettingHandler) SendTestEmail(c *gin.Context) {
 
 	// 如果未提供密码，从数据库获取已保存的密码
 	password := req.SMTPPassword
+	proxyURL := req.SMTPProxyURL
 	if password == "" {
 		savedConfig, err := h.emailService.GetSMTPConfig(c.Request.Context())
 		if err == nil && savedConfig != nil {
 			password = savedConfig.Password
+			if proxyURL == "" {
+				proxyURL = savedConfig.ProxyURL
+			}
 		}
 	}
 
@@ -849,6 +880,7 @@ func (h *SettingHandler) SendTestEmail(c *gin.Context) {
 		From:     req.SMTPFrom,
 		FromName: req.SMTPFromName,
 		UseTLS:   req.SMTPUseTLS,
+		ProxyURL: proxyURL,
 	}
 
 	siteName := h.settingService.GetSiteName(c.Request.Context())

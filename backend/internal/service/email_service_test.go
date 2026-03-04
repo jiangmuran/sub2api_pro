@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeSMTPHost(t *testing.T) {
 	tests := []struct {
@@ -49,5 +52,25 @@ func TestLoginAuth(t *testing.T) {
 	}
 	if next, err := la.Next(nil, false); err != nil || next != nil {
 		t.Fatalf("terminal challenge failed, next=%v err=%v", next, err)
+	}
+}
+
+func TestDialSMTPConnectionRejectsInvalidProxyURL(t *testing.T) {
+	_, err := dialSMTPConnection("smtp.example.com:587", ":://not-a-valid-url")
+	if err == nil {
+		t.Fatalf("expected error for invalid proxy URL")
+	}
+	if !strings.Contains(err.Error(), "parse smtp proxy") {
+		t.Fatalf("expected parse smtp proxy error, got: %v", err)
+	}
+}
+
+func TestDialSMTPConnectionRejectsNonSOCKSProxy(t *testing.T) {
+	_, err := dialSMTPConnection("smtp.example.com:587", "http://127.0.0.1:8080")
+	if err == nil {
+		t.Fatalf("expected error for non-socks proxy")
+	}
+	if !strings.Contains(err.Error(), "smtp proxy must use socks5 or socks5h") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

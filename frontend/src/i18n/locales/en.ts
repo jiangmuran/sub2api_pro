@@ -3783,6 +3783,9 @@ export default {
         fromEmailPlaceholder: "noreply{'@'}example.com",
         fromName: 'From Name',
         fromNamePlaceholder: 'Sub2API',
+        proxy: 'SMTP Proxy',
+        proxyDirect: 'Direct Connection',
+        proxyHint: 'Optional: route SMTP through a SOCKS5 proxy',
         useTls: 'Use TLS',
         useTlsHint: 'Enable TLS encryption for SMTP connection'
       },

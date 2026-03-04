@@ -19,6 +19,8 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
+	"golang.org/x/net/proxy"
 )
 
 var (
@@ -82,6 +84,7 @@ type SMTPConfig struct {
 	From     string
 	FromName string
 	UseTLS   bool
+	ProxyURL string
 }
 
 // EmailService 邮件服务
@@ -108,6 +111,7 @@ func (s *EmailService) GetSMTPConfig(ctx context.Context) (*SMTPConfig, error) {
 		SettingKeySMTPFrom,
 		SettingKeySMTPFromName,
 		SettingKeySMTPUseTLS,
+		SettingKeySMTPProxyURL,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -137,6 +141,7 @@ func (s *EmailService) GetSMTPConfig(ctx context.Context) (*SMTPConfig, error) {
 		From:     settings[SettingKeySMTPFrom],
 		FromName: settings[SettingKeySMTPFromName],
 		UseTLS:   useTLS,
+		ProxyURL: settings[SettingKeySMTPProxyURL],
 	}, nil
 }
 
@@ -173,23 +178,29 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 	addr := fmt.Sprintf("%s:%d", host, config.Port)
 
 	if config.UseTLS {
-		return s.sendMailTLS(addr, config.From, to, []byte(msg), host, config.Username, config.Password)
+		return s.sendMailTLS(addr, config.From, to, []byte(msg), host, config.Username, config.Password, config.ProxyURL)
 	}
 
-	return s.sendMailWithSTARTTLS(addr, config.From, to, []byte(msg), host, config.Username, config.Password)
+	return s.sendMailWithSTARTTLS(addr, config.From, to, []byte(msg), host, config.Username, config.Password, config.ProxyURL)
 }
 
 // sendMailTLS 使用TLS发送邮件
-func (s *EmailService) sendMailTLS(addr, from, to string, msg []byte, host, username, password string) error {
+func (s *EmailService) sendMailTLS(addr, from, to string, msg []byte, host, username, password, proxyURL string) error {
 	tlsConfig := &tls.Config{
 		ServerName: host,
 		// 强制 TLS 1.2+，避免协议降级导致的弱加密风险。
 		MinVersion: tls.VersionTLS12,
 	}
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	rawConn, err := dialSMTPConnection(addr, proxyURL)
 	if err != nil {
-		return fmt.Errorf("tls dial: %w", err)
+		return fmt.Errorf("smtp dial: %w", err)
+	}
+
+	conn := tls.Client(rawConn, tlsConfig)
+	if err := conn.Handshake(); err != nil {
+		_ = rawConn.Close()
+		return fmt.Errorf("tls handshake: %w", err)
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -232,10 +243,16 @@ func (s *EmailService) sendMailTLS(addr, from, to string, msg []byte, host, user
 	return nil
 }
 
-func (s *EmailService) sendMailWithSTARTTLS(addr, from, to string, msg []byte, host, username, password string) error {
-	client, err := smtp.Dial(addr)
+func (s *EmailService) sendMailWithSTARTTLS(addr, from, to string, msg []byte, host, username, password, proxyURL string) error {
+	conn, err := dialSMTPConnection(addr, proxyURL)
 	if err != nil {
 		return fmt.Errorf("smtp dial: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("new smtp client: %w", err)
 	}
 	defer func() { _ = client.Close() }()
 
@@ -286,6 +303,36 @@ func smtpAuthenticate(client *smtp.Client, host, username, password string) erro
 		return nil
 	}
 	return errors.Join(plainErr, loginErr)
+}
+
+func dialSMTPConnection(addr, proxyRaw string) (net.Conn, error) {
+	const dialTimeout = 10 * time.Second
+	trimmed, parsed, err := proxyurl.Parse(proxyRaw)
+	if err != nil {
+		return nil, fmt.Errorf("parse smtp proxy: %w", err)
+	}
+
+	dialer := &net.Dialer{Timeout: dialTimeout}
+	if trimmed == "" {
+		return dialer.Dial("tcp", addr)
+	}
+
+	if parsed.Scheme != "socks5" && parsed.Scheme != "socks5h" {
+		return nil, fmt.Errorf("smtp proxy must use socks5 or socks5h")
+	}
+
+	proxyDialer, err := proxy.FromURL(parsed, dialer)
+	if err != nil {
+		return nil, fmt.Errorf("create socks5 dialer: %w", err)
+	}
+
+	if contextDialer, ok := proxyDialer.(proxy.ContextDialer); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), dialTimeout)
+		defer cancel()
+		return contextDialer.DialContext(ctx, "tcp", addr)
+	}
+
+	return proxyDialer.Dial("tcp", addr)
 }
 
 type loginAuth struct {
@@ -480,9 +527,15 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 			// 与发送逻辑一致，显式要求 TLS 1.2+。
 			MinVersion: tls.VersionTLS12,
 		}
-		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		rawConn, err := dialSMTPConnection(addr, config.ProxyURL)
 		if err != nil {
-			return fmt.Errorf("tls connection failed: %w", err)
+			return fmt.Errorf("smtp dial failed: %w", err)
+		}
+
+		conn := tls.Client(rawConn, tlsConfig)
+		if err := conn.Handshake(); err != nil {
+			_ = rawConn.Close()
+			return fmt.Errorf("tls handshake failed: %w", err)
 		}
 		defer func() { _ = conn.Close() }()
 
@@ -500,9 +553,15 @@ func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
 	}
 
 	// 非TLS连接测试
-	client, err := smtp.Dial(addr)
+	conn, err := dialSMTPConnection(addr, config.ProxyURL)
 	if err != nil {
 		return fmt.Errorf("smtp connection failed: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp client creation failed: %w", err)
 	}
 	defer func() { _ = client.Close() }()
 
