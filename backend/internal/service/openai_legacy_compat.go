@@ -234,7 +234,7 @@ func ConvertOpenAIResponsesSSEToLegacy(data string, protocol string, fallbackMod
 	} else if eventType == "response.output_text.done" {
 		finishReason = "stop"
 	} else if eventType == "response.completed" || eventType == "response.done" {
-		return "", false
+		return "[DONE]", true
 	} else {
 		return "", false
 	}
