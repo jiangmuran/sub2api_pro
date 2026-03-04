@@ -3038,6 +3038,7 @@ func (m *AccountMutation) ResetOauthStatus() {
 // SetOauthRefreshAttempts sets the "oauth_refresh_attempts" field.
 func (m *AccountMutation) SetOauthRefreshAttempts(i int) {
 	m.oauth_refresh_attempts = &i
+	m.addoauth_refresh_attempts = nil
 }
 
 // OauthRefreshAttempts returns the value of the "oauth_refresh_attempts" field in the mutation.
@@ -4017,7 +4018,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 32)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -4582,9 +4583,6 @@ func (m *AccountMutation) ClearedFields() []string {
 	if m.FieldCleared(account.FieldProxyID) {
 		fields = append(fields, account.FieldProxyID)
 	}
-	if m.FieldCleared(account.FieldErrorMessage) {
-		fields = append(fields, account.FieldErrorMessage)
-	}
 	if m.FieldCleared(account.FieldOauthNextRefreshAt) {
 		fields = append(fields, account.FieldOauthNextRefreshAt)
 	}
@@ -4593,6 +4591,9 @@ func (m *AccountMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(account.FieldOauthLastError) {
 		fields = append(fields, account.FieldOauthLastError)
+	}
+	if m.FieldCleared(account.FieldErrorMessage) {
+		fields = append(fields, account.FieldErrorMessage)
 	}
 	if m.FieldCleared(account.FieldLastUsedAt) {
 		fields = append(fields, account.FieldLastUsedAt)
@@ -4647,9 +4648,6 @@ func (m *AccountMutation) ClearField(name string) error {
 	case account.FieldProxyID:
 		m.ClearProxyID()
 		return nil
-	case account.FieldErrorMessage:
-		m.ClearErrorMessage()
-		return nil
 	case account.FieldOauthNextRefreshAt:
 		m.ClearOauthNextRefreshAt()
 		return nil
@@ -4658,6 +4656,9 @@ func (m *AccountMutation) ClearField(name string) error {
 		return nil
 	case account.FieldOauthLastError:
 		m.ClearOauthLastError()
+		return nil
+	case account.FieldErrorMessage:
+		m.ClearErrorMessage()
 		return nil
 	case account.FieldLastUsedAt:
 		m.ClearLastUsedAt()

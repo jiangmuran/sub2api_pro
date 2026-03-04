@@ -17,12 +17,20 @@ func (m *opsRepoMock) InsertErrorLog(ctx context.Context, input *OpsInsertErrorL
 	return 0, nil
 }
 
+func (m *opsRepoMock) InsertRequestLog(ctx context.Context, input *OpsInsertRequestLogInput) (int64, error) {
+	return 0, nil
+}
+
 func (m *opsRepoMock) ListErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error) {
 	return &OpsErrorLogList{Errors: []*OpsErrorLog{}, Page: 1, PageSize: 20}, nil
 }
 
 func (m *opsRepoMock) GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error) {
 	return &OpsErrorLogDetail{}, nil
+}
+
+func (m *opsRepoMock) GetRequestLogByRequestID(ctx context.Context, requestID string) (*OpsRequestLogDetail, error) {
+	return &OpsRequestLogDetail{}, nil
 }
 
 func (m *opsRepoMock) ListRequestDetails(ctx context.Context, filter *OpsRequestDetailFilter) ([]*OpsRequestDetail, int64, error) {

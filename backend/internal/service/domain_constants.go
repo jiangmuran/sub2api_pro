@@ -145,6 +145,18 @@ const (
 	SettingKeyFallbackModelGemini      = "fallback_model_gemini"
 	SettingKeyFallbackModelAntigravity = "fallback_model_antigravity"
 
+	// Daily check-in settings
+	SettingKeyDailyCheckinEnabled   = "daily_checkin_enabled"
+	SettingKeyDailyCheckinRewardMin = "daily_checkin_reward_min"
+	SettingKeyDailyCheckinRewardMax = "daily_checkin_reward_max"
+
+	// Security chat settings
+	SettingKeySecurityChatRetentionDays    = "security_chat_retention_days"
+	SettingKeySecurityChatWhitelistEnabled = "security_chat_whitelist_enabled"
+	SettingKeySecurityChatExcludedUsers    = "security_chat_excluded_users"
+	SettingKeySecurityChatAIEnabled        = "security_chat_ai_enabled"
+	SettingKeySecurityChatAIModel          = "security_chat_ai_model"
+
 	// Request identity patch (Claude -> Gemini systemInstruction injection)
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"

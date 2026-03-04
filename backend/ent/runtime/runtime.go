@@ -225,16 +225,26 @@ func init() {
 	account.DefaultStatus = accountDescStatus.Default.(string)
 	// account.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	account.StatusValidator = accountDescStatus.Validators[0].(func(string) error)
+	// accountDescOauthStatus is the schema descriptor for oauth_status field.
+	accountDescOauthStatus := accountFields[11].Descriptor()
+	// account.DefaultOauthStatus holds the default value on creation for the oauth_status field.
+	account.DefaultOauthStatus = accountDescOauthStatus.Default.(string)
+	// account.OauthStatusValidator is a validator for the "oauth_status" field. It is called by the builders before save.
+	account.OauthStatusValidator = accountDescOauthStatus.Validators[0].(func(string) error)
+	// accountDescOauthRefreshAttempts is the schema descriptor for oauth_refresh_attempts field.
+	accountDescOauthRefreshAttempts := accountFields[12].Descriptor()
+	// account.DefaultOauthRefreshAttempts holds the default value on creation for the oauth_refresh_attempts field.
+	account.DefaultOauthRefreshAttempts = accountDescOauthRefreshAttempts.Default.(int)
 	// accountDescAutoPauseOnExpired is the schema descriptor for auto_pause_on_expired field.
-	accountDescAutoPauseOnExpired := accountFields[14].Descriptor()
+	accountDescAutoPauseOnExpired := accountFields[19].Descriptor()
 	// account.DefaultAutoPauseOnExpired holds the default value on creation for the auto_pause_on_expired field.
 	account.DefaultAutoPauseOnExpired = accountDescAutoPauseOnExpired.Default.(bool)
 	// accountDescSchedulable is the schema descriptor for schedulable field.
-	accountDescSchedulable := accountFields[15].Descriptor()
+	accountDescSchedulable := accountFields[20].Descriptor()
 	// account.DefaultSchedulable holds the default value on creation for the schedulable field.
 	account.DefaultSchedulable = accountDescSchedulable.Default.(bool)
 	// accountDescSessionWindowStatus is the schema descriptor for session_window_status field.
-	accountDescSessionWindowStatus := accountFields[23].Descriptor()
+	accountDescSessionWindowStatus := accountFields[28].Descriptor()
 	// account.SessionWindowStatusValidator is a validator for the "session_window_status" field. It is called by the builders before save.
 	account.SessionWindowStatusValidator = accountDescSessionWindowStatus.Validators[0].(func(string) error)
 	accountgroupFields := schema.AccountGroup{}.Fields()

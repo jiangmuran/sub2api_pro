@@ -637,6 +637,16 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyFallbackModelOpenAI:      "gpt-4o",
 		SettingKeyFallbackModelGemini:      "gemini-2.5-pro",
 		SettingKeyFallbackModelAntigravity: "gemini-2.5-pro",
+		// Daily check-in defaults
+		SettingKeyDailyCheckinEnabled:   "false",
+		SettingKeyDailyCheckinRewardMin: "1",
+		SettingKeyDailyCheckinRewardMax: "3",
+		// Security chat defaults
+		SettingKeySecurityChatRetentionDays:    "7",
+		SettingKeySecurityChatWhitelistEnabled: "false",
+		SettingKeySecurityChatExcludedUsers:    "",
+		SettingKeySecurityChatAIEnabled:        "false",
+		SettingKeySecurityChatAIModel:          "",
 		// Identity patch defaults
 		SettingKeyEnableIdentityPatch: "true",
 		SettingKeyIdentityPatchPrompt: "",
@@ -753,6 +763,25 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.FallbackModelOpenAI = s.getStringOrDefault(settings, SettingKeyFallbackModelOpenAI, "gpt-4o")
 	result.FallbackModelGemini = s.getStringOrDefault(settings, SettingKeyFallbackModelGemini, "gemini-2.5-pro")
 	result.FallbackModelAntigravity = s.getStringOrDefault(settings, SettingKeyFallbackModelAntigravity, "gemini-2.5-pro")
+
+	// Daily check-in settings
+	result.DailyCheckinEnabled = settings[SettingKeyDailyCheckinEnabled] == "true"
+	result.DailyCheckinRewardMin = 1
+	result.DailyCheckinRewardMax = 3
+	if raw := strings.TrimSpace(settings[SettingKeyDailyCheckinRewardMin]); raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err == nil {
+			result.DailyCheckinRewardMin = v
+		}
+	}
+	if raw := strings.TrimSpace(settings[SettingKeyDailyCheckinRewardMax]); raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err == nil {
+			result.DailyCheckinRewardMax = v
+		}
+	}
+
+	// Security chat AI settings
+	result.SecurityChatAIEnabled = settings[SettingKeySecurityChatAIEnabled] == "true"
+	result.SecurityChatAIModel = strings.TrimSpace(settings[SettingKeySecurityChatAIModel])
 
 	// Identity patch settings (default: enabled, to preserve existing behavior)
 	if v, ok := settings[SettingKeyEnableIdentityPatch]; ok && v != "" {

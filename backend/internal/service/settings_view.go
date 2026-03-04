@@ -53,6 +53,15 @@ type SystemSettings struct {
 	FallbackModelGemini      string `json:"fallback_model_gemini"`
 	FallbackModelAntigravity string `json:"fallback_model_antigravity"`
 
+	// Daily check-in settings
+	DailyCheckinEnabled   bool
+	DailyCheckinRewardMin float64
+	DailyCheckinRewardMax float64
+
+	// Security chat AI settings
+	SecurityChatAIEnabled bool
+	SecurityChatAIModel   string
+
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
 	IdentityPatchPrompt string `json:"identity_patch_prompt"`
