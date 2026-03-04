@@ -2710,6 +2710,7 @@ export default {
       value: '面值',
       count: '数量',
       generate: '生成',
+      copyCode: '复制',
       copyAll: '全部复制',
       download: '下载',
       codesExported: '兑换码导出成功',

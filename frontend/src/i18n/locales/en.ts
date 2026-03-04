@@ -2573,6 +2573,7 @@ export default {
       count: 'Count',
       generating: 'Generating...',
       generate: 'Generate',
+      copyCode: 'Copy',
       copyAll: 'Copy All',
       copied: 'Copied!',
       download: 'Download',
