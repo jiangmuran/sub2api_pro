@@ -80,6 +80,11 @@ func NormalizeOpenAIResponsesBody(body []byte) ([]byte, bool, error) {
 		changed = true
 	}
 
+	if _, exists := payload["user"]; exists {
+		delete(payload, "user")
+		changed = true
+	}
+
 	if normalizeOpenAICompatibilityPayload(payload) {
 		changed = true
 	}
@@ -139,6 +144,9 @@ func ConvertOpenAILegacyRequestBody(body []byte, protocol string) ([]byte, error
 
 	if _, exists := payload["stream_options"]; exists {
 		delete(payload, "stream_options")
+	}
+	if _, exists := payload["user"]; exists {
+		delete(payload, "user")
 	}
 
 	_ = normalizeOpenAICompatibilityPayload(payload)

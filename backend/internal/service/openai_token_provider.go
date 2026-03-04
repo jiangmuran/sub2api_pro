@@ -96,6 +96,18 @@ func NewOpenAITokenProvider(
 	}
 }
 
+// InvalidateToken clears token cache entry for the given account.
+func (p *OpenAITokenProvider) InvalidateToken(ctx context.Context, account *Account) error {
+	if p == nil || p.tokenCache == nil || account == nil {
+		return nil
+	}
+	cacheKey := OpenAITokenCacheKey(account)
+	if strings.TrimSpace(cacheKey) == "" {
+		return nil
+	}
+	return p.tokenCache.DeleteAccessToken(ctx, cacheKey)
+}
+
 func (p *OpenAITokenProvider) SnapshotRuntimeMetrics() OpenAITokenRuntimeMetrics {
 	if p == nil {
 		return OpenAITokenRuntimeMetrics{}

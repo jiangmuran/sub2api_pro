@@ -52,6 +52,20 @@ func TestNormalizeOpenAIResponsesBody_RemovesStreamOptions(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIResponsesBody_RemovesUser(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"input_text","text":"hi"}],"user":"u_123"}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "user").Exists() {
+		t.Fatalf("expected user removed")
+	}
+}
+
 func TestNormalizeOpenAIResponsesBody_ConvertsReasoningEffort(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","input":[{"type":"input_text","text":"hi"}],"reasoning_effort":"high"}`)
 	normalized, changed, err := NormalizeOpenAIResponsesBody(body)

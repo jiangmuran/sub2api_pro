@@ -1650,7 +1650,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		// Remove unsupported fields (not supported by upstream OpenAI API)
-		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier", "stream_options", "reasoning_effort"}
+		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier", "stream_options", "reasoning_effort", "user"}
 		for _, unsupportedField := range unsupportedFields {
 			if _, has := reqBody[unsupportedField]; has {
 				delete(reqBody, unsupportedField)
@@ -1934,6 +1934,15 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	// Handle error response
 	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		_ = resp.Body.Close()
+		if isOpenAIInvalidBearerError(resp.StatusCode, respBody) {
+			if retryResult, retryErr, retried := s.retryOpenAIOAuthInvalidBearerOnce(ctx, c, account, body); retried {
+				return retryResult, retryErr
+			}
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(respBody))
+
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
 			respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 			_ = resp.Body.Close()
@@ -3871,6 +3880,15 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 		changed = true
 	}
 
+	if gjson.GetBytes(normalized, "user").Exists() {
+		next, err := sjson.DeleteBytes(normalized, "user")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body delete user: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
 	if gjson.GetBytes(normalized, "reasoning_effort").Exists() {
 		next, err := sjson.DeleteBytes(normalized, "reasoning_effort")
 		if err != nil {
@@ -3881,6 +3899,57 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 	}
 
 	return normalized, changed, nil
+}
+
+const openAIOAuthInvalidBearerRetryKey = "openai_oauth_invalid_bearer_retry"
+
+func (s *OpenAIGatewayService) retryOpenAIOAuthInvalidBearerOnce(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	requestBody []byte,
+) (*OpenAIForwardResult, error, bool) {
+	if account == nil || account.Type != AccountTypeOAuth || account.Platform != PlatformOpenAI || c == nil {
+		return nil, nil, false
+	}
+	if v, ok := c.Get(openAIOAuthInvalidBearerRetryKey); ok {
+		if attempted, cast := v.(bool); cast && attempted {
+			return nil, nil, false
+		}
+	}
+	c.Set(openAIOAuthInvalidBearerRetryKey, true)
+
+	if account.Credentials == nil {
+		account.Credentials = map[string]any{}
+	}
+	account.Credentials["expires_at"] = time.Now().Add(-10 * time.Minute).Format(time.RFC3339)
+
+	if s.openAITokenProvider != nil {
+		_ = s.openAITokenProvider.InvalidateToken(ctx, account)
+	}
+	if s.accountRepo != nil {
+		_ = s.accountRepo.Update(ctx, account)
+	}
+
+	result, err := s.Forward(ctx, c, account, requestBody)
+	return result, err, true
+}
+
+func isOpenAIInvalidBearerError(statusCode int, body []byte) bool {
+	if statusCode != http.StatusUnauthorized || len(body) == 0 {
+		return false
+	}
+	msg := strings.TrimSpace(extractUpstreamErrorMessage(body))
+	if msg == "" && gjson.ValidBytes(body) {
+		msg = strings.TrimSpace(gjson.GetBytes(body, "detail").String())
+		if msg == "" {
+			msg = strings.TrimSpace(gjson.GetBytes(body, "message").String())
+		}
+	}
+	if msg == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(msg), "invalid bearer token")
 }
 
 func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byte) string {
