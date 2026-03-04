@@ -261,12 +261,14 @@ export default {
     apiKeys: 'API Keys',
     usage: 'Usage',
     redeem: 'Redeem',
+    distributor: 'Distributor',
     profile: 'Profile',
     users: 'Users',
     groups: 'Groups',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     proxies: 'Proxies',
+    distributors: 'Distributors',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
@@ -693,6 +695,31 @@ export default {
     failedToRedeem: 'Failed to redeem code. Please check the code and try again.',
     subscriptionRefreshFailed: 'Redeemed successfully, but failed to refresh subscription status.',
     pleaseEnterCode: 'Please enter a redeem code'
+  },
+
+  // Distributor (User)
+  distributor: {
+    title: 'Distributor',
+    description: 'Manage your distributor profile and orders',
+    balance: 'Balance',
+    offers: 'Offers',
+    validityDays: 'Validity (days)',
+    sellPrice: 'Sell Price',
+    memoPrompt: 'Optional note for this order',
+    buyCode: 'Buy Code',
+    searchOrders: 'Search orders...',
+    revoke: 'Revoke',
+    code: 'Redeem Code',
+    status: 'Status',
+    issuedAt: 'Issued At',
+    redeemedAt: 'Redeemed At',
+    codeCreated: 'Redeem code created',
+    revoked: 'Order revoked',
+    orderStatus: {
+      issued: 'Issued',
+      redeemed: 'Redeemed',
+      revoked: 'Revoked'
+    }
   },
 
   // Profile
@@ -2497,6 +2524,11 @@ export default {
       description: 'Generate and manage redeem codes',
       generateCodes: 'Generate Codes',
       searchCodes: 'Search codes or email...',
+      categoryFilter: 'Filter by category',
+      onlyDistributor: 'Show distributor codes only',
+      clearDistributorFilter: 'Show all categories',
+      showCategoryStats: 'Show category stats',
+      hideCategoryStats: 'Hide category stats',
       allTypes: 'All Types',
       allStatus: 'All Status',
       balance: 'Balance',
@@ -2506,15 +2538,21 @@ export default {
       invitationHint: 'Invitation codes are used to restrict user registration. They are automatically marked as used after use.',
       unused: 'Unused',
       used: 'Used',
+      ungrouped: 'Ungrouped',
       columns: {
         code: 'Code',
         type: 'Type',
         value: 'Value',
         status: 'Status',
+        category: 'Category',
+        notes: 'Notes',
+        total: 'Total',
         usedBy: 'Used By',
         usedAt: 'Used At',
         actions: 'Actions'
       },
+      categoryStats: 'Category Stats',
+      noCategoryStats: 'No category data available',
       userPrefix: 'User #{id}',
       exportCsv: 'Export CSV',
       deleteAllUnused: 'Delete All Unused Codes',
@@ -2528,6 +2566,8 @@ export default {
       generatedSuccessfully: 'Generated Successfully',
       codesCreated: '{count} redeem code(s) created',
       codeType: 'Code Type',
+      category: 'Category',
+      notes: 'Notes',
       amount: 'Amount ($)',
       value: 'Value',
       count: 'Count',
@@ -2564,7 +2604,45 @@ export default {
         unused: 'Unused',
         used: 'Used',
         expired: 'Expired',
-        disabled: 'Disabled'
+        disabled: 'Disabled',
+        revoked: 'Revoked'
+      }
+    },
+
+    // Distributors
+    distributor: {
+      title: 'Distributor Management',
+      description: 'Manage distributor profiles, offers, and orders',
+      notes: 'Notes',
+      markSettled: 'Mark Settled',
+      searchProfile: 'Search distributor...',
+      email: 'Email',
+      unsettled: 'Unsettled',
+      delta: 'Delta',
+      grossProfit: 'Gross Profit',
+      orders: 'Orders',
+      statsByUser: 'Stats by User',
+      manage: 'Manage',
+      balance: 'Balance',
+      amountPrompt: 'Enter amount',
+      topup: 'Top up',
+      refund: 'Refund',
+      offers: 'Offers',
+      offerName: 'Offer Name',
+      validityDays: 'Validity (days)',
+      cost: 'Cost',
+      searchOrders: 'Search orders...',
+      revoke: 'Revoke',
+      code: 'Redeem Code',
+      status: 'Status',
+      sellPrice: 'Sell Price',
+      usedByEmail: 'Used By Email',
+      issuedAt: 'Issued At',
+      redeemedAt: 'Redeemed At',
+      orderStatus: {
+        issued: 'Issued',
+        redeemed: 'Redeemed',
+        revoked: 'Revoked'
       }
     },
 

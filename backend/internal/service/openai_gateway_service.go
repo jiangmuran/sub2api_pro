@@ -1658,6 +1658,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				markPatchDelete(unsupportedField)
 			}
 		}
+
+		if v, ok := reqBody["service_tier"].(string); ok && strings.EqualFold(strings.TrimSpace(v), "auto") {
+			delete(reqBody, "service_tier")
+			bodyModified = true
+			markPatchDelete("service_tier")
+		}
 	}
 
 	// 仅在 WSv2 模式保留 previous_response_id，其他模式（HTTP/WSv1）统一过滤。

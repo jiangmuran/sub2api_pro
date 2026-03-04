@@ -261,12 +261,14 @@ export default {
     apiKeys: 'API 密钥',
     usage: '使用记录',
     redeem: '兑换',
+    distributor: '分销',
     profile: '个人资料',
     users: '用户管理',
     groups: '分组管理',
     subscriptions: '订阅管理',
     accounts: '账号管理',
     proxies: 'IP管理',
+    distributors: '分销管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
@@ -699,6 +701,31 @@ export default {
     failedToRedeem: '兑换失败，请检查兑换码后重试。',
     subscriptionRefreshFailed: '兑换成功，但订阅状态刷新失败。',
     pleaseEnterCode: '请输入兑换码'
+  },
+
+  // Distributor
+  distributor: {
+    title: '分销',
+    description: '管理你的分销资料与订单',
+    balance: '余额',
+    offers: '商品',
+    validityDays: '有效期（天）',
+    sellPrice: '售价',
+    memoPrompt: '备注（可选）',
+    buyCode: '购买兑换码',
+    searchOrders: '搜索订单...',
+    revoke: '撤销',
+    code: '兑换码',
+    status: '状态',
+    issuedAt: '下发时间',
+    redeemedAt: '使用时间',
+    codeCreated: '兑换码已创建',
+    revoked: '订单已撤销',
+    orderStatus: {
+      issued: '已下发',
+      redeemed: '已使用',
+      revoked: '已撤销'
+    }
   },
 
   // Profile
@@ -2627,11 +2654,19 @@ export default {
       title: '兑换码管理',
       description: '生成和管理兑换码',
       generateCodes: '生成兑换码',
+      categoryFilter: '按分类筛选',
+      onlyDistributor: '仅显示分销兑换码',
+      clearDistributorFilter: '显示全部分类',
+      showCategoryStats: '显示分类统计',
+      hideCategoryStats: '隐藏分类统计',
       columns: {
         code: '兑换码',
         type: '类型',
         value: '面值',
         status: '状态',
+        category: '分类',
+        notes: '备注',
+        total: '总数',
         usedBy: '使用者',
         usedAt: '使用时间',
         createdAt: '创建时间',
@@ -2656,7 +2691,10 @@ export default {
       allStatus: '全部状态',
       unused: '未使用',
       used: '已使用',
+      ungrouped: '未分类',
       searchCodes: '搜索兑换码或邮箱...',
+      categoryStats: '分类统计',
+      noCategoryStats: '暂无分类统计',
       exportCsv: '导出 CSV',
       deleteAllUnused: '删除全部未使用',
       deleteCodeConfirm: '确定要删除此兑换码吗？此操作无法撤销。',
@@ -2666,6 +2704,8 @@ export default {
       generatedSuccessfully: '生成成功',
       codesCreated: '已创建 {count} 个兑换码',
       codeType: '类型',
+      category: '分类',
+      notes: '备注',
       amount: '金额 ($)',
       value: '面值',
       count: '数量',
@@ -2689,7 +2729,8 @@ export default {
         unused: '未使用',
         used: '已使用',
         expired: '已过期',
-        disabled: '已禁用'
+        disabled: '已禁用',
+        revoked: '已撤销'
       },
       form: {
         typeLabel: '类型',
@@ -2729,6 +2770,43 @@ export default {
       failedToGenerate: '生成兑换码失败',
       failedToUpdate: '更新兑换码失败',
       failedToDelete: '删除兑换码失败'
+    },
+
+    // Distributors
+    distributor: {
+      title: '分销管理',
+      description: '管理分销资料、商品与订单',
+      notes: '备注',
+      markSettled: '结算',
+      searchProfile: '搜索分销商...',
+      email: '邮箱',
+      unsettled: '未结算',
+      delta: '变动',
+      grossProfit: '毛利',
+      orders: '订单',
+      statsByUser: '用户统计',
+      manage: '管理',
+      balance: '余额',
+      amountPrompt: '请输入金额',
+      topup: '充值',
+      refund: '退款',
+      offers: '商品',
+      offerName: '商品名称',
+      validityDays: '有效期（天）',
+      cost: '成本',
+      searchOrders: '搜索订单...',
+      revoke: '撤销',
+      code: '兑换码',
+      status: '状态',
+      sellPrice: '售价',
+      usedByEmail: '使用者邮箱',
+      issuedAt: '下发时间',
+      redeemedAt: '使用时间',
+      orderStatus: {
+        issued: '已下发',
+        redeemed: '已使用',
+        revoked: '已撤销'
+      }
     },
 
     // Announcements
