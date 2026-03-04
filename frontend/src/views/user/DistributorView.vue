@@ -97,6 +97,7 @@
                   min="0.01"
                   step="0.01"
                   class="input mt-1"
+                  :placeholder="(offer.cost_cny_cents / 100).toFixed(2)"
                   @blur="normalizeSellPrice(offer)"
                 />
               </div>
@@ -112,7 +113,7 @@
               />
               <button
                 class="btn btn-primary"
-                :disabled="creatingOrderId === offer.id || !offer.enabled"
+                :disabled="creatingOrderId === offer.id || !offer.enabled || !isSellPriceValid(offer.id)"
                 @click="buy(offer)"
               >
                 {{ creatingOrderId === offer.id ? t('common.processing') : t('distributor.buyCode') }}
@@ -205,7 +206,7 @@ const revokingOrderId = ref<number | null>(null)
 
 const search = ref('')
 const status = ref('')
-const sellPriceMap = ref<Record<number, number>>({})
+const sellPriceMap = ref<Record<number, number | undefined>>({})
 const memoMap = ref<Record<number, string>>({})
 
 const columns = computed<Column[]>(() => [
@@ -267,9 +268,6 @@ const loadOffers = async () => {
   try {
     offers.value = await distributorAPI.offers()
     for (const offer of offers.value) {
-      if (!Number.isFinite(sellPriceMap.value[offer.id]) || sellPriceMap.value[offer.id] <= 0) {
-        sellPriceMap.value[offer.id] = Number((offer.cost_cny_cents / 100).toFixed(2))
-      }
       if (memoMap.value[offer.id] === undefined) {
         memoMap.value[offer.id] = ''
       }
@@ -295,10 +293,15 @@ const loadOrders = async () => {
 const normalizeSellPrice = (offer: DistributorOffer) => {
   const value = Number(sellPriceMap.value[offer.id])
   if (!Number.isFinite(value) || value <= 0) {
-    sellPriceMap.value[offer.id] = Number((offer.cost_cny_cents / 100).toFixed(2))
+    delete sellPriceMap.value[offer.id]
     return
   }
   sellPriceMap.value[offer.id] = Number(value.toFixed(2))
+}
+
+const isSellPriceValid = (offerID: number) => {
+  const value = Number(sellPriceMap.value[offerID])
+  return Number.isFinite(value) && value > 0
 }
 
 const buy = async (offer: DistributorOffer) => {
@@ -310,7 +313,7 @@ const buy = async (offer: DistributorOffer) => {
   const sellPriceYuan = Number(sellPriceMap.value[offer.id])
   const sellPriceCents = Math.round(sellPriceYuan * 100)
   if (!Number.isFinite(sellPriceCents) || sellPriceCents <= 0) {
-    appStore.showError(t('common.unknownError'))
+    appStore.showError(t('distributor.sellPriceRequired'))
     return
   }
 

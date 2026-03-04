@@ -31,7 +31,7 @@
           </div>
         </div>
 
-        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
           <input
             v-model="profileSearch"
             type="text"
@@ -45,11 +45,15 @@
             class="input"
             :placeholder="t('admin.distributor.email')"
           />
+          <Select v-model="createForm.copy_from_user_id" :options="copyProfileOptions" />
           <Select v-model="createForm.enabled" :options="enabledOptions" />
           <button class="btn btn-primary" :disabled="savingProfile" @click="upsertProfile">
             {{ savingProfile ? t('common.processing') : t('common.save') }}
           </button>
         </div>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {{ t('admin.distributor.copyOffersHint') }}
+        </p>
         <input
           v-model="createForm.notes"
           type="text"
@@ -111,7 +115,7 @@
         </div>
         <DataTable :columns="statsColumns" :data="summaryRows" :sticky-actions-column="false">
           <template #cell-distributor_user_id="{ value }">
-            <span class="font-medium text-gray-800 dark:text-gray-100">{{ userEmailMap[value] || value }}</span>
+            <span class="font-medium text-gray-800 dark:text-gray-100">{{ resolveUserEmail(value) }}</span>
           </template>
           <template #cell-sell_amount_cny="{ value }">{{ formatCNY(value) }}</template>
           <template #cell-cost_amount_cny="{ value }">{{ formatCNY(value) }}</template>
@@ -139,7 +143,7 @@
           >
             <template #cell-user="{ row }">
               <div class="min-w-40">
-                <p class="font-medium text-gray-900 dark:text-gray-100">{{ row.user?.email || row.user_id }}</p>
+                <p class="font-medium text-gray-900 dark:text-gray-100">{{ getProfileUserEmail(row) }}</p>
                 <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ row.notes || '-' }}</p>
               </div>
             </template>
@@ -182,7 +186,7 @@
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                    {{ selectedProfile.user?.email || selectedProfile.user_id }}
+                    {{ selectedUserEmail }}
                   </h3>
                   <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ selectedProfile.notes || '-' }}</p>
                 </div>
@@ -411,7 +415,8 @@ const settleNotes = ref('')
 const createForm = reactive({
   email: '',
   enabled: true,
-  notes: ''
+  notes: '',
+  copy_from_user_id: 0
 })
 
 const offerForm = reactive({
@@ -434,6 +439,13 @@ const selectedProfile = computed(() =>
   profiles.value.find((item) => item.user_id === selectedUserId.value) || null
 )
 
+const selectedUserEmail = computed(() => {
+  if (!selectedProfile.value) {
+    return '-'
+  }
+  return getProfileUserEmail(selectedProfile.value)
+})
+
 const selectedStats = computed(
   () => summaryRows.value.find((item) => item.distributor_user_id === selectedUserId.value) || null
 )
@@ -452,6 +464,14 @@ const totalGrossProfit = computed(() =>
 const enabledOptions = computed(() => [
   { value: true, label: t('common.enabled') },
   { value: false, label: t('common.disabled') }
+])
+
+const copyProfileOptions = computed(() => [
+  { value: 0, label: t('admin.distributor.copyFromNone') },
+  ...profiles.value.map((item) => ({
+    value: item.user_id,
+    label: `${getProfileUserEmail(item)} (#${item.user_id})`
+  }))
 ])
 
 const groupOptions = computed(() =>
@@ -515,10 +535,39 @@ const orderStatusOptions = computed(() => [
 const userEmailMap = computed<Record<number, string>>(() => {
   const map: Record<number, string> = {}
   for (const item of profiles.value) {
-    map[item.user_id] = item.user?.email || String(item.user_id)
+    map[item.user_id] = getProfileUserEmail(item)
   }
   return map
 })
+
+const resolvedUserEmailMap = ref<Record<number, string>>({})
+
+const getUserEmailFromObject = (user: any): string => {
+  if (!user || typeof user !== 'object') {
+    return ''
+  }
+  return String(user.email ?? user.Email ?? '').trim()
+}
+
+const getProfileUserEmail = (profile: DistributorProfile): string => {
+  const fromEmbedded = getUserEmailFromObject((profile as any).user)
+  if (fromEmbedded) {
+    return fromEmbedded
+  }
+  const fromResolved = resolvedUserEmailMap.value[profile.user_id]
+  if (fromResolved) {
+    return fromResolved
+  }
+  return String(profile.user_id)
+}
+
+const resolveUserEmail = (userId: number | string): string => {
+  const numericID = Number(userId)
+  if (!Number.isFinite(numericID) || numericID <= 0) {
+    return String(userId)
+  }
+  return userEmailMap.value[numericID] || resolvedUserEmailMap.value[numericID] || String(userId)
+}
 
 const formatCNY = (cents?: number | null) => {
   const value = Number.isFinite(cents as number) ? Number(cents) : 0
@@ -549,6 +598,7 @@ const showRequestError = (error: any) => {
 
 const loadSummary = async () => {
   summary.value = await adminAPI.distributors.summary()
+  await hydrateUserEmails()
 }
 
 const loadProfiles = async () => {
@@ -556,6 +606,7 @@ const loadProfiles = async () => {
   try {
     const resp = await adminAPI.distributors.listProfiles(1, 50, profileSearch.value.trim())
     profiles.value = resp.items
+    await hydrateUserEmails()
     if (selectedUserId.value && !profiles.value.some((item) => item.user_id === selectedUserId.value)) {
       selectedUserId.value = null
       offers.value = []
@@ -618,6 +669,69 @@ const loadAll = async () => {
   }
 }
 
+const hydrateUserEmails = async () => {
+  const ids = new Set<number>()
+  for (const item of profiles.value) {
+    ids.add(item.user_id)
+  }
+  for (const item of summaryRows.value) {
+    ids.add(Number(item.distributor_user_id))
+  }
+
+  const toResolve: number[] = []
+  for (const id of ids) {
+    if (!id || userEmailMap.value[id] || resolvedUserEmailMap.value[id]) {
+      continue
+    }
+    toResolve.push(id)
+  }
+  if (toResolve.length === 0) {
+    return
+  }
+
+  const updates: Record<number, string> = {}
+  await Promise.all(
+    toResolve.map(async (id) => {
+      try {
+        const user = await adminAPI.users.getById(id)
+        if (user?.email) {
+          updates[id] = user.email
+        }
+      } catch {
+        // ignore lookup failures, fallback to id display
+      }
+    })
+  )
+
+  if (Object.keys(updates).length > 0) {
+    resolvedUserEmailMap.value = {
+      ...resolvedUserEmailMap.value,
+      ...updates
+    }
+  }
+}
+
+const copyOffersFromTemplateUser = async (sourceUserID: number, targetUserID: number) => {
+  const sourceOffers = await adminAPI.distributors.listOffers(sourceUserID)
+  if (sourceOffers.length === 0) {
+    return 0
+  }
+  let copiedCount = 0
+  for (const offer of sourceOffers) {
+    await adminAPI.distributors.createOffer({
+      distributor_user_id: targetUserID,
+      name: offer.name,
+      target_group_id: offer.target_group_id,
+      validity_days: offer.validity_days,
+      cost_cny: offer.cost_cny_cents,
+      enabled: offer.enabled,
+      notes: offer.notes || ''
+    })
+    copiedCount++
+  }
+  return copiedCount
+}
+
 const upsertProfile = async () => {
   const email = createForm.email.trim()
   if (!email) {
@@ -627,14 +741,30 @@ const upsertProfile = async () => {
 
   savingProfile.value = true
   try {
+    const templateUserID = Number(createForm.copy_from_user_id || 0)
     const profile = await adminAPI.distributors.upsertProfile(email, createForm.enabled, createForm.notes.trim())
+    let copiedCount = 0
+    if (templateUserID > 0) {
+      if (templateUserID === profile.user_id) {
+        appStore.showInfo(t('admin.distributor.copyFromSelfNotAllowed'))
+      } else {
+        copiedCount = await copyOffersFromTemplateUser(templateUserID, profile.user_id)
+      }
+    }
+
     appStore.showSuccess(t('common.success'))
     createForm.email = ''
     createForm.notes = ''
+    createForm.copy_from_user_id = 0
 
     await loadProfiles()
-    if (!selectedUserId.value) {
-      await selectUser(profile.user_id)
+    await loadSummary()
+    await selectUser(profile.user_id)
+    if (copiedCount > 0) {
+      appStore.showSuccess(t('admin.distributor.copiedOffers', { count: copiedCount }))
+      if (selectedUserId.value === profile.user_id) {
+        await loadOffers()
+      }
     }
   } catch (error: any) {
     showRequestError(error)
@@ -673,6 +803,12 @@ const submitBalanceAdjust = async (operation: 'topup' | 'refund') => {
 
 const selectUser = async (userId: number) => {
   selectedUserId.value = userId
+  const selected = profiles.value.find((item) => item.user_id === userId)
+  if (selected) {
+    createForm.email = getProfileUserEmail(selected)
+    createForm.enabled = selected.enabled
+    createForm.notes = selected.notes || ''
+  }
   try {
     await Promise.all([loadOffers(), loadOrders()])
   } catch (error: any) {

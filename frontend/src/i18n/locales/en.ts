@@ -713,6 +713,7 @@ export default {
     status: 'Status',
     issuedAt: 'Issued At',
     redeemedAt: 'Redeemed At',
+    sellPriceRequired: 'Please enter a valid sell price',
     codeCreated: 'Redeem code created',
     revoked: 'Order revoked',
     orderStatus: {
@@ -2614,6 +2615,11 @@ export default {
     distributor: {
       title: 'Distributor Management',
       description: 'Manage distributor profiles, offers, and orders',
+      copyFrom: 'Copy config from',
+      copyFromNone: 'Do not copy (create blank)',
+      copyOffersHint: 'When creating a distributor, you can choose an existing distributor to copy offer configuration.',
+      copiedOffers: '{count} offer(s) copied',
+      copyFromSelfNotAllowed: 'Cannot copy configuration from the same distributor',
       notes: 'Notes',
       markSettled: 'Mark Settled',
       searchProfile: 'Search distributor...',

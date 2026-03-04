@@ -719,6 +719,7 @@ export default {
     status: '状态',
     issuedAt: '下发时间',
     redeemedAt: '使用时间',
+    sellPriceRequired: '请填写有效售价',
     codeCreated: '兑换码已创建',
     revoked: '订单已撤销',
     orderStatus: {
@@ -2776,6 +2777,11 @@ export default {
     distributor: {
       title: '分销管理',
       description: '管理分销资料、商品与订单',
+      copyFrom: '复制配置来源',
+      copyFromNone: '不复制（空白创建）',
+      copyOffersHint: '创建分销商时可选择已有分销商，自动复制其商品配置。',
+      copiedOffers: '已复制 {count} 个商品配置',
+      copyFromSelfNotAllowed: '不能从同一个分销商复制配置',
       notes: '备注',
       markSettled: '结算',
       searchProfile: '搜索分销商...',

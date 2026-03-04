@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
+import { getSetupStatus } from '@/api/setup'
 import { resolveDocumentTitle } from './title'
 
 /**
@@ -450,7 +451,7 @@ const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // 开始导航加载状态
   navigationLoading.startNavigation()
 
@@ -482,6 +483,27 @@ router.beforeEach((to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
+
+  // Setup route is only accessible when backend is actually in setup mode.
+  // This preserves first-run behavior while preventing access after installation.
+  if (to.path === '/setup') {
+    try {
+      const status = await getSetupStatus()
+      if (status.needs_setup) {
+        next()
+        return
+      }
+    } catch {
+      // Fall through to auth-based fallback below when status check fails.
+    }
+
+    if (!authStore.isAuthenticated) {
+      next('/login')
+      return
+    }
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
+  }
 
   // If route doesn't require auth, allow access
   if (!requiresAuth) {
