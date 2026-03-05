@@ -9,6 +9,7 @@ import { useAppStore } from '@/stores/app'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
+import { distributorAPI } from '@/api'
 import { resolveDocumentTitle } from './title'
 
 /**
@@ -532,6 +533,19 @@ router.beforeEach(async (to, _from, next) => {
     // User is authenticated but not admin, redirect to user dashboard
     next('/dashboard')
     return
+  }
+
+  if (to.path === '/distributor' || to.path.startsWith('/distributor/')) {
+    try {
+      const profile = await distributorAPI.profile()
+      if (!profile?.enabled) {
+        next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+        return
+      }
+    } catch {
+      next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+      return
+    }
   }
 
   // 简易模式下限制访问某些页面

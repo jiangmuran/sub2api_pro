@@ -151,6 +151,7 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAdminSettingsStore, useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import { distributorAPI } from '@/api'
 import VersionBadge from '@/components/common/VersionBadge.vue'
 import { sanitizeSvg } from '@/utils/sanitize'
 
@@ -174,6 +175,7 @@ const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
 const mobileOpen = computed(() => appStore.mobileOpen)
 const isAdmin = computed(() => authStore.isAdmin)
 const isDark = ref(document.documentElement.classList.contains('dark'))
+const hasDistributorAccess = ref(false)
 
 // Site settings from appStore (cached, no flicker)
 const siteName = computed(() => appStore.siteName)
@@ -527,7 +529,9 @@ const userNavItems = computed((): NavItem[] => {
           }
         ]
       : []),
-    { path: '/distributor', label: t('nav.distributor'), icon: UsersIcon, hideInSimpleMode: true },
+    ...(hasDistributorAccess.value
+      ? [{ path: '/distributor', label: t('nav.distributor'), icon: UsersIcon, hideInSimpleMode: true }]
+      : []),
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
@@ -559,7 +563,9 @@ const personalNavItems = computed((): NavItem[] => {
           }
         ]
       : []),
-    { path: '/distributor', label: t('nav.distributor'), icon: UsersIcon, hideInSimpleMode: true },
+    ...(hasDistributorAccess.value
+      ? [{ path: '/distributor', label: t('nav.distributor'), icon: UsersIcon, hideInSimpleMode: true }]
+      : []),
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
@@ -666,6 +672,19 @@ function isActive(path: string): boolean {
   return route.path === path || route.path.startsWith(path + '/')
 }
 
+async function refreshDistributorAccess(): Promise<void> {
+  if (!authStore.user?.id) {
+    hasDistributorAccess.value = false
+    return
+  }
+  try {
+    const profile = await distributorAPI.profile()
+    hasDistributorAccess.value = !!profile?.enabled
+  } catch {
+    hasDistributorAccess.value = false
+  }
+}
+
 // Initialize theme
 const savedTheme = localStorage.getItem('theme')
 if (
@@ -683,6 +702,14 @@ watch(
     if (v) {
       adminSettingsStore.fetch()
     }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => authStore.user?.id,
+  () => {
+    void refreshDistributorAccess()
   },
   { immediate: true }
 )
