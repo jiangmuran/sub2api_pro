@@ -117,6 +117,34 @@ func TestNormalizeOpenAIResponsesBody_ConvertsTextContentType(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIResponsesBody_ConvertsAssistantTextContentType(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"message","role":"assistant","content":[{"type":"text","text":"hello"}]}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "input.0.content.0.type").String() != "output_text" {
+		t.Fatalf("expected assistant content type converted to output_text")
+	}
+}
+
+func TestNormalizeOpenAIResponsesBody_ConvertsAssistantInputTextToOutputText(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"message","role":"assistant","content":[{"type":"input_text","text":"hello"}]}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "input.0.content.0.type").String() != "output_text" {
+		t.Fatalf("expected assistant input_text converted to output_text")
+	}
+}
+
 func TestNormalizeOpenAIResponsesBody_ConvertsTopLevelTextType(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","input":[{"type":"text","text":"hello"}]}`)
 	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
@@ -128,6 +156,20 @@ func TestNormalizeOpenAIResponsesBody_ConvertsTopLevelTextType(t *testing.T) {
 	}
 	if gjson.GetBytes(normalized, "input.0.type").String() != "input_text" {
 		t.Fatalf("expected top-level type converted to input_text")
+	}
+}
+
+func TestNormalizeOpenAIResponsesBody_RemovesReasoningSummary(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"input_text","text":"hi"}],"reasoningSummary":"brief"}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "reasoningSummary").Exists() {
+		t.Fatalf("expected reasoningSummary removed")
 	}
 }
 

@@ -190,6 +190,11 @@ func normalizeOpenAICompatibilityPayload(payload map[string]any) bool {
 		changed = true
 	}
 
+	if _, exists := payload["reasoningSummary"]; exists {
+		delete(payload, "reasoningSummary")
+		changed = true
+	}
+
 	if input, ok := payload["input"].([]any); ok {
 		if normalizeOpenAIInputRoles(input) {
 			changed = true
@@ -244,9 +249,17 @@ func normalizeOpenAIInputContentTypes(input []any) bool {
 		if !ok {
 			continue
 		}
+		assistantRole := isAssistantInputRole(entry)
 
 		if value, ok := entry["type"].(string); ok {
-			if strings.EqualFold(strings.TrimSpace(value), "text") {
+			normalizedValue := strings.ToLower(strings.TrimSpace(value))
+			if normalizedValue == "text" {
+				entry["type"] = normalizedInputContentType(assistantRole)
+				changed = true
+			} else if assistantRole && normalizedValue == "input_text" {
+				entry["type"] = "output_text"
+				changed = true
+			} else if !assistantRole && normalizedValue == "output_text" {
 				entry["type"] = "input_text"
 				changed = true
 			}
@@ -265,7 +278,14 @@ func normalizeOpenAIInputContentTypes(input []any) bool {
 			if !ok {
 				continue
 			}
-			if strings.EqualFold(strings.TrimSpace(contentType), "text") {
+			normalizedType := strings.ToLower(strings.TrimSpace(contentType))
+			if normalizedType == "text" {
+				contentMap["type"] = normalizedInputContentType(assistantRole)
+				changed = true
+			} else if assistantRole && normalizedType == "input_text" {
+				contentMap["type"] = "output_text"
+				changed = true
+			} else if !assistantRole && normalizedType == "output_text" {
 				contentMap["type"] = "input_text"
 				changed = true
 			}
@@ -273,6 +293,21 @@ func normalizeOpenAIInputContentTypes(input []any) bool {
 	}
 
 	return changed
+}
+
+func isAssistantInputRole(entry map[string]any) bool {
+	if entry == nil {
+		return false
+	}
+	role, _ := entry["role"].(string)
+	return strings.EqualFold(strings.TrimSpace(role), "assistant")
+}
+
+func normalizedInputContentType(assistantRole bool) string {
+	if assistantRole {
+		return "output_text"
+	}
+	return "input_text"
 }
 
 func normalizeOpenAIInputMessageNames(input []any) bool {
