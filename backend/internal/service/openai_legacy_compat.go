@@ -197,6 +197,9 @@ func normalizeOpenAICompatibilityPayload(payload map[string]any) bool {
 		if normalizeOpenAIInputContentTypes(input) {
 			changed = true
 		}
+		if normalizeOpenAIInputMessageNames(input) {
+			changed = true
+		}
 	}
 
 	return changed
@@ -270,6 +273,38 @@ func normalizeOpenAIInputContentTypes(input []any) bool {
 	}
 
 	return changed
+}
+
+func normalizeOpenAIInputMessageNames(input []any) bool {
+	changed := false
+	for _, item := range input {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, hasName := entry["name"]; !hasName {
+			continue
+		}
+
+		if shouldStripInputMessageName(entry) {
+			delete(entry, "name")
+			changed = true
+		}
+	}
+
+	return changed
+}
+
+func shouldStripInputMessageName(entry map[string]any) bool {
+	if entry == nil {
+		return false
+	}
+	if _, hasRole := entry["role"]; hasRole {
+		return true
+	}
+	itemType, _ := entry["type"].(string)
+	normalizedType := strings.ToLower(strings.TrimSpace(itemType))
+	return normalizedType == "message"
 }
 
 func ConvertOpenAIResponsesToLegacy(body []byte, protocol string, fallbackModel string) ([]byte, error) {

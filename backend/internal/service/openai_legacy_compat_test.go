@@ -131,6 +131,34 @@ func TestNormalizeOpenAIResponsesBody_ConvertsTopLevelTextType(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIResponsesBody_RemovesMessageName(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"role":"user","name":"legacy-user","content":"hi"}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "input.0.name").Exists() {
+		t.Fatalf("expected message-style input name removed")
+	}
+}
+
+func TestNormalizeOpenAIResponsesBody_KeepsFunctionCallName(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"function_call","name":"http-intruder","arguments":"{}","call_id":"call_1"}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if changed {
+		t.Fatalf("did not expect change")
+	}
+	if gjson.GetBytes(normalized, "input.0.name").String() != "http-intruder" {
+		t.Fatalf("expected function_call name preserved")
+	}
+}
+
 func TestConvertOpenAILegacyRequestBody_Chat(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64}`)
 	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
