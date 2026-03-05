@@ -1606,6 +1606,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	if normalizeOpenAIToolSchemas(reqBody) {
+		bodyModified = true
+		disablePatch()
+	}
+
 	// Handle max_output_tokens based on platform and account type
 	if !isCodexCLI {
 		if maxOutputTokens, hasMaxOutputTokens := reqBody["max_output_tokens"]; hasMaxOutputTokens {
@@ -3904,6 +3909,20 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 		}
 		normalized = next
 		changed = true
+	}
+
+	if gjson.GetBytes(normalized, "tools").Exists() {
+		var payload map[string]any
+		if err := json.Unmarshal(normalized, &payload); err == nil {
+			if normalizeOpenAIToolSchemas(payload) {
+				rebuilt, marshalErr := json.Marshal(payload)
+				if marshalErr != nil {
+					return body, false, fmt.Errorf("normalize passthrough body marshal tools schema: %w", marshalErr)
+				}
+				normalized = rebuilt
+				changed = true
+			}
+		}
 	}
 
 	return normalized, changed, nil

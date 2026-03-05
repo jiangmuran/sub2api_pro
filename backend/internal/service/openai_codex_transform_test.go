@@ -251,3 +251,80 @@ func TestIsInstructionsEmpty(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeOpenAIToolSchemas_AddsMissingArrayItems(t *testing.T) {
+	reqBody := map[string]any{
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"name": "http-intruder",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"payloads": map[string]any{
+							"type": "array",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	changed := normalizeOpenAIToolSchemas(reqBody)
+	require.True(t, changed)
+
+	tools, ok := reqBody["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	params, ok := tool["parameters"].(map[string]any)
+	require.True(t, ok)
+	props, ok := params["properties"].(map[string]any)
+	require.True(t, ok)
+	payloads, ok := props["payloads"].(map[string]any)
+	require.True(t, ok)
+	items, exists := payloads["items"]
+	require.True(t, exists)
+	_, ok = items.(map[string]any)
+	require.True(t, ok)
+}
+
+func TestNormalizeOpenAIToolSchemas_HandlesFunctionParametersShape(t *testing.T) {
+	reqBody := map[string]any{
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name": "http-intruder",
+					"parameters": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"payloads": map[string]any{
+								"type": []any{"array", "null"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	changed := normalizeOpenAIToolSchemas(reqBody)
+	require.True(t, changed)
+
+	tools, ok := reqBody["tools"].([]any)
+	require.True(t, ok)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	functionMap, ok := tool["function"].(map[string]any)
+	require.True(t, ok)
+	params, ok := functionMap["parameters"].(map[string]any)
+	require.True(t, ok)
+	props, ok := params["properties"].(map[string]any)
+	require.True(t, ok)
+	payloads, ok := props["payloads"].(map[string]any)
+	require.True(t, ok)
+	_, exists := payloads["items"]
+	require.True(t, exists)
+}

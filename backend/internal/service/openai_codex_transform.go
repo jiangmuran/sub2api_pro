@@ -437,3 +437,94 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 
 	return modified
 }
+
+// normalizeOpenAIToolSchemas ensures tool parameter schemas stay compatible with
+// OpenAI's stricter JSON Schema checks (e.g. array type requires items).
+func normalizeOpenAIToolSchemas(reqBody map[string]any) bool {
+	rawTools, ok := reqBody["tools"]
+	if !ok || rawTools == nil {
+		return false
+	}
+	tools, ok := rawTools.([]any)
+	if !ok {
+		return false
+	}
+
+	changed := false
+	for _, tool := range tools {
+		toolMap, ok := tool.(map[string]any)
+		if !ok || toolMap == nil {
+			continue
+		}
+
+		if params, ok := toolMap["parameters"]; ok {
+			if normalizeOpenAIToolSchemaNode(params) {
+				changed = true
+			}
+		}
+
+		if functionValue, ok := toolMap["function"]; ok {
+			if functionMap, ok := functionValue.(map[string]any); ok && functionMap != nil {
+				if params, ok := functionMap["parameters"]; ok {
+					if normalizeOpenAIToolSchemaNode(params) {
+						changed = true
+					}
+				}
+			}
+		}
+	}
+
+	return changed
+}
+
+func normalizeOpenAIToolSchemaNode(node any) bool {
+	switch value := node.(type) {
+	case map[string]any:
+		changed := false
+		if schemaTypeIncludesArray(value["type"]) {
+			if items, exists := value["items"]; !exists || items == nil {
+				value["items"] = map[string]any{}
+				changed = true
+			}
+		}
+		for _, child := range value {
+			if normalizeOpenAIToolSchemaNode(child) {
+				changed = true
+			}
+		}
+		return changed
+	case []any:
+		changed := false
+		for _, child := range value {
+			if normalizeOpenAIToolSchemaNode(child) {
+				changed = true
+			}
+		}
+		return changed
+	default:
+		return false
+	}
+}
+
+func schemaTypeIncludesArray(value any) bool {
+	switch v := value.(type) {
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "array")
+	case []any:
+		for _, item := range v {
+			if text, ok := item.(string); ok && strings.EqualFold(strings.TrimSpace(text), "array") {
+				return true
+			}
+		}
+		return false
+	case []string:
+		for _, item := range v {
+			if strings.EqualFold(strings.TrimSpace(item), "array") {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
