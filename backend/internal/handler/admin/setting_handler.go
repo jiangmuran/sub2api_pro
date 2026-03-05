@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -826,7 +827,7 @@ func (h *SettingHandler) TestSMTPConnection(c *gin.Context) {
 
 	err := h.emailService.TestSMTPConnectionWithConfig(config)
 	if err != nil {
-		response.ErrorFrom(c, err)
+		response.BadRequest(c, "SMTP connection test failed: "+rootCauseMessage(err))
 		return
 	}
 
@@ -918,7 +919,7 @@ func (h *SettingHandler) SendTestEmail(c *gin.Context) {
 `
 
 	if err := h.emailService.SendEmailWithConfig(config, req.Email, subject, body); err != nil {
-		response.ErrorFrom(c, err)
+		response.BadRequest(c, "Send test email failed: "+rootCauseMessage(err))
 		return
 	}
 
@@ -963,6 +964,25 @@ func (h *SettingHandler) DeleteAdminAPIKey(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "Admin API key deleted"})
+}
+
+func rootCauseMessage(err error) string {
+	if err == nil {
+		return "unknown error"
+	}
+	current := err
+	for {
+		next := errors.Unwrap(current)
+		if next == nil {
+			break
+		}
+		current = next
+	}
+	msg := strings.TrimSpace(current.Error())
+	if msg == "" {
+		return "unknown error"
+	}
+	return msg
 }
 
 // GetStreamTimeoutSettings 获取流超时处理配置

@@ -103,6 +103,34 @@ func TestNormalizeOpenAIResponsesBody_ConvertsToolRole(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIResponsesBody_ConvertsTextContentType(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"message","role":"user","content":[{"type":"text","text":"hello"}]}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "input.0.content.0.type").String() != "input_text" {
+		t.Fatalf("expected content type converted to input_text")
+	}
+}
+
+func TestNormalizeOpenAIResponsesBody_ConvertsTopLevelTextType(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"text","text":"hello"}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "input.0.type").String() != "input_text" {
+		t.Fatalf("expected top-level type converted to input_text")
+	}
+}
+
 func TestConvertOpenAILegacyRequestBody_Chat(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}],"max_tokens":64}`)
 	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
@@ -145,6 +173,17 @@ func TestConvertOpenAILegacyRequestBody_ConvertsToolRoleAndReasoning(t *testing.
 	}
 	if gjson.GetBytes(converted, "reasoning.effort").String() != "medium" {
 		t.Fatalf("expected reasoning.effort=medium")
+	}
+}
+
+func TestConvertOpenAILegacyRequestBody_ConvertsTextContentType(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}]}`)
+	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
+	if err != nil {
+		t.Fatalf("ConvertOpenAILegacyRequestBody error: %v", err)
+	}
+	if gjson.GetBytes(converted, "input.0.content.0.type").String() != "input_text" {
+		t.Fatalf("expected content type converted to input_text")
 	}
 }
 

@@ -194,6 +194,9 @@ func normalizeOpenAICompatibilityPayload(payload map[string]any) bool {
 		if normalizeOpenAIInputRoles(input) {
 			changed = true
 		}
+		if normalizeOpenAIInputContentTypes(input) {
+			changed = true
+		}
 	}
 
 	return changed
@@ -228,6 +231,44 @@ func normalizeOpenAIInputRoles(input []any) bool {
 			changed = true
 		}
 	}
+	return changed
+}
+
+func normalizeOpenAIInputContentTypes(input []any) bool {
+	changed := false
+	for _, item := range input {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if value, ok := entry["type"].(string); ok {
+			if strings.EqualFold(strings.TrimSpace(value), "text") {
+				entry["type"] = "input_text"
+				changed = true
+			}
+		}
+
+		contents, ok := entry["content"].([]any)
+		if !ok {
+			continue
+		}
+		for _, contentItem := range contents {
+			contentMap, ok := contentItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			contentType, ok := contentMap["type"].(string)
+			if !ok {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(contentType), "text") {
+				contentMap["type"] = "input_text"
+				changed = true
+			}
+		}
+	}
+
 	return changed
 }
 
