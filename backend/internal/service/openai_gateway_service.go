@@ -1650,7 +1650,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		// Remove unsupported fields (not supported by upstream OpenAI API)
-		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier", "stream_options", "reasoning_effort", "user"}
+		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier", "stream_options", "reasoning_effort"}
 		for _, unsupportedField := range unsupportedFields {
 			if _, has := reqBody[unsupportedField]; has {
 				delete(reqBody, unsupportedField)
@@ -1659,6 +1659,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 		}
 
+	}
+
+	// `user` is unsupported by current OpenAI Responses upstream variants we proxy to.
+	// Keep this cleanup outside the `!isCodexCLI` branch so Codex CLI requests are covered too.
+	if _, has := reqBody["user"]; has {
+		delete(reqBody, "user")
+		bodyModified = true
+		markPatchDelete("user")
 	}
 
 	if v, ok := reqBody["service_tier"].(string); ok && strings.EqualFold(strings.TrimSpace(v), "auto") {
