@@ -345,6 +345,18 @@ func ConvertOpenAIResponsesToLegacy(body []byte, protocol string, fallbackModel 
 		}
 		return json.Marshal(payload)
 	default:
+		toolCalls := extractResponsesToolCalls(body)
+		finishReason := "stop"
+		if len(toolCalls) > 0 && content == "" {
+			finishReason = "tool_calls"
+		}
+		message := map[string]any{
+			"role":    "assistant",
+			"content": content,
+		}
+		if len(toolCalls) > 0 {
+			message["tool_calls"] = toolCalls
+		}
 		payload := map[string]any{
 			"id":      id,
 			"object":  "chat.completion",
@@ -352,12 +364,9 @@ func ConvertOpenAIResponsesToLegacy(body []byte, protocol string, fallbackModel 
 			"model":   model,
 			"choices": []any{
 				map[string]any{
-					"index": 0,
-					"message": map[string]any{
-						"role":    "assistant",
-						"content": content,
-					},
-					"finish_reason": "stop",
+					"index":         0,
+					"message":       message,
+					"finish_reason": finishReason,
 				},
 			},
 			"usage": usage,
@@ -397,6 +406,29 @@ func ConvertOpenAIResponsesSSEToLegacy(data string, protocol string, fallbackMod
 	eventType := strings.TrimSpace(gjson.Get(trimmed, "type").String())
 	if eventType == "" {
 		return "", false
+	}
+
+	if protocol == OpenAILegacyProtocolChat && eventType == "response.output_item.added" {
+		itemType := strings.TrimSpace(gjson.Get(trimmed, "item.type").String())
+		if itemType == "message" {
+			choice := map[string]any{
+				"index":         0,
+				"finish_reason": "",
+				"delta":         map[string]any{"role": "assistant"},
+			}
+			payload := map[string]any{
+				"id":      id,
+				"object":  "chat.completion.chunk",
+				"created": created,
+				"model":   model,
+				"choices": []any{choice},
+			}
+			encoded, err := json.Marshal(payload)
+			if err != nil {
+				return "", false
+			}
+			return string(encoded), true
+		}
 	}
 
 	var content string
@@ -487,6 +519,51 @@ func extractResponsesOutputText(body []byte) string {
 		}
 	}
 	return strings.TrimSpace(builder.String())
+}
+
+func extractResponsesToolCalls(body []byte) []any {
+	if len(body) == 0 {
+		return nil
+	}
+	output := gjson.GetBytes(body, "output")
+	if !output.Exists() || !output.IsArray() {
+		return nil
+	}
+
+	toolCalls := make([]any, 0)
+	for _, item := range output.Array() {
+		if strings.TrimSpace(item.Get("type").String()) != "function_call" {
+			continue
+		}
+		name := strings.TrimSpace(item.Get("name").String())
+		if name == "" {
+			continue
+		}
+		arguments := item.Get("arguments").String()
+		if strings.TrimSpace(arguments) == "" {
+			arguments = "{}"
+		}
+		toolCallID := strings.TrimSpace(item.Get("call_id").String())
+		if toolCallID == "" {
+			toolCallID = strings.TrimSpace(item.Get("id").String())
+		}
+		if toolCallID == "" {
+			toolCallID = "call_" + name
+		}
+		toolCalls = append(toolCalls, map[string]any{
+			"id":   toolCallID,
+			"type": "function",
+			"function": map[string]any{
+				"name":      name,
+				"arguments": arguments,
+			},
+		})
+	}
+
+	if len(toolCalls) == 0 {
+		return nil
+	}
+	return toolCalls
 }
 
 func buildLegacyUsage(body []byte) map[string]any {

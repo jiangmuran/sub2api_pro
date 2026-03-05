@@ -234,6 +234,31 @@ func TestConvertOpenAIResponsesToLegacy_Chat(t *testing.T) {
 	}
 }
 
+func TestConvertOpenAIResponsesToLegacy_ChatWithToolCalls(t *testing.T) {
+	body := []byte(`{
+  "id":"resp_tool_1",
+  "model":"gpt-5.3-codex",
+  "usage":{"input_tokens":10,"output_tokens":20},
+  "output":[{"type":"function_call","id":"fc_1","call_id":"call_1","name":"http-intruder","arguments":"{\"q\":\"x\"}"}]
+}`)
+	converted, err := ConvertOpenAIResponsesToLegacy(body, OpenAILegacyProtocolChat, "gpt-5.3-codex")
+	if err != nil {
+		t.Fatalf("ConvertOpenAIResponsesToLegacy error: %v", err)
+	}
+	if gjson.GetBytes(converted, "choices.0.message.role").String() != "assistant" {
+		t.Fatalf("expected assistant role")
+	}
+	if gjson.GetBytes(converted, "choices.0.message.tool_calls.0.type").String() != "function" {
+		t.Fatalf("expected function tool call")
+	}
+	if gjson.GetBytes(converted, "choices.0.message.tool_calls.0.function.name").String() != "http-intruder" {
+		t.Fatalf("unexpected tool name")
+	}
+	if gjson.GetBytes(converted, "choices.0.finish_reason").String() != "tool_calls" {
+		t.Fatalf("expected finish_reason=tool_calls")
+	}
+}
+
 func TestConvertOpenAIResponsesSSEToLegacy_ChatDelta(t *testing.T) {
 	data := `{"type":"response.output_text.delta","delta":"hi","response":{"id":"resp_1","model":"gpt-4o","created":123}}`
 	converted, ok := ConvertOpenAIResponsesSSEToLegacy(data, OpenAILegacyProtocolChat, "gpt-4o")
@@ -248,6 +273,17 @@ func TestConvertOpenAIResponsesSSEToLegacy_ChatDelta(t *testing.T) {
 	}
 	if gjson.Get(converted, "choices.0.delta.content").String() != "hi" {
 		t.Fatalf("unexpected delta content")
+	}
+}
+
+func TestConvertOpenAIResponsesSSEToLegacy_ChatOutputItemAddedMessage(t *testing.T) {
+	data := `{"type":"response.output_item.added","item":{"type":"message"},"response":{"id":"resp_2","model":"gpt-4o","created":123}}`
+	converted, ok := ConvertOpenAIResponsesSSEToLegacy(data, OpenAILegacyProtocolChat, "gpt-4o")
+	if !ok {
+		t.Fatalf("expected conversion")
+	}
+	if gjson.Get(converted, "choices.0.delta.role").String() != "assistant" {
+		t.Fatalf("expected assistant role delta")
 	}
 }
 
