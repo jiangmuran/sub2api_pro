@@ -21,6 +21,8 @@ var (
 	ErrDistributorOrderNotRevocable = infraerrors.Conflict("DISTRIBUTOR_ORDER_NOT_REVOCABLE", "order cannot be revoked")
 )
 
+const distributorOfferArchiveTag = "[system-archived-offer]"
+
 type DistributorAdminSummary struct {
 	UnsettledCNYCents         int64                  `json:"unsettled_cny_cents"`
 	DeltaSinceLastSettleCNY   int64                  `json:"delta_since_last_settle_cny"`
@@ -85,7 +87,37 @@ VALUES ($1, $2, $3, NOW())
 ON CONFLICT (user_id)
 DO UPDATE SET enabled = EXCLUDED.enabled, notes = EXCLUDED.notes, updated_at = NOW()
 `
-	if _, err := s.db.ExecContext(ctx, upsert, user.ID, enabled, notes); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, upsert, user.ID, enabled, notes); err != nil {
+		return nil, err
+	}
+
+	if !enabled {
+		if _, err := tx.ExecContext(ctx, `
+UPDATE distributor_offers
+SET enabled = FALSE, updated_at = NOW()
+WHERE distributor_user_id = $1
+`, user.ID); err != nil {
+			return nil, err
+		}
+
+		if _, err := tx.ExecContext(ctx, `
+DELETE FROM distributor_offers o
+WHERE o.distributor_user_id = $1
+  AND NOT EXISTS (
+    SELECT 1 FROM distributor_orders d WHERE d.offer_id = o.id
+  )
+`, user.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return s.GetProfileByUserID(ctx, user.ID)
@@ -205,6 +237,22 @@ func (s *DistributorService) CreateOffer(ctx context.Context, distributorUserID 
 	name = strings.TrimSpace(name)
 	notes = strings.TrimSpace(notes)
 
+	if existing, err := s.findOfferByIdentity(ctx, distributorUserID, targetGroupID, validityDays); err != nil {
+		return nil, err
+	} else if existing != nil {
+		mergedName, mergedCost, mergedEnabled, mergedNotes, needUpdate := mergeDistributorOffer(*existing, name, costCNYCents, enabled, notes)
+		if needUpdate {
+			if _, err := s.db.ExecContext(ctx, `
+UPDATE distributor_offers
+SET name=$2, cost_cny_cents=$3, enabled=$4, notes=$5, updated_at=NOW()
+WHERE id=$1
+`, existing.ID, mergedName, mergedCost, mergedEnabled, mergedNotes); err != nil {
+				return nil, err
+			}
+		}
+		return s.GetOfferByID(ctx, existing.ID)
+	}
+
 	const q = `
 INSERT INTO distributor_offers(distributor_user_id,name,target_group_id,validity_days,cost_cny_cents,enabled,notes,created_at,updated_at)
 VALUES($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()) RETURNING id
@@ -261,8 +309,8 @@ FROM distributor_offers WHERE id = $1
 }
 
 func (s *DistributorService) ListOffers(ctx context.Context, distributorUserID int64, onlyEnabled bool) ([]DistributorOffer, error) {
-	args := []any{distributorUserID}
-	where := " WHERE distributor_user_id = $1"
+	args := []any{distributorUserID, "%" + distributorOfferArchiveTag + "%"}
+	where := " WHERE distributor_user_id = $1 AND COALESCE(notes,'') NOT LIKE $2"
 	if onlyEnabled {
 		where += " AND enabled = TRUE"
 	}
@@ -285,13 +333,61 @@ FROM distributor_offers`+where+` ORDER BY updated_at DESC`, args...)
 }
 
 func (s *DistributorService) DeleteOffer(ctx context.Context, id int64) error {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM distributor_offers WHERE id = $1`, id)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	affected, _ := res.RowsAffected()
-	if affected == 0 {
-		return ErrDistributorOfferNotFound
+	defer func() { _ = tx.Rollback() }()
+
+	var offer DistributorOffer
+	if err := tx.QueryRowContext(ctx, `
+SELECT id, distributor_user_id, name, target_group_id, validity_days, cost_cny_cents, enabled, notes, created_at, updated_at
+FROM distributor_offers WHERE id = $1 FOR UPDATE
+`, id).Scan(&offer.ID, &offer.DistributorUserID, &offer.Name, &offer.TargetGroupID, &offer.ValidityDays, &offer.CostCNYCents, &offer.Enabled, &offer.Notes, &offer.CreatedAt, &offer.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrDistributorOfferNotFound
+		}
+		return err
+	}
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM distributor_offers WHERE id = $1`, id)
+	if err == nil {
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			return ErrDistributorOfferNotFound
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return commitErr
+		}
+		return nil
+	}
+
+	if !isForeignKeyConstraintError(err) {
+		return err
+	}
+
+	var issuedCount int64
+	if scanErr := tx.QueryRowContext(ctx, `SELECT COUNT(1) FROM distributor_orders WHERE offer_id = $1 AND status = $2`, id, DistributorOrderStatusIssued).Scan(&issuedCount); scanErr != nil {
+		return scanErr
+	}
+	if issuedCount > 0 {
+		return infraerrors.Conflict("DISTRIBUTOR_OFFER_IN_USE", "offer has active issued orders and cannot be deleted")
+	}
+
+	archiveID, err := s.ensureArchiveOfferForDelete(ctx, tx, &offer)
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `UPDATE distributor_orders SET offer_id = $2 WHERE offer_id = $1`, id, archiveID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM distributor_offers WHERE id = $1`, id); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -832,6 +928,115 @@ func isDistributorSchemaCompatError(err error) bool {
 		strings.Contains(msg, "undefined column") ||
 		strings.Contains(msg, "undefined table") ||
 		strings.Contains(msg, "no such column")
+}
+
+func isForeignKeyConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if msg == "" {
+		return false
+	}
+	if strings.Contains(msg, "foreign key") && strings.Contains(msg, "constraint") {
+		return true
+	}
+	if strings.Contains(msg, "violates") && strings.Contains(msg, "constraint") {
+		return true
+	}
+	return strings.Contains(msg, "sqlstate 23503")
+}
+
+func (s *DistributorService) findOfferByIdentity(ctx context.Context, distributorUserID int64, targetGroupID int64, validityDays int) (*DistributorOffer, error) {
+	row := s.db.QueryRowContext(ctx, `
+SELECT id, distributor_user_id, name, target_group_id, validity_days, cost_cny_cents, enabled, notes, created_at, updated_at
+FROM distributor_offers
+WHERE distributor_user_id = $1
+  AND target_group_id = $2
+  AND validity_days = $3
+  AND COALESCE(notes,'') NOT LIKE $4
+ORDER BY cost_cny_cents ASC, id ASC
+LIMIT 1
+`, distributorUserID, targetGroupID, validityDays, "%"+distributorOfferArchiveTag+"%")
+	var o DistributorOffer
+	if err := row.Scan(&o.ID, &o.DistributorUserID, &o.Name, &o.TargetGroupID, &o.ValidityDays, &o.CostCNYCents, &o.Enabled, &o.Notes, &o.CreatedAt, &o.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &o, nil
+}
+
+func (s *DistributorService) ensureArchiveOfferForDelete(ctx context.Context, tx *sql.Tx, source *DistributorOffer) (int64, error) {
+	if tx == nil || source == nil {
+		return 0, infraerrors.BadRequest("DISTRIBUTOR_INVALID_ARCHIVE_REQUEST", "invalid archive offer request")
+	}
+
+	var archiveID int64
+	err := tx.QueryRowContext(ctx, `
+SELECT id
+FROM distributor_offers
+WHERE distributor_user_id = $1
+  AND target_group_id = $2
+  AND validity_days = $3
+  AND LOWER(name) = LOWER($4)
+  AND COALESCE(notes,'') LIKE $5
+ORDER BY id ASC
+LIMIT 1
+`, source.DistributorUserID, source.TargetGroupID, source.ValidityDays, source.Name, "%"+distributorOfferArchiveTag+"%").Scan(&archiveID)
+	if err == nil {
+		return archiveID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+
+	archiveName := strings.TrimSpace(source.Name)
+	if archiveName == "" {
+		archiveName = "archived-offer"
+	}
+	archiveName = archiveName + " [archived]"
+	archiveNotes := strings.TrimSpace(source.Notes)
+	if archiveNotes == "" {
+		archiveNotes = distributorOfferArchiveTag
+	} else if !strings.Contains(archiveNotes, distributorOfferArchiveTag) {
+		archiveNotes = archiveNotes + " " + distributorOfferArchiveTag
+	}
+
+	if err := tx.QueryRowContext(ctx, `
+INSERT INTO distributor_offers(distributor_user_id,name,target_group_id,validity_days,cost_cny_cents,enabled,notes,created_at,updated_at)
+VALUES($1,$2,$3,$4,$5,FALSE,$6,NOW(),NOW()) RETURNING id
+`, source.DistributorUserID, archiveName, source.TargetGroupID, source.ValidityDays, source.CostCNYCents, archiveNotes).Scan(&archiveID); err != nil {
+		return 0, err
+	}
+	return archiveID, nil
+}
+
+func mergeDistributorOffer(existing DistributorOffer, incomingName string, incomingCost int64, incomingEnabled bool, incomingNotes string) (string, int64, bool, string, bool) {
+	mergedName := strings.TrimSpace(existing.Name)
+	if mergedName == "" {
+		mergedName = strings.TrimSpace(incomingName)
+	}
+
+	mergedCost := existing.CostCNYCents
+	if incomingCost > 0 && (mergedCost <= 0 || incomingCost < mergedCost) {
+		mergedCost = incomingCost
+	}
+
+	mergedEnabled := existing.Enabled || incomingEnabled
+
+	mergedNotes := strings.TrimSpace(existing.Notes)
+	if mergedNotes == "" {
+		mergedNotes = strings.TrimSpace(incomingNotes)
+	}
+
+	needUpdate := mergedName != existing.Name ||
+		mergedCost != existing.CostCNYCents ||
+		mergedEnabled != existing.Enabled ||
+		mergedNotes != existing.Notes
+
+	return mergedName, mergedCost, mergedEnabled, mergedNotes, needUpdate
 }
 
 func wrapDistributorSchemaError(err error) error {

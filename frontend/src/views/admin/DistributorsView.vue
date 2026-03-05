@@ -711,8 +711,20 @@ const hydrateUserEmails = async () => {
   }
 }
 
+const dedupeOffersForImport = (sourceOffers: DistributorOffer[]): DistributorOffer[] => {
+  const bestByKey = new Map<string, DistributorOffer>()
+  for (const offer of sourceOffers) {
+    const key = `${offer.target_group_id}:${offer.validity_days}`
+    const existing = bestByKey.get(key)
+    if (!existing || offer.cost_cny_cents < existing.cost_cny_cents) {
+      bestByKey.set(key, offer)
+    }
+  }
+  return Array.from(bestByKey.values())
+}
+
 const copyOffersFromTemplateUser = async (sourceUserID: number, targetUserID: number) => {
-  const sourceOffers = await adminAPI.distributors.listOffers(sourceUserID)
+  const sourceOffers = dedupeOffersForImport(await adminAPI.distributors.listOffers(sourceUserID))
   if (sourceOffers.length === 0) {
     return 0
   }

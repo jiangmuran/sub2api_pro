@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -447,9 +449,9 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	frontendBaseURL := strings.TrimSpace(h.cfg.Server.FrontendURL)
+	frontendBaseURL := h.resolvePasswordResetFrontendBaseURL(c.Request.Context())
 	if frontendBaseURL == "" {
-		slog.Error("server.frontend_url not configured; cannot build password reset link")
+		slog.Error("password reset frontend url not configured; set system api_base_url or server.frontend_url")
 		response.InternalError(c, "Password reset is not configured")
 		return
 	}
@@ -464,6 +466,68 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	response.Success(c, ForgotPasswordResponse{
 		Message: "If your email is registered, you will receive a password reset link shortly.",
 	})
+}
+
+func (h *AuthHandler) resolvePasswordResetFrontendBaseURL(ctx context.Context) string {
+	if h.settingSvc != nil {
+		if settings, err := h.settingSvc.GetAllSettings(ctx); err == nil {
+			if normalized, ok := normalizePasswordResetBaseURL(settings.APIBaseURL, true); ok {
+				return normalized
+			}
+		}
+	}
+
+	if h.cfg != nil {
+		if normalized, ok := normalizePasswordResetBaseURL(h.cfg.Server.FrontendURL, false); ok {
+			return normalized
+		}
+	}
+
+	return ""
+}
+
+func normalizePasswordResetBaseURL(raw string, fromAPIBaseURL bool) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", false
+	}
+	if err := config.ValidateAbsoluteHTTPURL(raw); err != nil {
+		return "", false
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", false
+	}
+
+	cleanPath := strings.TrimSuffix(u.Path, "/")
+	if fromAPIBaseURL {
+		cleanPath = trimAPIPathSuffix(cleanPath)
+	}
+	cleanPath = strings.TrimSuffix(cleanPath, "/")
+
+	u.Path = cleanPath
+	u.RawPath = ""
+	u.RawQuery = ""
+	u.Fragment = ""
+
+	return strings.TrimSuffix(u.String(), "/"), true
+}
+
+func trimAPIPathSuffix(path string) string {
+	trimmed := strings.TrimSuffix(strings.TrimSpace(path), "/")
+	if trimmed == "" {
+		return ""
+	}
+
+	lower := strings.ToLower(trimmed)
+	if strings.HasSuffix(lower, "/api/v1") {
+		return trimmed[:len(trimmed)-len("/api/v1")]
+	}
+	if strings.HasSuffix(lower, "/api") {
+		return trimmed[:len(trimmed)-len("/api")]
+	}
+	return trimmed
 }
 
 // ResetPasswordRequest 重置密码请求
