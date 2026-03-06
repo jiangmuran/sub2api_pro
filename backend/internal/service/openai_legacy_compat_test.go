@@ -117,6 +117,23 @@ func TestNormalizeOpenAIResponsesBody_ConvertsTextContentType(t *testing.T) {
 	}
 }
 
+func TestNormalizeOpenAIResponsesBody_RemovesCacheControlFromInputContent(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":[{"type":"message","role":"user","cache_control":{"type":"ephemeral"},"content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral"}}]}]}`)
+	normalized, changed, err := NormalizeOpenAIResponsesBody(body)
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesBody error: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	if gjson.GetBytes(normalized, "input.0.cache_control").Exists() {
+		t.Fatalf("expected input-level cache_control removed")
+	}
+	if gjson.GetBytes(normalized, "input.0.content.0.cache_control").Exists() {
+		t.Fatalf("expected content-level cache_control removed")
+	}
+}
+
 func TestNormalizeOpenAIResponsesBody_ConvertsAssistantTextContentType(t *testing.T) {
 	body := []byte(`{"model":"gpt-4o","input":[{"type":"message","role":"assistant","content":[{"type":"text","text":"hello"}]}]}`)
 	normalized, changed, err := NormalizeOpenAIResponsesBody(body)

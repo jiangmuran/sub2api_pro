@@ -249,6 +249,10 @@ func normalizeOpenAIInputContentTypes(input []any) bool {
 		if !ok {
 			continue
 		}
+		if _, exists := entry["cache_control"]; exists {
+			delete(entry, "cache_control")
+			changed = true
+		}
 		assistantRole := isAssistantInputRole(entry)
 
 		if value, ok := entry["type"].(string); ok {
@@ -273,6 +277,10 @@ func normalizeOpenAIInputContentTypes(input []any) bool {
 			contentMap, ok := contentItem.(map[string]any)
 			if !ok {
 				continue
+			}
+			if _, exists := contentMap["cache_control"]; exists {
+				delete(contentMap, "cache_control")
+				changed = true
 			}
 			contentType, ok := contentMap["type"].(string)
 			if !ok {
