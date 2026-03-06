@@ -279,12 +279,66 @@
                   class="input min-w-64 flex-1"
                   :placeholder="t('admin.distributor.notes')"
                 />
-                <button class="btn btn-primary" :disabled="creatingOffer" @click="createOffer">
-                  {{ creatingOffer ? t('common.processing') : t('common.create') }}
+                <button class="btn btn-primary" :disabled="creatingOffer" @click="submitOffer">
+                  {{ creatingOffer ? t('common.processing') : (editingOfferId ? t('common.save') : t('common.create')) }}
+                </button>
+                <button
+                  v-if="editingOfferId"
+                  class="btn btn-secondary"
+                  :disabled="creatingOffer"
+                  @click="resetOfferForm"
+                >
+                  {{ t('common.cancel') }}
                 </button>
               </div>
 
+              <div class="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-800">
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+                  <input
+                    v-model.trim="batchOfferForm.validity_days"
+                    type="number"
+                    min="1"
+                    max="36500"
+                    class="input"
+                    :placeholder="t('admin.distributor.bulkValidityPlaceholder')"
+                  />
+                  <input
+                    v-model.trim="batchOfferForm.cost_cny"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    class="input"
+                    :placeholder="t('admin.distributor.bulkCostPlaceholder')"
+                  />
+                  <button class="btn btn-secondary" @click="toggleSelectAllOffers(!isAllOffersSelected)">
+                    {{ t('admin.distributor.selectAllOffers') }}
+                  </button>
+                  <button class="btn btn-primary" :disabled="batchUpdatingOffers" @click="applyBatchOfferUpdates">
+                    {{ batchUpdatingOffers ? t('common.processing') : t('admin.distributor.bulkUpdate') }}
+                  </button>
+                </div>
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('common.selectedCount', { count: selectedOfferCount }) }}
+                </p>
+              </div>
+
               <DataTable :columns="offerColumns" :data="offers" :loading="loadingOffers" :sticky-actions-column="false">
+                <template #header-select>
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    :checked="isAllOffersSelected"
+                    @change="toggleSelectAllOffersFromEvent"
+                  />
+                </template>
+                <template #cell-select="{ row }">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    :checked="isOfferSelected(row.id)"
+                    @change="toggleOfferSelectionFromEvent(row.id, $event)"
+                  />
+                </template>
                 <template #cell-target_group_id="{ value }">
                   {{ groupNameMap[value] || value }}
                 </template>
@@ -301,6 +355,9 @@
                 </template>
                 <template #cell-notes="{ value }">{{ value || '-' }}</template>
                 <template #cell-actions="{ row }">
+                  <button class="btn btn-secondary btn-sm" :disabled="creatingOffer" @click="beginEditOffer(row)">
+                    {{ t('common.edit') }}
+                  </button>
                   <button class="btn btn-danger btn-sm" :disabled="deletingOfferId === row.id" @click="deleteOffer(row.id)">
                     {{ deletingOfferId === row.id ? t('common.processing') : t('common.delete') }}
                   </button>
@@ -400,10 +457,13 @@ const loadingOffers = ref(false)
 const loadingOrders = ref(false)
 const savingProfile = ref(false)
 const creatingOffer = ref(false)
+const batchUpdatingOffers = ref(false)
 const deletingOfferId = ref<number | null>(null)
 const revokeLoadingId = ref<number | null>(null)
 const adjustingBalance = ref(false)
 const settling = ref(false)
+const editingOfferId = ref<number | null>(null)
+const selectedOfferIds = ref<number[]>([])
 
 const selectedUserId = ref<number | null>(null)
 
@@ -426,6 +486,11 @@ const offerForm = reactive({
   cost_cny: 1,
   enabled: true,
   notes: ''
+})
+
+const batchOfferForm = reactive({
+  validity_days: '',
+  cost_cny: ''
 })
 
 const balanceForm = reactive({
@@ -459,6 +524,10 @@ const totalOrderCount = computed(() =>
 )
 const totalGrossProfit = computed(() =>
   summaryRows.value.reduce((acc, item) => acc + (item.gross_profit_cny || 0), 0)
+)
+const selectedOfferCount = computed(() => selectedOfferIds.value.length)
+const isAllOffersSelected = computed(() =>
+  offers.value.length > 0 && selectedOfferIds.value.length === offers.value.length
 )
 
 const enabledOptions = computed(() => [
@@ -496,6 +565,7 @@ const profileColumns = computed<Column[]>(() => [
 ])
 
 const offerColumns = computed<Column[]>(() => [
+  { key: 'select', label: '' },
   { key: 'name', label: t('admin.distributor.offerName') },
   { key: 'target_group_id', label: t('keys.group') },
   { key: 'validity_days', label: t('admin.distributor.validityDays') },
@@ -625,6 +695,10 @@ const loadOffers = async () => {
   loadingOffers.value = true
   try {
     offers.value = await adminAPI.distributors.listOffers(selectedUserId.value)
+    selectedOfferIds.value = selectedOfferIds.value.filter((id) => offers.value.some((item) => item.id === id))
+    if (editingOfferId.value && !offers.value.some((item) => item.id === editingOfferId.value)) {
+      resetOfferForm()
+    }
   } finally {
     loadingOffers.value = false
   }
@@ -815,6 +889,8 @@ const submitBalanceAdjust = async (operation: 'topup' | 'refund') => {
 
 const selectUser = async (userId: number) => {
   selectedUserId.value = userId
+  selectedOfferIds.value = []
+  resetOfferForm()
   const selected = profiles.value.find((item) => item.user_id === userId)
   if (selected) {
     createForm.email = getProfileUserEmail(selected)
@@ -828,7 +904,29 @@ const selectUser = async (userId: number) => {
   }
 }
 
-const createOffer = async () => {
+const resetOfferForm = () => {
+  editingOfferId.value = null
+  offerForm.name = ''
+  offerForm.validity_days = 30
+  offerForm.cost_cny = 1
+  offerForm.enabled = true
+  offerForm.notes = ''
+  if (!offerForm.target_group_id && groupOptions.value.length > 0) {
+    offerForm.target_group_id = Number(groupOptions.value[0].value)
+  }
+}
+
+const beginEditOffer = (offer: DistributorOffer) => {
+  editingOfferId.value = offer.id
+  offerForm.name = offer.name
+  offerForm.target_group_id = offer.target_group_id
+  offerForm.validity_days = offer.validity_days
+  offerForm.cost_cny = Number((offer.cost_cny_cents / 100).toFixed(2))
+  offerForm.enabled = offer.enabled
+  offerForm.notes = offer.notes || ''
+}
+
+const submitOffer = async () => {
   if (!selectedUserId.value) {
     return
   }
@@ -850,7 +948,7 @@ const createOffer = async () => {
 
   creatingOffer.value = true
   try {
-    await adminAPI.distributors.createOffer({
+    const payload = {
       distributor_user_id: selectedUserId.value,
       name,
       target_group_id: offerForm.target_group_id,
@@ -858,10 +956,14 @@ const createOffer = async () => {
       cost_cny: Math.round(costCNY * 100),
       enabled: offerForm.enabled,
       notes: offerForm.notes.trim()
-    })
+    }
+    if (editingOfferId.value) {
+      await adminAPI.distributors.updateOffer(editingOfferId.value, payload)
+    } else {
+      await adminAPI.distributors.createOffer(payload)
+    }
     appStore.showSuccess(t('common.success'))
-    offerForm.name = ''
-    offerForm.notes = ''
+    resetOfferForm()
     await loadOffers()
   } catch (error: any) {
     showRequestError(error)
@@ -870,11 +972,122 @@ const createOffer = async () => {
   }
 }
 
+const isOfferSelected = (id: number) => selectedOfferIds.value.includes(id)
+
+const toggleOfferSelection = (id: number, checked: boolean) => {
+  if (checked) {
+    if (!selectedOfferIds.value.includes(id)) {
+      selectedOfferIds.value = [...selectedOfferIds.value, id]
+    }
+    return
+  }
+  selectedOfferIds.value = selectedOfferIds.value.filter((item) => item !== id)
+}
+
+const toggleOfferSelectionFromEvent = (id: number, event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  toggleOfferSelection(id, Boolean(target?.checked))
+}
+
+const toggleSelectAllOffers = (checked: boolean) => {
+  if (!checked) {
+    selectedOfferIds.value = []
+    return
+  }
+  selectedOfferIds.value = offers.value.map((item) => item.id)
+}
+
+const toggleSelectAllOffersFromEvent = (event: Event) => {
+  const target = event.target as HTMLInputElement | null
+  toggleSelectAllOffers(Boolean(target?.checked))
+}
+
+const applyBatchOfferUpdates = async () => {
+  if (!selectedUserId.value) {
+    return
+  }
+  if (selectedOfferIds.value.length === 0) {
+    appStore.showError(t('admin.distributor.bulkSelectionRequired'))
+    return
+  }
+
+  const validityRaw = batchOfferForm.validity_days.trim()
+  const costRaw = batchOfferForm.cost_cny.trim()
+
+  let nextValidityDays: number | null = null
+  let nextCostCNYCents: number | null = null
+
+  if (validityRaw !== '') {
+    const parsed = Number.parseInt(validityRaw, 10)
+    if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 36500) {
+      appStore.showError(t('admin.distributor.validityDays'))
+      return
+    }
+    nextValidityDays = parsed
+  }
+  if (costRaw !== '') {
+    const parsed = Number(costRaw)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      appStore.showError(t('admin.distributor.cost'))
+      return
+    }
+    nextCostCNYCents = Math.round(parsed * 100)
+  }
+
+  if (nextValidityDays === null && nextCostCNYCents === null) {
+    appStore.showError(t('admin.distributor.bulkFieldsRequired'))
+    return
+  }
+
+  const selectedSet = new Set<number>(selectedOfferIds.value)
+  const targets = offers.value.filter((item) => selectedSet.has(item.id))
+  if (targets.length === 0) {
+    appStore.showError(t('admin.distributor.bulkSelectionRequired'))
+    return
+  }
+
+  batchUpdatingOffers.value = true
+  try {
+    let updatedCount = 0
+    for (const offer of targets) {
+      const validityDays = nextValidityDays ?? offer.validity_days
+      const costCNYCents = nextCostCNYCents ?? offer.cost_cny_cents
+      if (validityDays === offer.validity_days && costCNYCents === offer.cost_cny_cents) {
+        continue
+      }
+      await adminAPI.distributors.updateOffer(offer.id, {
+        distributor_user_id: offer.distributor_user_id,
+        name: offer.name,
+        target_group_id: offer.target_group_id,
+        validity_days: validityDays,
+        cost_cny: costCNYCents,
+        enabled: offer.enabled,
+        notes: offer.notes || ''
+      })
+      updatedCount++
+    }
+
+    appStore.showSuccess(t('admin.distributor.bulkUpdated', { count: updatedCount }))
+    selectedOfferIds.value = []
+    batchOfferForm.validity_days = ''
+    batchOfferForm.cost_cny = ''
+    await loadOffers()
+  } catch (error: any) {
+    showRequestError(error)
+  } finally {
+    batchUpdatingOffers.value = false
+  }
+}
+
 const deleteOffer = async (id: number) => {
   deletingOfferId.value = id
   try {
     await adminAPI.distributors.deleteOffer(id)
     appStore.showSuccess(t('common.success'))
+    if (editingOfferId.value === id) {
+      resetOfferForm()
+    }
+    selectedOfferIds.value = selectedOfferIds.value.filter((item) => item !== id)
     await loadOffers()
   } catch (error: any) {
     showRequestError(error)

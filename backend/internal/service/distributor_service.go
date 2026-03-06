@@ -366,14 +366,6 @@ FROM distributor_offers WHERE id = $1 FOR UPDATE
 		return err
 	}
 
-	var issuedCount int64
-	if scanErr := tx.QueryRowContext(ctx, `SELECT COUNT(1) FROM distributor_orders WHERE offer_id = $1 AND status = $2`, id, DistributorOrderStatusIssued).Scan(&issuedCount); scanErr != nil {
-		return scanErr
-	}
-	if issuedCount > 0 {
-		return infraerrors.Conflict("DISTRIBUTOR_OFFER_IN_USE", "offer has active issued orders and cannot be deleted")
-	}
-
 	archiveID, err := s.ensureArchiveOfferForDelete(ctx, tx, &offer)
 	if err != nil {
 		return err
