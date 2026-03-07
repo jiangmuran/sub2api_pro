@@ -1035,6 +1035,41 @@ export interface RedeemCodeRequest {
   code: string
 }
 
+export interface InvitationRedeemCategoryStat {
+  category: string
+  redeem_count: number
+}
+
+export interface InvitationRedeemGroupStat {
+  group_id: number
+  group_name: string
+  redeem_count: number
+}
+
+export interface InvitationRedeemDetail {
+  redeem_code_id: number
+  code: string
+  type: RedeemCodeType
+  category: string
+  value: number
+  group_id?: number | null
+  group_name?: string
+  used_at?: string | null
+}
+
+export interface InvitationRedeemImpactStats {
+  invitation_code_id: number
+  code: string
+  category: string
+  used_by_user_id?: number | null
+  used_by_email?: string
+  registered_at?: string | null
+  subscription_redeems_total: number
+  redeems: InvitationRedeemDetail[]
+  by_category: InvitationRedeemCategoryStat[]
+  by_group: InvitationRedeemGroupStat[]
+}
+
 export interface DistributorProfile {
   id: number
   user_id: number
@@ -1461,6 +1496,22 @@ export interface PromoCodeUsage {
   bonus_amount: number
   used_at: string
   user?: User
+}
+
+export interface PromoCodeUsageStats {
+  promo_code_id: number
+  code: string
+  bonus_amount: number
+  max_uses: number
+  used_count: number
+  total_bonus_amount: number
+  total_uses: number
+  unique_users: number
+  uses_today: number
+  uses_last_7_days: number
+  uses_last_30_days: number
+  activated_users: number
+  activation_rate: number
 }
 
 export interface CreatePromoCodeRequest {

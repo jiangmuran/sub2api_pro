@@ -5,10 +5,11 @@
 
 import { apiClient } from '../client'
 import type {
-  RedeemCode,
-  GenerateRedeemCodesRequest,
-  RedeemCodeType,
-  PaginatedResponse
+	RedeemCode,
+	GenerateRedeemCodesRequest,
+	RedeemCodeType,
+	PaginatedResponse,
+	InvitationRedeemImpactStats
 } from '@/types'
 
 /**
@@ -184,6 +185,13 @@ export async function exportCodes(filters?: {
   return response.data
 }
 
+export async function getInvitationImpact(id: number): Promise<InvitationRedeemImpactStats> {
+	const { data } = await apiClient.get<InvitationRedeemImpactStats>(
+		`/admin/redeem-codes/${id}/invitation-impact`
+	)
+	return data
+}
+
 export const redeemAPI = {
   list,
   getById,
@@ -192,7 +200,8 @@ export const redeemAPI = {
   batchDelete,
   expire,
   getStats,
-  exportCodes
+  exportCodes,
+  getInvitationImpact
 }
 
 export default redeemAPI

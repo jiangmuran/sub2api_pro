@@ -207,3 +207,21 @@ func (h *PromoHandler) GetUsages(c *gin.Context) {
 	}
 	response.Paginated(c, out, paginationResult.Total, page, pageSize)
 }
+
+// GetStats handles getting aggregated usage statistics for a promo code
+// GET /api/v1/admin/promo-codes/:id/stats
+func (h *PromoHandler) GetStats(c *gin.Context) {
+	codeID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid promo code ID")
+		return
+	}
+
+	stats, err := h.promoService.GetUsageStats(c.Request.Context(), codeID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, stats)
+}

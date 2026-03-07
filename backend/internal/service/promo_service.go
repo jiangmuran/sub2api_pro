@@ -9,6 +9,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
@@ -265,4 +266,106 @@ func (s *PromoService) List(ctx context.Context, params pagination.PaginationPar
 // ListUsages 获取使用记录
 func (s *PromoService) ListUsages(ctx context.Context, promoCodeID int64, params pagination.PaginationParams) ([]PromoCodeUsage, *pagination.PaginationResult, error) {
 	return s.promoRepo.ListUsagesByPromoCode(ctx, promoCodeID, params)
+}
+
+// PromoCodeUsageStats 聚合后的优惠码使用统计（按用户和时间窗口粗粒度统计）。
+type PromoCodeUsageStats struct {
+	PromoCodeID      int64   `json:"promo_code_id"`
+	Code             string  `json:"code"`
+	BonusAmount      float64 `json:"bonus_amount"`
+	MaxUses          int     `json:"max_uses"`
+	UsedCount        int     `json:"used_count"`
+	TotalBonusAmount float64 `json:"total_bonus_amount"`
+	TotalUses        int64   `json:"total_uses"`
+	UniqueUsers      int64   `json:"unique_users"`
+	UsesToday        int64   `json:"uses_today"`
+	UsesLast7Days    int64   `json:"uses_last_7_days"`
+	UsesLast30Days   int64   `json:"uses_last_30_days"`
+	ActivatedUsers   int64   `json:"activated_users"`
+	ActivationRate   float64 `json:"activation_rate"`
+}
+
+// GetUsageStats 计算指定优惠码的使用统计信息。
+// 目前实现为按日粗粒度统计：今天、最近7天、最近30天的使用次数。
+func (s *PromoService) GetUsageStats(ctx context.Context, promoCodeID int64) (*PromoCodeUsageStats, error) {
+	code, err := s.promoRepo.GetByID(ctx, promoCodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	stats := &PromoCodeUsageStats{
+		PromoCodeID: promoCodeID,
+		Code:        code.Code,
+		BonusAmount: code.BonusAmount,
+		MaxUses:     code.MaxUses,
+		UsedCount:   code.UsedCount,
+	}
+
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	last7Start := todayStart.AddDate(0, 0, -7)
+	last30Start := todayStart.AddDate(0, 0, -30)
+
+	userSet := make(map[int64]struct{})
+	params := pagination.PaginationParams{Page: 1, PageSize: 500}
+
+	for {
+		usages, pageResult, err := s.promoRepo.ListUsagesByPromoCode(ctx, promoCodeID, params)
+		if err != nil {
+			return nil, err
+		}
+		if len(usages) == 0 {
+			break
+		}
+		for i := range usages {
+			u := usages[i]
+			stats.TotalUses++
+			stats.TotalBonusAmount += u.BonusAmount
+			userSet[u.UserID] = struct{}{}
+
+			usedAt := u.UsedAt
+			if !usedAt.Before(todayStart) {
+				stats.UsesToday++
+			}
+			if !usedAt.Before(last7Start) {
+				stats.UsesLast7Days++
+			}
+			if !usedAt.Before(last30Start) {
+				stats.UsesLast30Days++
+			}
+		}
+
+		if pageResult == nil || params.Page >= pageResult.Pages {
+			break
+		}
+		params.Page++
+	}
+
+	stats.UniqueUsers = int64(len(userSet))
+
+	// 统计至少拥有一条订阅记录的用户数，用于估算“购买/激活率”。
+	if len(userSet) > 0 {
+		userIDs := make([]int64, 0, len(userSet))
+		for id := range userSet {
+			userIDs = append(userIDs, id)
+		}
+		subs, err := s.entClient.UserSubscription.
+			Query().
+			Where(usersubscription.UserIDIn(userIDs...)).
+			Select(usersubscription.FieldUserID).
+			All(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("query subscriptions for promo stats: %w", err)
+		}
+		activatedUserSet := make(map[int64]struct{})
+		for _, sub := range subs {
+			activatedUserSet[sub.UserID] = struct{}{}
+		}
+		stats.ActivatedUsers = int64(len(activatedUserSet))
+		if stats.UniqueUsers > 0 {
+			stats.ActivationRate = float64(stats.ActivatedUsers) / float64(stats.UniqueUsers)
+		}
+	}
+
+	return stats, nil
 }

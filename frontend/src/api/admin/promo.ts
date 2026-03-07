@@ -8,7 +8,8 @@ import type {
   PromoCodeUsage,
   CreatePromoCodeRequest,
   UpdatePromoCodeRequest,
-  BasePaginationResponse
+  BasePaginationResponse,
+  PromoCodeUsageStats
 } from '@/types'
 
 export async function list(
@@ -57,13 +58,19 @@ export async function getUsages(
   return data
 }
 
+export async function getStats(id: number): Promise<PromoCodeUsageStats> {
+  const { data } = await apiClient.get<PromoCodeUsageStats>(`/admin/promo-codes/${id}/stats`)
+  return data
+}
+
 const promoAPI = {
   list,
   getById,
   create,
   update,
   delete: deleteCode,
-  getUsages
+  getUsages,
+  getStats
 }
 
 export default promoAPI

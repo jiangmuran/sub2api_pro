@@ -213,11 +213,20 @@
             }}</span>
           </template>
 
-          <template #cell-actions="{ row }">
-            <div class="flex items-center space-x-2">
-              <button
-                v-if="row.status === 'unused'"
-                @click="handleDelete(row)"
+      <template #cell-actions="{ row }">
+        <div class="flex items-center space-x-2">
+          <button
+            v-if="row.type === 'invitation' && row.status === 'used'"
+            @click="handleViewInvitationImpact(row)
+            "
+            class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-300"
+          >
+            <Icon name="chartBar" size="sm" />
+            <span class="text-xs">{{ t('admin.redeem.viewInvitationImpact') }}</span>
+          </button>
+          <button
+            v-if="row.status === 'unused'"
+            @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -395,6 +404,202 @@
       </div>
     </Teleport>
 
+    <!-- Invitation Impact Dialog -->
+    <Teleport to="body">
+      <div
+        v-if="showInvitationImpactDialog"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <div class="fixed inset-0 bg-black/50" @click="closeInvitationImpact"></div>
+        <div
+          class="relative z-10 w-full max-w-3xl rounded-xl bg-white shadow-xl dark:bg-dark-800"
+        >
+          <div
+            class="flex items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-dark-600"
+          >
+            <div>
+              <h2 class="text-base font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.redeem.invitationImpactTitle') }}
+              </h2>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <span v-if="currentInvitationCode">
+                  {{ t('admin.redeem.invitationCodeLabel') }}
+                  <code class="ml-1 font-mono text-xs">
+                    {{ currentInvitationCode.code }}
+                  </code>
+                </span>
+              </p>
+            </div>
+            <button
+              @click="closeInvitationImpact"
+              class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+            >
+              <Icon name="x" size="md" :stroke-width="2" />
+            </button>
+          </div>
+
+          <div class="max-h-[70vh] overflow-y-auto px-5 py-4 text-sm">
+            <div v-if="invitationImpactLoading" class="flex items-center justify-center py-8">
+              <Icon name="refresh" size="lg" class="animate-spin text-gray-400" />
+            </div>
+            <div v-else-if="!invitationImpact" class="py-8 text-center text-gray-500 dark:text-gray-400">
+              {{ t('admin.redeem.invitationImpactEmpty') }}
+            </div>
+            <div v-else class="space-y-4">
+              <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-700/60">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.redeem.registeredUser') }}
+                  </p>
+                  <p class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+                    {{ invitationImpact.used_by_email || '-' }}
+                  </p>
+                </div>
+                <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-700/60">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.redeem.subscriptionRedeemsTotal') }}
+                  </p>
+                  <p class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+                    {{ invitationImpact.subscription_redeems_total }}
+                  </p>
+                </div>
+                <div class="rounded-lg bg-gray-50 p-3 dark:bg-dark-700/60">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.redeem.invitationCategory') }}
+                  </p>
+                  <p class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+                    {{ invitationImpact.category || t('admin.redeem.ungrouped') }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {{ t('admin.redeem.byRedeemCategory') }}
+                  </h3>
+                  <div
+                    v-if="!invitationImpact.by_category || invitationImpact.by_category.length === 0"
+                    class="rounded-lg border border-dashed border-gray-200 p-3 text-xs text-gray-400 dark:border-dark-600 dark:text-gray-500"
+                  >
+                    {{ t('admin.redeem.noSubscriptionRedeems') }}
+                  </div>
+                  <table
+                    v-else
+                    class="min-w-full divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200 text-xs dark:divide-dark-700 dark:border-dark-700"
+                  >
+                    <thead class="bg-gray-50 dark:bg-dark-800">
+                      <tr>
+                        <th class="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">
+                          {{ t('admin.redeem.columns.category') }}
+                        </th>
+                        <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">
+                          {{ t('admin.redeem.redeemCount') }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                      <tr v-for="item in invitationImpact.by_category" :key="item.category">
+                        <td class="px-3 py-1.5 text-gray-900 dark:text-gray-100">
+                          {{ item.category || t('admin.redeem.ungrouped') }}
+                        </td>
+                        <td class="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                          {{ item.redeem_count }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div>
+                  <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {{ t('admin.redeem.bySubscriptionGroup') }}
+                  </h3>
+                  <div
+                    v-if="!invitationImpact.by_group || invitationImpact.by_group.length === 0"
+                    class="rounded-lg border border-dashed border-gray-200 p-3 text-xs text-gray-400 dark:border-dark-600 dark:text-gray-500"
+                  >
+                    {{ t('admin.redeem.noSubscriptionRedeems') }}
+                  </div>
+                  <table
+                    v-else
+                    class="min-w-full divide-y divide-gray-200 overflow-hidden rounded-lg border border-gray-200 text-xs dark:divide-dark-700 dark:border-dark-700"
+                  >
+                    <thead class="bg-gray-50 dark:bg-dark-800">
+                      <tr>
+                        <th class="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">
+                          {{ t('keys.group') }}
+                        </th>
+                        <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">
+                          {{ t('admin.redeem.redeemCount') }}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                      <tr v-for="item in invitationImpact.by_group" :key="item.group_id">
+                        <td class="px-3 py-1.5 text-gray-900 dark:text-gray-100">
+                          {{ item.group_name || ('#' + item.group_id) }}
+                        </td>
+                        <td class="px-3 py-1.5 text-right text-gray-700 dark:text-gray-300">
+                          {{ item.redeem_count }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  {{ t('admin.redeem.redeemDetails') }}
+                </h3>
+                <div
+                  v-if="!invitationImpact.redeems || invitationImpact.redeems.length === 0"
+                  class="rounded-lg border border-dashed border-gray-200 p-3 text-xs text-gray-400 dark:border-dark-600 dark:text-gray-500"
+                >
+                  {{ t('admin.redeem.noSubscriptionRedeems') }}
+                </div>
+                <div v-else class="space-y-2">
+                  <div
+                    v-for="item in invitationImpact.redeems"
+                    :key="item.redeem_code_id"
+                    class="flex items-center justify-between rounded-lg border border-gray-200 p-3 text-xs dark:border-dark-700"
+                  >
+                    <div>
+                      <p class="font-mono text-gray-900 dark:text-gray-100">
+                        {{ item.code }}
+                      </p>
+                      <p class="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                        <span v-if="item.category">
+                          {{ t('admin.redeem.columns.category') }}: {{ item.category }}
+                        </span>
+                        <span v-if="item.group_name" class="ml-2">
+                          {{ t('keys.group') }}: {{ item.group_name }}
+                        </span>
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-[11px] text-gray-500 dark:text-gray-400">
+                        {{ item.used_at ? formatDateTime(item.used_at) : '-' }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="flex justify-end gap-2 rounded-b-xl border-t border-gray-200 bg-gray-50 px-5 py-3 text-xs dark:border-dark-600 dark:bg-dark-700/50"
+          >
+            <button type="button" @click="closeInvitationImpact" class="btn btn-secondary btn-sm">
+              {{ t('common.close') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Generated Codes Result Dialog -->
     <Teleport to="body">
       <div v-if="showResultDialog" class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -489,7 +694,14 @@ import { useAppStore } from '@/stores/app'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
-import type { RedeemCode, RedeemCodeType, Group, GroupPlatform, SubscriptionType } from '@/types'
+import type {
+  RedeemCode,
+  RedeemCodeType,
+  Group,
+  GroupPlatform,
+  SubscriptionType,
+  InvitationRedeemImpactStats
+} from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -659,6 +871,10 @@ const deletingCode = ref<RedeemCode | null>(null)
 const copiedCode = ref<string | null>(null)
 const categoryStats = ref<RedeemCategoryStat[]>([])
 const invitationStats = ref<InvitationStats | null>(null)
+const showInvitationImpactDialog = ref(false)
+const invitationImpactLoading = ref(false)
+const currentInvitationCode = ref<RedeemCode | null>(null)
+const invitationImpact = ref<InvitationRedeemImpactStats | null>(null)
 
 const generateForm = reactive({
   type: 'balance' as RedeemCodeType,

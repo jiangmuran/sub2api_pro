@@ -268,6 +268,28 @@ func (h *RedeemHandler) GetStats(c *gin.Context) {
 	response.Success(c, stats)
 }
 
+// GetInvitationImpact handles getting impact statistics for an invitation redeem code
+// GET /api/v1/admin/redeem-codes/:id/invitation-impact
+func (h *RedeemHandler) GetInvitationImpact(c *gin.Context) {
+	if h.redeemService == nil {
+		response.InternalError(c, "redeem service not configured")
+		return
+	}
+	codeID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid redeem code ID")
+		return
+	}
+
+	stats, err := h.redeemService.GetInvitationImpactStats(c.Request.Context(), codeID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, stats)
+}
+
 // Export handles exporting redeem codes to CSV
 // GET /api/v1/admin/redeem-codes/export
 func (h *RedeemHandler) Export(c *gin.Context) {

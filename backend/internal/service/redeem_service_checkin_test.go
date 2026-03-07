@@ -198,7 +198,7 @@ func (r *checkinTestRedeemRepo) List(_ context.Context, _ pagination.PaginationP
 	return nil, nil, nil
 }
 
-func (r *checkinTestRedeemRepo) ListWithFilters(_ context.Context, _ pagination.PaginationParams, _, _, _ string) ([]RedeemCode, *pagination.PaginationResult, error) {
+func (r *checkinTestRedeemRepo) ListWithFilters(_ context.Context, _ pagination.PaginationParams, _, _, _, _ string) ([]RedeemCode, *pagination.PaginationResult, error) {
 	return nil, nil, nil
 }
 
@@ -285,6 +285,10 @@ func (r *checkinTestUserRepo) ExistsByEmail(_ context.Context, _ string) (bool, 
 
 func (r *checkinTestUserRepo) RemoveGroupFromAllowedGroups(_ context.Context, _ int64) (int64, error) {
 	return 0, nil
+}
+
+func (r *checkinTestUserRepo) AddGroupToAllowedGroups(_ context.Context, _ int64, _ int64) error {
+	return nil
 }
 
 func (r *checkinTestUserRepo) UpdateTotpSecret(_ context.Context, _ int64, _ *string) error {

@@ -360,6 +360,7 @@ func registerRedeemCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		codes.DELETE("/:id", h.Admin.Redeem.Delete)
 		codes.POST("/batch-delete", h.Admin.Redeem.BatchDelete)
 		codes.POST("/:id/expire", h.Admin.Redeem.Expire)
+		codes.GET("/:id/invitation-impact", h.Admin.Redeem.GetInvitationImpact)
 	}
 }
 
@@ -372,6 +373,7 @@ func registerPromoCodeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		promoCodes.PUT("/:id", h.Admin.Promo.Update)
 		promoCodes.DELETE("/:id", h.Admin.Promo.Delete)
 		promoCodes.GET("/:id/usages", h.Admin.Promo.GetUsages)
+		promoCodes.GET("/:id/stats", h.Admin.Promo.GetStats)
 	}
 }
 

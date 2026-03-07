@@ -320,6 +320,39 @@
       </div>
       <div v-else class="space-y-3">
         <div
+          v-if="usageStats"
+          class="rounded-lg border border-indigo-100 bg-indigo-50 p-3 text-xs text-gray-700 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-100"
+        >
+          <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <div class="font-medium text-indigo-700 dark:text-indigo-100">
+              {{ t('admin.promo.usageStatsFor', { code: usageStats.code }) }}
+            </div>
+            <div class="flex flex-wrap gap-3 text-xs">
+              <span>
+                {{ t('admin.promo.totalUses') }}: {{ usageStats.total_uses }}
+              </span>
+              <span>
+                {{ t('admin.promo.uniqueUsers') }}: {{ usageStats.unique_users }}
+              </span>
+              <span>
+                {{ t('admin.promo.totalBonus') }}: ${{ usageStats.total_bonus_amount.toFixed(2) }}
+              </span>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-4 text-xs">
+            <span>
+              {{ t('admin.promo.usesToday') }}: {{ usageStats.uses_today }}
+            </span>
+            <span>
+              {{ t('admin.promo.uses7d') }}: {{ usageStats.uses_last_7_days }}
+            </span>
+            <span>
+              {{ t('admin.promo.uses30d') }}: {{ usageStats.uses_last_30_days }}
+            </span>
+          </div>
+        </div>
+
+        <div
           v-for="usage in usages"
           :key="usage.id"
           class="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-dark-600"
@@ -385,7 +418,7 @@ import { useAppStore } from '@/stores/app'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
-import type { PromoCode, PromoCodeUsage } from '@/types'
+import type { PromoCode, PromoCodeUsage, PromoCodeUsageStats } from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -434,6 +467,7 @@ const currentViewingCode = ref<PromoCode | null>(null)
 const usagesPage = ref(1)
 const usagesPageSize = ref(20)
 const usagesTotal = ref(0)
+const usageStats = ref<PromoCodeUsageStats | null>(null)
 
 // Forms
 const createForm = reactive({
@@ -677,7 +711,8 @@ const handleViewUsages = async (code: PromoCode) => {
   currentViewingCode.value = code
   showUsagesDialog.value = true
   usagesPage.value = 1
-  await loadUsages()
+  usageStats.value = null
+  await Promise.all([loadUsages(), loadUsageStats()])
 }
 
 const loadUsages = async () => {
@@ -697,6 +732,15 @@ const loadUsages = async () => {
     appStore.showError(error.response?.data?.detail || t('admin.promo.failedToLoadUsages'))
   } finally {
     usagesLoading.value = false
+  }
+}
+
+const loadUsageStats = async () => {
+  if (!currentViewingCode.value) return
+  try {
+    usageStats.value = await adminAPI.promo.getStats(currentViewingCode.value.id)
+  } catch (error: any) {
+    console.error('Error loading promo usage stats:', error)
   }
 }
 
