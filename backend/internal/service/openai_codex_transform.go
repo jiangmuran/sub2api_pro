@@ -148,11 +148,16 @@ func normalizeCodexModel(model string) string {
 		modelID = parts[len(parts)-1]
 	}
 
+	lowerModelID := strings.ToLower(modelID)
+	if strings.HasPrefix(lowerModelID, "gpt-5.4") {
+		return lowerModelID
+	}
+
 	if mapped := getNormalizedCodexModel(modelID); mapped != "" {
 		return mapped
 	}
 
-	normalized := strings.ToLower(modelID)
+	normalized := lowerModelID
 
 	if strings.Contains(normalized, "gpt-5.2-codex") || strings.Contains(normalized, "gpt 5.2 codex") {
 		return "gpt-5.2-codex"

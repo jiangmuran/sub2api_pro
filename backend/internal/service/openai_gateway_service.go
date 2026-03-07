@@ -2713,6 +2713,11 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
 		req.Header.Set("user-agent", codexCLIUserAgent)
 	}
+	// OAuth 账户走 ChatGPT internal API 时，为非 Codex UA 兜底设置 Codex CLI UA，
+	// 降低被上游风控拦截或降级路径的风险。
+	if account.Type == AccountTypeOAuth && !openai.IsCodexCLIRequest(req.Header.Get("user-agent")) {
+		req.Header.Set("user-agent", codexCLIUserAgent)
+	}
 
 	// Ensure required headers exist
 	if req.Header.Get("content-type") == "" {

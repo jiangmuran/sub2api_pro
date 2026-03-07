@@ -181,6 +181,19 @@ func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 	}
 }
 
+func TestNormalizeCodexModel_Gpt54(t *testing.T) {
+	cases := map[string]string{
+		"gpt-5.4":        "gpt-5.4",
+		"GPT-5.4":        "gpt-5.4",
+		"openai/gpt-5.4": "gpt-5.4",
+		"gpt-5.4-codex":  "gpt-5.4-codex",
+	}
+
+	for input, expected := range cases {
+		require.Equal(t, expected, normalizeCodexModel(input))
+	}
+}
+
 func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *testing.T) {
 	// Codex CLI 场景：已有 instructions 时不修改
 
