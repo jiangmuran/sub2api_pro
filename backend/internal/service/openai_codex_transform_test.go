@@ -165,6 +165,64 @@ func TestApplyCodexOAuthTransform_EmptyInput(t *testing.T) {
 	require.Len(t, input, 0)
 }
 
+func TestApplyCodexOAuthTransform_WrapsTopLevelTextItemsAsMessages(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.4",
+		"input": []any{
+			map[string]any{"type": "input_text", "text": "hi"},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, true)
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 1)
+
+	item, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "message", item["type"])
+	require.Equal(t, "user", item["role"])
+
+	content, ok := item["content"].([]any)
+	require.True(t, ok)
+	require.Len(t, content, 1)
+
+	contentItem, ok := content[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "input_text", contentItem["type"])
+	require.Equal(t, "hi", contentItem["text"])
+}
+
+func TestApplyCodexOAuthTransform_WrapsAssistantOutputTextAsMessage(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.4",
+		"input": []any{
+			map[string]any{"type": "output_text", "role": "assistant", "text": "done"},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, true)
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 1)
+
+	item, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "message", item["type"])
+	require.Equal(t, "assistant", item["role"])
+
+	content, ok := item["content"].([]any)
+	require.True(t, ok)
+	require.Len(t, content, 1)
+
+	contentItem, ok := content[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "output_text", contentItem["type"])
+	require.Equal(t, "done", contentItem["text"])
+}
+
 func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 	cases := map[string]string{
 		"gpt-5.3":                   "gpt-5.3-codex",

@@ -3952,6 +3952,9 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 		var payload map[string]any
 		if err := json.Unmarshal(normalized, &payload); err == nil {
 			payloadChanged := false
+			if normalizeCodexInputPayload(payload) {
+				payloadChanged = true
+			}
 			if normalizeOpenAIToolSchemas(payload) {
 				payloadChanged = true
 			}

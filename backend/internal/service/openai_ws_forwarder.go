@@ -2449,6 +2449,16 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
 			mappedModel = normalizedModel
 		}
+		var payload map[string]any
+		if err := json.Unmarshal(normalized, &payload); err == nil {
+			if normalizeCodexInputPayload(payload) {
+				rebuilt, marshalErr := json.Marshal(payload)
+				if marshalErr != nil {
+					return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", marshalErr)
+				}
+				normalized = rebuilt
+			}
+		}
 		if mappedModel != originalModel {
 			next, setErr := applyPayloadMutation(normalized, "model", mappedModel)
 			if setErr != nil {

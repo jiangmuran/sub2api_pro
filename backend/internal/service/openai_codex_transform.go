@@ -128,6 +128,9 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTran
 	}
 
 	// 续链场景保留 item_reference 与 id，避免 call_id 上下文丢失。
+	if normalizeCodexInputPayload(reqBody) {
+		result.Modified = true
+	}
 	if input, ok := reqBody["input"].([]any); ok {
 		input = filterCodexInput(input, needsToolContinuation)
 		reqBody["input"] = input
@@ -489,6 +492,101 @@ func normalizeOpenAIToolSchemas(reqBody map[string]any) bool {
 	}
 
 	return changed
+}
+
+func normalizeCodexInputItems(input []any) []any {
+	if len(input) == 0 {
+		return input
+	}
+
+	normalized := make([]any, 0, len(input))
+	for _, item := range input {
+		wrapped, changed := wrapCodexTopLevelInputItem(item)
+		if changed {
+			normalized = append(normalized, wrapped)
+			continue
+		}
+		normalized = append(normalized, item)
+	}
+
+	return normalized
+}
+
+func normalizeCodexInputPayload(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+	input, ok := reqBody["input"].([]any)
+	if !ok {
+		return false
+	}
+	normalized := make([]any, 0, len(input))
+	changed := false
+	for _, item := range input {
+		wrapped, itemChanged := wrapCodexTopLevelInputItem(item)
+		if itemChanged {
+			changed = true
+		}
+		normalized = append(normalized, wrapped)
+	}
+	if changed {
+		reqBody["input"] = normalized
+	}
+	return changed
+}
+
+func wrapCodexTopLevelInputItem(item any) (any, bool) {
+	entry, ok := item.(map[string]any)
+	if !ok || entry == nil {
+		return item, false
+	}
+
+	typ, _ := entry["type"].(string)
+	typ = strings.ToLower(strings.TrimSpace(typ))
+	if typ == "message" || typ == "item_reference" || isCodexToolCallItemType(typ) || typ == "reasoning" {
+		return item, false
+	}
+
+	text, hasText := entry["text"].(string)
+	if !hasText {
+		return item, false
+	}
+
+	contentType := typ
+	if contentType == "" || contentType == "text" {
+		contentType = "input_text"
+	}
+
+	role := "user"
+	if strings.EqualFold(strings.TrimSpace(stringValue(entry["role"])), "assistant") || contentType == "output_text" {
+		role = "assistant"
+	}
+
+	content := map[string]any{
+		"type": contentType,
+		"text": text,
+	}
+	if role == "assistant" && contentType == "input_text" {
+		content["type"] = "output_text"
+	}
+	if role == "user" && contentType == "output_text" {
+		content["type"] = "input_text"
+	}
+
+	wrapped := map[string]any{
+		"type":    "message",
+		"role":    role,
+		"content": []any{content},
+	}
+
+	return wrapped, true
+}
+
+func stringValue(value any) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
 }
 
 func normalizeOpenAIToolSchemaNode(node any) bool {
