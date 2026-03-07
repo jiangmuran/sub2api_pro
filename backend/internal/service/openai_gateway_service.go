@@ -3855,13 +3855,29 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 	normalized := body
 	changed := false
 
-	if store := gjson.GetBytes(normalized, "store"); !store.Exists() || store.Type != gjson.False {
+	store := gjson.GetBytes(normalized, "store")
+	if !store.Exists() || store.Type != gjson.False {
 		next, err := sjson.SetBytes(normalized, "store", false)
 		if err != nil {
 			return body, false, fmt.Errorf("normalize passthrough body store=false: %w", err)
 		}
 		normalized = next
 		changed = true
+	}
+
+	// When store is false, item_reference items cannot be resolved by upstream
+	// and will trigger errors like "Item with id 'msg_...' not found". Drop
+	// these purely-referential items to keep behavior closer to official
+	// clients while preserving function_call_output/tool_call context.
+	if gjson.GetBytes(normalized, "store").Type == gjson.False {
+		filtered, removed, err := dropOpenAIItemReferences(normalized)
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body drop item_reference: %w", err)
+		}
+		if removed {
+			normalized = filtered
+			changed = true
+		}
 	}
 
 	if stream := gjson.GetBytes(normalized, "stream"); !stream.Exists() || stream.Type != gjson.True {
@@ -3951,6 +3967,52 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte) ([]byte, bool, error) {
 	}
 
 	return normalized, changed, nil
+}
+
+// dropOpenAIItemReferences removes input items of type "item_reference" whose
+// id looks like a message id (msg_*). This is used in OAuth passthrough mode
+// when store=false to avoid upstream errors like "Item with id 'msg_...' not
+// found" while keeping within-request references (e.g. call_id-based) and
+// other items unchanged.
+func dropOpenAIItemReferences(body []byte) ([]byte, bool, error) {
+	input := gjson.GetBytes(body, "input")
+	if !input.Exists() || !input.IsArray() {
+		return body, false, nil
+	}
+
+	var rawItems []any
+	if err := json.Unmarshal([]byte(input.Raw), &rawItems); err != nil {
+		return body, false, err
+	}
+
+	changed := false
+	filtered := make([]any, 0, len(rawItems))
+	for _, item := range rawItems {
+		m, ok := item.(map[string]any)
+		if !ok {
+			filtered = append(filtered, item)
+			continue
+		}
+		itemType, _ := m["type"].(string)
+		if strings.TrimSpace(itemType) == "item_reference" {
+			idValue, _ := m["id"].(string)
+			idValue = strings.TrimSpace(idValue)
+			if strings.HasPrefix(idValue, "msg_") {
+				changed = true
+				continue
+			}
+		}
+		filtered = append(filtered, m)
+	}
+	if !changed {
+		return body, false, nil
+	}
+
+	updated, err := sjson.SetBytes(body, "input", filtered)
+	if err != nil {
+		return body, false, err
+	}
+	return updated, true, nil
 }
 
 const openAIOAuthInvalidBearerRetryKey = "openai_oauth_invalid_bearer_retry"

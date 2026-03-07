@@ -19,6 +19,29 @@ func TestNormalizeOpenAIResponsesBody_WrapInputString(t *testing.T) {
 	if !gjson.GetBytes(normalized, "input").IsArray() {
 		t.Fatalf("expected input array")
 	}
+	if gjson.GetBytes(normalized, "input.0.type").String() != "input_text" {
+		t.Fatalf("expected input[0].type=input_text, got %s", gjson.GetBytes(normalized, "input.0.type").String())
+	}
+	if gjson.GetBytes(normalized, "input.0.text").String() != "hello" {
+		t.Fatalf("expected input[0].text=hello, got %s", gjson.GetBytes(normalized, "input.0.text").String())
+	}
+}
+
+func TestConvertOpenAILegacyRequestBody_WrapsStringInputAsInputText(t *testing.T) {
+	body := []byte(`{"model":"gpt-4o","input":"hello"}`)
+	converted, err := ConvertOpenAILegacyRequestBody(body, OpenAILegacyProtocolChat)
+	if err != nil {
+		t.Fatalf("ConvertOpenAILegacyRequestBody error: %v", err)
+	}
+	if !gjson.GetBytes(converted, "input").IsArray() {
+		t.Fatalf("expected input array")
+	}
+	if gjson.GetBytes(converted, "input.0.type").String() != "input_text" {
+		t.Fatalf("expected input[0].type=input_text, got %s", gjson.GetBytes(converted, "input.0.type").String())
+	}
+	if gjson.GetBytes(converted, "input.0.text").String() != "hello" {
+		t.Fatalf("expected input[0].text=hello, got %s", gjson.GetBytes(converted, "input.0.text").String())
+	}
 }
 
 func TestNormalizeOpenAIResponsesBody_UsesMessages(t *testing.T) {

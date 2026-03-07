@@ -306,6 +306,15 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 		}
 		typ, _ := m["type"].(string)
 		if typ == "item_reference" {
+			idValue, _ := m["id"].(string)
+			idValue = strings.TrimSpace(idValue)
+			// Drop message-id-style references (msg_*) when store=false. These
+			// cannot be resolved without persistence and will cause upstream
+			// errors. call_id-style references (e.g. call_*) are kept to support
+			// within-request tool continuation.
+			if strings.HasPrefix(idValue, "msg_") {
+				continue
+			}
 			if !preserveReferences {
 				continue
 			}

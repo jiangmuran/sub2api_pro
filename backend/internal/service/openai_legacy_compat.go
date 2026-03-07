@@ -66,12 +66,17 @@ func NormalizeOpenAIResponsesBody(body []byte) ([]byte, bool, error) {
 	}
 
 	if v, ok := payload["input"]; ok {
-		switch v.(type) {
-		case []any:
-			// ok
-		default:
-			payload["input"] = []any{v}
+		if items, coerced := coerceOpenAIInputToItems(v); coerced {
+			payload["input"] = items
 			changed = true
+		} else {
+			switch v.(type) {
+			case []any:
+				// ok
+			default:
+				payload["input"] = []any{v}
+				changed = true
+			}
 		}
 	}
 
@@ -127,11 +132,15 @@ func ConvertOpenAILegacyRequestBody(body []byte, protocol string) ([]byte, error
 	}
 
 	if v, ok := payload["input"]; ok {
-		switch v.(type) {
-		case []any:
-			// ok
-		default:
-			payload["input"] = []any{v}
+		if items, coerced := coerceOpenAIInputToItems(v); coerced {
+			payload["input"] = items
+		} else {
+			switch v.(type) {
+			case []any:
+				// ok
+			default:
+				payload["input"] = []any{v}
+			}
 		}
 	}
 
@@ -208,6 +217,40 @@ func normalizeOpenAICompatibilityPayload(payload map[string]any) bool {
 	}
 
 	return changed
+}
+
+// coerceOpenAIInputToItems converts legacy string input into Responses-compatible
+// input items without changing existing map/array structures.
+// It only handles string values (or arrays of strings) and leaves other shapes
+// to the existing fallback logic.
+func coerceOpenAIInputToItems(value any) ([]any, bool) {
+	switch v := value.(type) {
+	case []any:
+		changed := false
+		items := make([]any, len(v))
+		for i, item := range v {
+			if s, ok := item.(string); ok {
+				items[i] = map[string]any{
+					"type": "input_text",
+					"text": s,
+				}
+				changed = true
+				continue
+			}
+			items[i] = item
+		}
+		if !changed {
+			return nil, false
+		}
+		return items, true
+	case string:
+		return []any{map[string]any{
+			"type": "input_text",
+			"text": v,
+		}}, true
+	default:
+		return nil, false
+	}
 }
 
 func normalizeOpenAIInputRoles(input []any) bool {
