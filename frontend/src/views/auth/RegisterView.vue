@@ -213,6 +213,43 @@
           </p>
         </div>
 
+        <!-- Legal Agreement -->
+        <div class="text-xs text-gray-500 dark:text-dark-400">
+          <label class="inline-flex items-start gap-2">
+            <input
+              v-model="formData.agree_terms"
+              type="checkbox"
+              class="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span>
+              {{ t('auth.agreeToTermsPrefix') }}
+              <router-link
+                to="/legal/terms"
+                class="text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                {{ t('legal.termsLink') }}
+              </router-link>
+              、
+              <router-link
+                to="/legal/privacy"
+                class="text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                {{ t('legal.privacyLink') }}
+              </router-link>
+              {{ t('auth.and') }}
+              <router-link
+                to="/legal/disclaimer"
+                class="text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                {{ t('legal.disclaimerLink') }}
+              </router-link>
+            </span>
+          </label>
+          <p v-if="errors.agree_terms" class="input-error-text mt-1">
+            {{ errors.agree_terms }}
+          </p>
+        </div>
+
         <!-- Error Message -->
         <transition name="fade">
           <div
@@ -347,14 +384,16 @@ const formData = reactive({
   email: '',
   password: '',
   promo_code: '',
-  invitation_code: ''
+  invitation_code: '',
+  agree_terms: false
 })
 
 const errors = reactive({
   email: '',
   password: '',
   turnstile: '',
-  invitation_code: ''
+  invitation_code: '',
+  agree_terms: ''
 })
 
 // ==================== Lifecycle ====================
@@ -563,6 +602,7 @@ function validateForm(): boolean {
   errors.password = ''
   errors.turnstile = ''
   errors.invitation_code = ''
+   errors.agree_terms = ''
 
   let isValid = true
 
@@ -595,6 +635,12 @@ function validateForm(): boolean {
   // Turnstile validation
   if (turnstileEnabled.value && !turnstileToken.value) {
     errors.turnstile = t('auth.completeVerification')
+    isValid = false
+  }
+
+  // Terms agreement validation
+  if (!formData.agree_terms) {
+    errors.agree_terms = t('auth.mustAgreeTerms')
     isValid = false
   }
 

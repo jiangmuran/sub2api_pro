@@ -101,6 +101,31 @@
           </p>
         </div>
 
+        <!-- Legal Hint -->
+        <p class="text-xs text-gray-500 dark:text-dark-400">
+          {{ t('auth.loginLegalHintPrefix') }}
+          <router-link
+            to="/legal/terms"
+            class="text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          >
+            {{ t('legal.termsLink') }}
+          </router-link>
+          、
+          <router-link
+            to="/legal/privacy"
+            class="text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          >
+            {{ t('legal.privacyLink') }}
+          </router-link>
+          {{ t('auth.and') }}
+          <router-link
+            to="/legal/disclaimer"
+            class="text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          >
+            {{ t('legal.disclaimerLink') }}
+          </router-link>
+        </p>
+
         <!-- Error Message -->
         <transition name="fade">
           <div

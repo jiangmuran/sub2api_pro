@@ -254,6 +254,20 @@ export default {
     }
   },
 
+  legal: {
+    footerPrefix: '使用本网站即表示你同意',
+    termsLink: '用户协议',
+    privacyLink: '隐私政策',
+    disclaimerLink: '服务声明',
+    termsTitle: '用户协议',
+    termsTitleEn: 'Terms of Service',
+    privacyTitle: '隐私政策',
+    privacyTitleEn: 'Privacy Policy',
+    disclaimerTitle: '服务声明',
+    disclaimerTitleEn: 'Service Disclaimer',
+    lastUpdated: '最后更新日期'
+  },
+
   // Navigation
   nav: {
     dashboard: '仪表盘',
@@ -346,6 +360,10 @@ export default {
     invitationCodeInvalid: '邀请码无效或已被使用',
     invitationCodeValidating: '正在验证邀请码...',
     invitationCodeInvalidCannotRegister: '邀请码无效，请检查后重试',
+    agreeToTermsPrefix: '注册即表示你已阅读并同意',
+    loginLegalHintPrefix: '登录即表示你已阅读并同意',
+    mustAgreeTerms: '请先阅读并同意相关条款后再注册',
+    and: '和',
     linuxdo: {
       signIn: '使用 Linux.do 登录',
       orContinue: '或使用邮箱密码继续',
@@ -2789,6 +2807,7 @@ export default {
       unsettled: '未结算',
       delta: '变动',
       grossProfit: '毛利',
+      grossMargin: '毛利率',
       orders: '订单',
       statsByUser: '用户统计',
       manage: '管理',

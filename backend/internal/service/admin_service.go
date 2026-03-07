@@ -297,23 +297,23 @@ type GenerateRedeemCodesInput struct {
 }
 
 type RedeemCodeStats struct {
-	TotalCodes            int64
-	ActiveCodes           int64
-	UsedCodes             int64
-	ExpiredCodes          int64
-	TotalValueDistributed float64
-	ByType                map[string]int64
-	ByCategory            []RedeemCategoryStats
+	TotalCodes            int64                 `json:"total_codes"`
+	ActiveCodes           int64                 `json:"active_codes"`
+	UsedCodes             int64                 `json:"used_codes"`
+	ExpiredCodes          int64                 `json:"expired_codes"`
+	TotalValueDistributed float64               `json:"total_value_distributed"`
+	ByType                map[string]int64      `json:"by_type"`
+	ByCategory            []RedeemCategoryStats `json:"by_category"`
 }
 
 type RedeemCategoryStats struct {
-	Category   string
-	Total      int64
-	Unused     int64
-	Used       int64
-	Expired    int64
-	TotalValue float64
-	UsedValue  float64
+	Category   string  `json:"category"`
+	Total      int64   `json:"total"`
+	Unused     int64   `json:"unused"`
+	Used       int64   `json:"used"`
+	Expired    int64   `json:"expired"`
+	TotalValue float64 `json:"total_value"`
+	UsedValue  float64 `json:"used_value"`
 }
 
 type ProxyBatchDeleteResult struct {

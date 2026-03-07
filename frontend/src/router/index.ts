@@ -38,6 +38,36 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/legal/terms',
+    name: 'LegalTerms',
+    component: () => import('@/views/legal/TermsView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Terms of Service',
+      titleKey: 'legal.termsTitle'
+    }
+  },
+  {
+    path: '/legal/privacy',
+    name: 'LegalPrivacy',
+    component: () => import('@/views/legal/PrivacyView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Privacy Policy',
+      titleKey: 'legal.privacyTitle'
+    }
+  },
+  {
+    path: '/legal/disclaimer',
+    name: 'LegalDisclaimer',
+    component: () => import('@/views/legal/DisclaimerView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Disclaimer',
+      titleKey: 'legal.disclaimerTitle'
+    }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/auth/LoginView.vue'),

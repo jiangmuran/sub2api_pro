@@ -100,6 +100,29 @@
             </table>
           </div>
         </div>
+        <div
+          v-if="invitationStats"
+          class="mb-4 rounded-lg border border-indigo-100 bg-indigo-50 p-4 text-xs text-gray-700 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-100"
+        >
+          <div class="mb-1 font-medium text-indigo-700 dark:text-indigo-100">
+            {{ t('admin.redeem.invitationStatsHint') }}
+          </div>
+          <div class="flex flex-wrap gap-4">
+            <div>
+              <span class="font-semibold">{{ t('admin.redeem.invitationTotal') }}:</span>
+              <span class="ml-1">{{ invitationStats.total }}</span>
+            </div>
+            <div>
+              <span class="font-semibold">{{ t('admin.redeem.invitationUsed') }}:</span>
+              <span class="ml-1">{{ invitationStats.used }}</span>
+            </div>
+            <div>
+              <span class="font-semibold">{{ t('admin.redeem.invitationUnused') }}:</span>
+              <span class="ml-1">{{ invitationStats.unused }}</span>
+            </div>
+          </div>
+        </div>
+
         <DataTable :columns="columns" :data="codes" :loading="loading">
           <template #cell-code="{ value }">
             <div class="flex items-center space-x-2">
@@ -488,6 +511,12 @@ interface RedeemCategoryStat {
   used_value: number
 }
 
+interface InvitationStats {
+  total: number
+  used: number
+  unused: number
+}
+
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
@@ -629,6 +658,7 @@ const showDeleteUnusedDialog = ref(false)
 const deletingCode = ref<RedeemCode | null>(null)
 const copiedCode = ref<string | null>(null)
 const categoryStats = ref<RedeemCategoryStat[]>([])
+const invitationStats = ref<InvitationStats | null>(null)
 
 const generateForm = reactive({
   type: 'balance' as RedeemCodeType,
@@ -836,6 +866,17 @@ const loadStats = async () => {
   try {
     const stats = await adminAPI.redeem.getStats()
     categoryStats.value = stats.by_category || []
+
+    const invitationCategory = stats.by_category.find((item) => item.category === 'invitation')
+    if (invitationCategory) {
+      invitationStats.value = {
+        total: invitationCategory.total,
+        used: invitationCategory.used,
+        unused: invitationCategory.unused
+      }
+    } else {
+      invitationStats.value = null
+    }
   } catch (error) {
     console.error('Error loading redeem stats:', error)
   }

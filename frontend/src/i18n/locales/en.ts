@@ -254,6 +254,20 @@ export default {
     }
   },
 
+  legal: {
+    footerPrefix: 'By using this site you agree to the',
+    termsLink: 'Terms of Service',
+    privacyLink: 'Privacy Policy',
+    disclaimerLink: 'Service Disclaimer',
+    termsTitle: 'User Terms of Service',
+    termsTitleEn: 'Terms of Service',
+    privacyTitle: 'Privacy Policy',
+    privacyTitleEn: 'Privacy Policy',
+    disclaimerTitle: 'Service Disclaimer',
+    disclaimerTitleEn: 'Service Disclaimer',
+    lastUpdated: 'Last updated'
+  },
+
   // Navigation
   nav: {
     dashboard: 'Dashboard',
@@ -346,6 +360,10 @@ export default {
     invitationCodeInvalid: 'Invalid or used invitation code',
     invitationCodeValidating: 'Validating invitation code...',
     invitationCodeInvalidCannotRegister: 'Invalid invitation code. Please check and try again',
+    agreeToTermsPrefix: 'By signing up you agree to the',
+    loginLegalHintPrefix: 'By signing in you agree to the',
+    mustAgreeTerms: 'You must agree to the terms before registering',
+    and: 'and',
     linuxdo: {
       signIn: 'Continue with Linux.do',
       orContinue: 'or continue with email',
@@ -2627,6 +2645,7 @@ export default {
       unsettled: 'Unsettled',
       delta: 'Delta',
       grossProfit: 'Gross Profit',
+      grossMargin: 'Gross Margin',
       orders: 'Orders',
       statsByUser: 'Stats by User',
       manage: 'Manage',

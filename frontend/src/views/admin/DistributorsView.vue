@@ -121,6 +121,9 @@
           <template #cell-cost_amount_cny="{ value }">{{ formatCNY(value) }}</template>
           <template #cell-refund_amount_cny="{ value }">{{ formatCNY(value) }}</template>
           <template #cell-gross_profit_cny="{ value }">{{ formatCNY(value) }}</template>
+          <template #cell-gross_margin="{ row }">
+            {{ formatPercent(row.sell_amount_cny ? (row.gross_profit_cny / row.sell_amount_cny) * 100 : 0) }}
+          </template>
         </DataTable>
       </section>
 
@@ -215,6 +218,9 @@
                   <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.distributor.grossProfit') }}</p>
                   <p class="mt-1 text-base font-semibold text-gray-900 dark:text-white">
                     {{ formatCNY(selectedGrossProfit) }}
+                  </p>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.distributor.grossMarginShort') }} {{ formatPercent(selectedGrossMargin) }}
                   </p>
                 </div>
               </div>
@@ -517,6 +523,12 @@ const selectedStats = computed(
 
 const selectedOrderCount = computed(() => selectedStats.value?.orders_total || 0)
 const selectedGrossProfit = computed(() => selectedStats.value?.gross_profit_cny || 0)
+const selectedSellAmount = computed(() => selectedStats.value?.sell_amount_cny || 0)
+const selectedGrossMargin = computed(() => {
+  const sell = selectedSellAmount.value
+  if (!sell || sell <= 0) return 0
+  return (selectedGrossProfit.value / sell) * 100
+})
 const enabledProfileCount = computed(() => profiles.value.filter((item) => item.enabled).length)
 const totalProfileCount = computed(() => profiles.value.length)
 const totalOrderCount = computed(() =>
@@ -592,7 +604,8 @@ const statsColumns = computed<Column[]>(() => [
   { key: 'sell_amount_cny', label: t('admin.distributor.sellPrice') },
   { key: 'cost_amount_cny', label: t('admin.distributor.cost') },
   { key: 'refund_amount_cny', label: t('admin.distributor.refund') },
-  { key: 'gross_profit_cny', label: t('admin.distributor.grossProfit') }
+  { key: 'gross_profit_cny', label: t('admin.distributor.grossProfit') },
+  { key: 'gross_margin', label: t('admin.distributor.grossMargin') }
 ])
 
 const orderStatusOptions = computed(() => [
@@ -642,6 +655,11 @@ const resolveUserEmail = (userId: number | string): string => {
 const formatCNY = (cents?: number | null) => {
   const value = Number.isFinite(cents as number) ? Number(cents) : 0
   return `CNY ${(value / 100).toFixed(2)}`
+}
+
+const formatPercent = (value: number) => {
+  if (!Number.isFinite(value)) return '0.0%'
+  return `${value.toFixed(1)}%`
 }
 
 const getRedeemCode = (order: DistributorOrder): string => {

@@ -50,12 +50,13 @@
       </div>
 
       <!-- Footer Links -->
-      <div class="mt-6 text-center text-sm">
+      <div class="mt-6 text-center text-sm space-y-2">
         <slot name="footer" />
+        <SiteLegalFooter />
       </div>
 
       <!-- Copyright -->
-      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
+      <div class="mt-6 text-center text-xs text-gray-400 dark:text-dark-500">
         &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
       </div>
     </div>
@@ -65,6 +66,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
+import SiteLegalFooter from '@/components/layout/SiteLegalFooter.vue'
 import { sanitizeUrl } from '@/utils/url'
 
 const appStore = useAppStore()
