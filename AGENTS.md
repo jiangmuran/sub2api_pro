@@ -7,30 +7,79 @@
 - `openspec/`: Spec-driven change docs (`changes/<id>/{proposal,design,tasks}.md`).
 - `tools/`: Utility scripts (security/perf checks).
 
-## Build, Test, and Development Commands
+## Build, Lint, Test, and Dev Commands
 ```bash
 make build                           # Build backend + frontend
 make test                            # Backend tests + frontend lint/typecheck
+make test-backend                    # Backend tests + lint
+make test-frontend                   # Frontend lint + typecheck
+make secret-scan                     # Secret scan
+
 cd backend && make build             # Build backend binary
-cd backend && make test-unit         # Go unit tests
-cd backend && make test-integration  # Go integration tests
 cd backend && make test              # go test ./... + golangci-lint
+cd backend && make test-unit         # Go unit tests (tags=unit)
+cd backend && make test-integration  # Go integration tests (tags=integration)
+cd backend && make test-e2e          # End-to-end tests (script)
+cd backend && make test-e2e-local    # e2e tests via go test -tags=e2e
+
 cd frontend && pnpm install --frozen-lockfile
 cd frontend && pnpm dev              # Vite dev server
 cd frontend && pnpm build            # Type-check + production build
+cd frontend && pnpm preview          # Preview build
+cd frontend && pnpm lint             # ESLint with fixes
+cd frontend && pnpm lint:check       # ESLint check only
+cd frontend && pnpm typecheck        # vue-tsc --noEmit
+cd frontend && pnpm test             # Vitest watch mode
 cd frontend && pnpm test:run         # Vitest run
 cd frontend && pnpm test:coverage    # Vitest + coverage report
-python3 tools/secret_scan.py         # Secret scan
 ```
 
-## Coding Style & Naming Conventions
+## Single-Test and Targeted Commands
+```bash
+# Go: run a single test by name in a package
+cd backend && go test ./internal/service -run TestCreateUser -count=1
+
+# Go: run all tests in one file
+cd backend && go test ./internal/service -run Test -count=1 -v
+
+# Go: run a single tagged suite
+cd backend && go test -tags=unit ./internal/service -run TestCreateUser -count=1
+
+# Go: run a specific package only
+cd backend && go test ./internal/handler -count=1
+
+# Frontend: run a single spec file
+cd frontend && pnpm test:run src/views/admin/__tests__/RedeemView.spec.ts
+
+# Frontend: run tests matching a name/pattern
+cd frontend && pnpm test:run -t "redeem" 
+
+# Frontend: run tests in a directory
+cd frontend && pnpm test:run src/components/__tests__
+```
+
+## Code Style & Formatting
 - Go: format with `gofmt`; lint with `golangci-lint` (`backend/.golangci.yml`).
-- Respect layering: `internal/service` and `internal/handler` must not import `internal/repository`, `gorm`, or `redis` directly (enforced by depguard).
 - Frontend: Vue SFC + TypeScript, 2-space indentation, ESLint rules from `frontend/.eslintrc.cjs`.
-- Naming: components use `PascalCase.vue`, composables use `useXxx.ts`, Go tests use `*_test.go`, frontend tests use `*.spec.ts`.
+- Use existing patterns in nearby files; keep changes minimal and consistent.
+
+## Imports and Module Boundaries
+- Go import order: standard library, blank line, third-party, blank line, local modules.
+- Respect layering: `internal/service` and `internal/handler` must not import `internal/repository`, `gorm`, or `redis` directly (enforced by depguard).
+- Frontend imports: prefer `@/` aliases; use type-only imports (`import type`) for types.
+
+## Naming Conventions
+- Components use `PascalCase.vue`.
+- Composables use `useXxx.ts`.
+- Go tests use `*_test.go` with `TestXxx` names.
+- Frontend tests use `*.spec.ts` or `__tests__` folders.
+
+## Error Handling and Control Flow
+- Prefer early returns/guard clauses; `if` nesting must not exceed 3 levels.
+- Use typed errors and context-rich messages; log actionable details.
+- For API calls, surface user-facing errors via the app store or UI patterns used in the module.
 
 ## Go & Frontend Development Standards
-- Control branch complexity: `if` nesting must not exceed 3 levels. Refactor with guard clauses, early returns, helper functions, or strategy maps when deeper logic appears.
 - JSON hot-path rule: for read-only/partial-field extraction, prefer `gjson` over full `encoding/json` struct unmarshal to reduce allocations and improve latency.
 - Exception rule: if full schema validation or typed writes are required, `encoding/json` is allowed, but PR must explain why `gjson` is not suitable.
 
@@ -103,3 +152,6 @@ python3 tools/secret_scan.py         # Secret scan
 ## Security & Configuration Tips
 - Use `deploy/.env.example` and `deploy/config.example.yaml` as templates; do not commit real credentials.
 - Set stable `JWT_SECRET`, `TOTP_ENCRYPTION_KEY`, and strong database passwords outside local dev.
+
+## Cursor/Copilot Rules
+- No `.cursor/rules/`, `.cursorrules`, or `.github/copilot-instructions.md` found in this repository.

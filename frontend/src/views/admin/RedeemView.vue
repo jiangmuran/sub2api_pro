@@ -1098,6 +1098,39 @@ const loadStats = async () => {
   }
 }
 
+const handleViewInvitationImpact = async (code: RedeemCode) => {
+  currentInvitationCode.value = code
+  showInvitationImpactDialog.value = true
+  invitationImpactLoading.value = true
+  invitationImpact.value = null
+  const requestId = code.id
+
+  try {
+    const data = await adminAPI.redeem.getInvitationImpact(code.id)
+    if (currentInvitationCode.value?.id !== requestId) {
+      return
+    }
+    invitationImpact.value = data
+  } catch (error: any) {
+    if (currentInvitationCode.value?.id !== requestId) {
+      return
+    }
+    appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToLoad'))
+    console.error('Error loading invitation impact:', error)
+  } finally {
+    if (currentInvitationCode.value?.id === requestId) {
+      invitationImpactLoading.value = false
+    }
+  }
+}
+
+const closeInvitationImpact = () => {
+  showInvitationImpactDialog.value = false
+  invitationImpactLoading.value = false
+  invitationImpact.value = null
+  currentInvitationCode.value = null
+}
+
 const toggleCategoryStats = () => {
   showCategoryStats.value = !showCategoryStats.value
   localStorage.setItem(CATEGORY_STATS_VISIBLE_KEY, showCategoryStats.value ? '1' : '0')
