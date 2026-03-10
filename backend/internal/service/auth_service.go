@@ -226,6 +226,25 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	return token, user, nil
 }
 
+func (s *AuthService) GetInvitationCodeByUserID(ctx context.Context, userID int64) (string, error) {
+	if s == nil || s.redeemRepo == nil || userID <= 0 {
+		return "", nil
+	}
+
+	codes, err := s.redeemRepo.ListByUser(ctx, userID, 20)
+	if err != nil {
+		return "", err
+	}
+
+	for _, code := range codes {
+		if code.Type == RedeemTypeInvitation {
+			return strings.TrimSpace(code.Code), nil
+		}
+	}
+
+	return "", nil
+}
+
 // SendVerifyCodeResult 发送验证码返回结果
 type SendVerifyCodeResult struct {
 	Countdown int `json:"countdown"` // 倒计时秒数

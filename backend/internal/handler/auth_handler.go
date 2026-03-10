@@ -78,9 +78,28 @@ type AuthResponse struct {
 	User         *dto.User `json:"user"`
 }
 
+func (h *AuthHandler) userDTOWithInvitationCode(ctx context.Context, user *service.User) *dto.User {
+	userDTO := dto.UserFromService(user)
+	if userDTO == nil || h.authService == nil || user == nil {
+		return userDTO
+	}
+
+	invitationCode, err := h.authService.GetInvitationCodeByUserID(ctx, user.ID)
+	if err != nil {
+		slog.Warn("failed to load user invitation code", "user_id", user.ID, "error", err)
+		return userDTO
+	}
+	if invitationCode != "" {
+		userDTO.InvitationCode = invitationCode
+	}
+
+	return userDTO
+}
+
 // respondWithTokenPair 生成 Token 对并返回认证响应
 // 如果 Token 对生成失败，回退到只返回 Access Token（向后兼容）
 func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
+	userDTO := h.userDTOWithInvitationCode(c.Request.Context(), user)
 	tokenPair, err := h.authService.GenerateTokenPair(c.Request.Context(), user, "")
 	if err != nil {
 		slog.Error("failed to generate token pair", "error", err, "user_id", user.ID)
@@ -93,7 +112,7 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 		response.Success(c, AuthResponse{
 			AccessToken: token,
 			TokenType:   "Bearer",
-			User:        dto.UserFromService(user),
+			User:        userDTO,
 		})
 		return
 	}
@@ -102,7 +121,7 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresIn:    tokenPair.ExpiresIn,
 		TokenType:    "Bearer",
-		User:         dto.UserFromService(user),
+		User:         userDTO,
 	})
 }
 
@@ -290,7 +309,7 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 		runMode = h.cfg.RunMode
 	}
 
-	response.Success(c, UserResponse{User: dto.UserFromService(user), RunMode: runMode})
+	response.Success(c, UserResponse{User: h.userDTOWithInvitationCode(c.Request.Context(), user), RunMode: runMode})
 }
 
 // ValidatePromoCodeRequest 验证优惠码请求

@@ -11,12 +11,15 @@ const EMBEDDED_UI_MODE_QUERY_KEY = 'ui_mode'
 const EMBEDDED_UI_MODE_VALUE = 'embedded'
 const EMBEDDED_SRC_HOST_QUERY_KEY = 'src_host'
 const EMBEDDED_SRC_QUERY_KEY = 'src_url'
+const EMBEDDED_SOURCE_QUERY_KEY = 'source'
+const EMBEDDED_SOURCE_PREFIX = 'api_'
 
 export function buildEmbeddedUrl(
   baseUrl: string,
   userId?: number,
   authToken?: string | null,
   theme: 'light' | 'dark' = 'light',
+  invitationCode?: string | null,
 ): string {
   if (!baseUrl) return baseUrl
   try {
@@ -34,6 +37,11 @@ export function buildEmbeddedUrl(
       url.searchParams.set(EMBEDDED_SRC_HOST_QUERY_KEY, window.location.origin)
       url.searchParams.set(EMBEDDED_SRC_QUERY_KEY, window.location.href)
     }
+    const normalizedInvitationCode = invitationCode?.trim() ?? ''
+    url.searchParams.set(
+      EMBEDDED_SOURCE_QUERY_KEY,
+      normalizedInvitationCode ? `${EMBEDDED_SOURCE_PREFIX}${normalizedInvitationCode}` : 'api',
+    )
     return url.toString()
   } catch {
     return baseUrl
