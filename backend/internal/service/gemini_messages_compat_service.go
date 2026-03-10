@@ -1604,15 +1604,47 @@ func sleepGeminiBackoff(attempt int) {
 }
 
 var (
-	sensitiveQueryParamRegex = regexp.MustCompile(`(?i)([?&](?:key|client_secret|access_token|refresh_token)=)[^&"\s]+`)
-	retryInRegex             = regexp.MustCompile(`Please retry in ([0-9.]+)s`)
+	sensitiveQueryParamRegex   = regexp.MustCompile(`(?i)([?&](?:key|client_secret|access_token|refresh_token)=)[^&"\s]+`)
+	retryInRegex               = regexp.MustCompile(`Please retry in ([0-9.]+)s`)
+	openAIHelpCenterErrorRegex = regexp.MustCompile(`(?is)an error occurred while processing your request\.\s*you can retry your request, or contact us through our help center at help\.openai\.com if the error persists\.\s*please include the request id [a-z0-9-]+ in your message\.?`)
+	pastedPrefixRegex          = regexp.MustCompile(`(?i)^\s*\[?pasted\]?\s*`)
+	multiWhitespaceRegex       = regexp.MustCompile(`\s+`)
 )
 
 func sanitizeUpstreamErrorMessage(msg string) string {
 	if msg == "" {
 		return msg
 	}
-	return sensitiveQueryParamRegex.ReplaceAllString(msg, `$1***`)
+	msg = sensitiveQueryParamRegex.ReplaceAllString(msg, `$1***`)
+	msg = stripSystemReminderBlocks(msg)
+	msg = openAIHelpCenterErrorRegex.ReplaceAllString(msg, " ")
+	msg = pastedPrefixRegex.ReplaceAllString(msg, "")
+	msg = multiWhitespaceRegex.ReplaceAllString(msg, " ")
+	return strings.TrimSpace(msg)
+}
+
+func stripSystemReminderBlocks(content string) string {
+	const startTag = "<system-reminder>"
+	const endTag = "</system-reminder>"
+	if content == "" {
+		return content
+	}
+	for {
+		lower := strings.ToLower(content)
+		start := strings.Index(lower, startTag)
+		if start == -1 {
+			break
+		}
+		rest := lower[start+len(startTag):]
+		end := strings.Index(rest, endTag)
+		if end == -1 {
+			content = content[:start]
+			break
+		}
+		end = start + len(startTag) + end + len(endTag)
+		content = content[:start] + content[end:]
+	}
+	return strings.TrimSpace(content)
 }
 
 func (s *GeminiMessagesCompatService) writeGeminiMappedError(c *gin.Context, account *Account, upstreamStatus int, upstreamRequestID string, body []byte) error {

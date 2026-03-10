@@ -1950,6 +1950,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	terminalEventCount := 0
 	bufferedEventCount := 0
 	flushedBufferedEventCount := 0
+	pollutedOutputDetected := false
 	firstEventType := ""
 	lastEventType := ""
 
@@ -2113,6 +2114,13 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 				}
 			}
 		}
+		if sanitizedMessage, changed, drop := sanitizeOpenAIResponseEventBytes(message); changed {
+			pollutedOutputDetected = true
+			if drop {
+				continue
+			}
+			message = sanitizedMessage
+		}
 		if openAIWSEventShouldParseUsage(eventType) {
 			parseOpenAIWSResponseUsageFromCompletedEvent(message, usage)
 		}
@@ -2210,7 +2218,11 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			}
 		} else {
 			if responseField.Exists() && responseField.Type == gjson.JSON {
-				finalResponse = []byte(responseField.Raw)
+				originalFinalResponse := []byte(gjson.GetBytes(message, "response").Raw)
+				finalResponse = sanitizeOpenAIResponseBodyBytes(originalFinalResponse)
+				if !openAIResponseBodyHasToolLikeOutput(originalFinalResponse) && !openAIResponseBodyHasVisibleOutput(finalResponse) && openAIResponseBodyHasVisibleOutput(originalFinalResponse) {
+					pollutedOutputDetected = true
+				}
 			}
 		}
 
@@ -2235,6 +2247,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 			}
 			return nil, errors.New("ws finished without final response")
 		}
+		if pollutedOutputDetected && !wroteDownstream && !openAIResponseBodyHasVisibleOutput(finalResponse) {
+			return nil, wrapOpenAIWSFallback("polluted_output", errors.New("polluted output detected"))
+		}
 
 		if needModelReplace {
 			finalResponse = s.replaceModelInResponseBody(finalResponse, mappedModel, originalModel)
@@ -2247,6 +2262,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 
 		c.Data(http.StatusOK, "application/json", finalResponse)
 	} else {
+		if pollutedOutputDetected && !wroteDownstream && firstTokenMs == nil {
+			return nil, wrapOpenAIWSFallback("polluted_output", errors.New("polluted output detected"))
+		}
 		flushStreamWriter(true)
 	}
 

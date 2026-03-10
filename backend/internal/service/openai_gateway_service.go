@@ -409,6 +409,7 @@ func classifyOpenAIWSReconnectReason(err error) (string, bool) {
 		"event_error",
 		"error_event",
 		"upstream_error_event",
+		"polluted_output",
 		"ws_connection_limit_reached",
 		"missing_final_response":
 		return reason, true
@@ -2001,6 +2002,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	if reqStream {
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, mappedModel)
 		if err != nil {
+			var pollutedErr *openAIPollutedOutputRetryError
+			if errors.As(err, &pollutedErr) {
+				if retryResult, retryErr, retried := s.retryOpenAIPollutedOutputOnce(ctx, c, account, body); retried {
+					return retryResult, retryErr
+				}
+			}
 			return nil, err
 		}
 		usage = streamResult.usage
@@ -2008,6 +2015,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	} else {
 		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, mappedModel)
 		if err != nil {
+			var pollutedErr *openAIPollutedOutputRetryError
+			if errors.As(err, &pollutedErr) {
+				if retryResult, retryErr, retried := s.retryOpenAIPollutedOutputOnce(ctx, c, account, body); retried {
+					return retryResult, retryErr
+				}
+			}
 			return nil, err
 		}
 	}
@@ -2877,6 +2890,34 @@ type openaiStreamingResult struct {
 	firstTokenMs *int
 }
 
+type openAIPollutedOutputRetryError struct{}
+
+func (e *openAIPollutedOutputRetryError) Error() string {
+	return "openai polluted output detected"
+}
+
+const openAIPollutedOutputRetryKey = "openai_polluted_output_retry"
+
+func (s *OpenAIGatewayService) retryOpenAIPollutedOutputOnce(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	requestBody []byte,
+) (*OpenAIForwardResult, error, bool) {
+	if account == nil || c == nil {
+		return nil, nil, false
+	}
+	if v, ok := c.Get(openAIPollutedOutputRetryKey); ok {
+		if attempted, cast := v.(bool); cast && attempted {
+			return nil, nil, false
+		}
+	}
+	c.Set(openAIPollutedOutputRetryKey, true)
+	logger.LegacyPrintf("service.openai_gateway", "Detected polluted OpenAI output, retrying once silently: account=%d type=%s", account.ID, account.Type)
+	result, err := s.Forward(ctx, c, account, requestBody)
+	return result, err, true
+}
+
 func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string) (*openaiStreamingResult, error) {
 	if s.responseHeaderFilter != nil {
 		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
@@ -2909,6 +2950,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 	usage := &OpenAIUsage{}
 	var firstTokenMs *int
+	pollutedOutputDetected := false
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
 	if s.cfg != nil && s.cfg.Gateway.MaxLineSize > 0 {
@@ -2953,6 +2995,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	// 注意：OpenAI `/v1/responses` streaming 事件必须符合 OpenAI Responses schema；
 	// 否则下游 SDK（例如 OpenCode）会因为类型校验失败而报错。
 	errorEventSent := false
+	wroteDownstream := false
 	clientDisconnected := false // 客户端断开后继续 drain 上游以收集 usage
 	sendErrorEvent := func(reason string) {
 		if errorEventSent || clientDisconnected {
@@ -2968,6 +3011,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			clientDisconnected = true
 			return
 		}
+		wroteDownstream = true
 		if err := flushBuffered(); err != nil {
 			clientDisconnected = true
 		}
@@ -2979,6 +3023,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
 	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
+		if pollutedOutputDetected && !wroteDownstream && firstTokenMs == nil {
+			return nil, &openAIPollutedOutputRetryError{}
+		}
 		if !clientDisconnected {
 			if err := flushBuffered(); err != nil {
 				clientDisconnected = true
@@ -3033,6 +3080,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				// Fast path: most events do not contain model field values.
 				if needModelReplace && mappedModel != "" && strings.Contains(data, mappedModel) {
 					line = s.replaceModelInSSELine(line, mappedModel, originalModel)
+					if replacedData, extracted := extractOpenAISSEDataLine(line); extracted {
+						data = replacedData
+					}
 				}
 
 				// Correct Codex tool calls if needed (apply_patch -> edit, etc.)
@@ -3040,9 +3090,22 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 					data = string(correctedData)
 					line = "data: " + data
 				}
+				if sanitizedData, changed, drop := sanitizeOpenAIResponseEventBytes([]byte(data)); changed {
+					pollutedOutputDetected = true
+					if drop {
+						s.parseSSEUsageBytes([]byte(usageData), usage)
+						return
+					}
+					data = string(sanitizedData)
+					line = "data: " + data
+				}
 			}
 
 			// 写入客户端（客户端断开后继续 drain 上游）
+			if data == "[DONE]" && pollutedOutputDetected && !wroteDownstream && firstTokenMs == nil {
+				s.parseSSEUsageBytes([]byte(usageData), usage)
+				return
+			}
 			if !clientDisconnected {
 				shouldFlush := queueDrained
 				if firstTokenMs == nil && data != "" && data != "[DONE]" {
@@ -3056,10 +3119,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 					clientDisconnected = true
 					logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
 				} else if shouldFlush {
+					wroteDownstream = true
 					if err := flushBuffered(); err != nil {
 						clientDisconnected = true
 						logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
 					}
+				} else {
+					wroteDownstream = true
 				}
 			}
 
@@ -3081,10 +3147,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
 			} else if queueDrained {
+				wroteDownstream = true
 				if err := flushBuffered(); err != nil {
 					clientDisconnected = true
 					logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
 				}
+			} else {
+				wroteDownstream = true
 			}
 		}
 	}
@@ -3303,6 +3372,14 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		}
 	}
 
+	sanitizedBody := sanitizeOpenAIResponseBodyBytes(body)
+	if string(sanitizedBody) != string(body) {
+		if !openAIResponseBodyHasToolLikeOutput(body) && !openAIResponseBodyHasVisibleOutput(sanitizedBody) && openAIResponseBodyHasVisibleOutput(body) {
+			return nil, &openAIPollutedOutputRetryError{}
+		}
+		body = sanitizedBody
+	}
+
 	usageValue, usageOK := extractOpenAIUsageFromJSONBytes(body)
 	if !usageOK {
 		return nil, fmt.Errorf("parse response: invalid json response")
@@ -3346,7 +3423,10 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 		if parsedUsage, parsed := extractOpenAIUsageFromJSONBytes(finalResponse); parsed {
 			*usage = parsedUsage
 		}
-		body = finalResponse
+		body = sanitizeOpenAIResponseBodyBytes(finalResponse)
+		if !openAIResponseBodyHasToolLikeOutput(finalResponse) && !openAIResponseBodyHasVisibleOutput(body) && openAIResponseBodyHasVisibleOutput(finalResponse) {
+			return nil, &openAIPollutedOutputRetryError{}
+		}
 		if legacyProtocol != "" {
 			if legacyBody, err := ConvertOpenAIResponsesToLegacy(body, legacyProtocol, originalModel); err == nil {
 				body = legacyBody
@@ -3357,6 +3437,11 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 		// Correct tool calls in final response
 		body = s.correctToolCallsInResponseBody(body)
 	} else {
+		sanitizedBodyText, pollutedOnly := sanitizeOpenAISSEBodyText(bodyText)
+		if pollutedOnly {
+			return nil, &openAIPollutedOutputRetryError{}
+		}
+		bodyText = sanitizedBodyText
 		usage = s.parseSSEUsageFromBody(bodyText)
 		if originalModel != mappedModel {
 			bodyText = s.replaceModelInSSEBody(bodyText, mappedModel, originalModel)
@@ -3376,6 +3461,55 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 	c.Data(resp.StatusCode, contentType, body)
 
 	return usage, nil
+}
+
+func sanitizeOpenAISSEBodyText(body string) (string, bool) {
+	lines := strings.Split(body, "\n")
+	polluted := false
+	hasVisibleOutput := false
+	for i, line := range lines {
+		data, ok := extractOpenAISSEDataLine(line)
+		if !ok || data == "" || data == "[DONE]" {
+			continue
+		}
+		sanitized, changed, drop := sanitizeOpenAIResponseEventBytes([]byte(data))
+		if !changed {
+			if hasOpenAIVisibleOutputInEventBytes([]byte(data)) {
+				hasVisibleOutput = true
+			}
+			continue
+		}
+		polluted = true
+		if drop {
+			lines[i] = ""
+			continue
+		}
+		lines[i] = "data: " + string(sanitized)
+		if hasOpenAIVisibleOutputInEventBytes(sanitized) {
+			hasVisibleOutput = true
+		}
+		continue
+	}
+	return strings.Join(lines, "\n"), polluted && !hasVisibleOutput
+}
+
+func hasOpenAIVisibleOutputInEventBytes(message []byte) bool {
+	if len(message) == 0 || !gjson.ValidBytes(message) {
+		return false
+	}
+	eventType := strings.TrimSpace(gjson.GetBytes(message, "type").String())
+	switch eventType {
+	case "response.output_text.delta":
+		return strings.TrimSpace(gjson.GetBytes(message, "delta").String()) != ""
+	case "response.completed", "response.done":
+		response := gjson.GetBytes(message, "response")
+		if !response.Exists() || response.Type != gjson.JSON || response.Raw == "" {
+			return false
+		}
+		return openAIResponseBodyHasVisibleOutput([]byte(response.Raw))
+	default:
+		return false
+	}
 }
 
 func extractCodexFinalResponse(body string) ([]byte, bool) {

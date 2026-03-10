@@ -528,8 +528,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledPre
 	secondWrite := requestToJSONString(captureConn.writes[1])
 	require.False(t, gjson.Get(secondWrite, "previous_response_id").Exists(), "严格增量不成立时应移除 previous_response_id，改为 full create")
 	require.Equal(t, 2, len(gjson.Get(secondWrite, "input").Array()), "严格降级为 full create 时应重放完整 input 上下文")
-	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.text").String())
-	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.0.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.0.content.0.type").String())
+	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.content.0.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.1.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.1.content.0.type").String())
+	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.content.0.text").String())
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledPrevResponseStrictDropBeforePreflightPingFailReconnects(t *testing.T) {
@@ -680,8 +684,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledPre
 	secondWrite := requestToJSONString(secondWrites[0])
 	require.False(t, gjson.Get(secondWrite, "previous_response_id").Exists(), "严格降级后重试应移除 previous_response_id")
 	require.Equal(t, 2, len(gjson.Get(secondWrite, "input").Array()))
-	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.text").String())
-	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.0.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.0.content.0.type").String())
+	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.content.0.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.1.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.1.content.0.type").String())
+	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.content.0.text").String())
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreEnabledSkipsStrictPrevResponseEval(t *testing.T) {
@@ -1503,8 +1511,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledStr
 	secondWrite := requestToJSONString(secondWrites[0])
 	require.False(t, gjson.Get(secondWrite, "previous_response_id").Exists(), "自动恢复重放应移除 previous_response_id")
 	require.Equal(t, 2, len(gjson.Get(secondWrite, "input").Array()), "自动恢复重放应使用完整 input 上下文")
-	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.text").String())
-	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.0.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.0.content.0.type").String())
+	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.content.0.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.1.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.1.content.0.type").String())
+	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.content.0.text").String())
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_WriteFailBeforeDownstreamRetriesOnce(t *testing.T) {
@@ -1971,8 +1983,12 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StoreDisabledStr
 	require.True(t, gjson.Get(secondWrite, "store").Exists(), "Layer2 恢复不应改变 store 标志")
 	require.False(t, gjson.Get(secondWrite, "store").Bool())
 	require.Equal(t, 2, len(gjson.Get(secondWrite, "input").Array()), "Layer2 恢复应重放完整 input 上下文")
-	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.text").String())
-	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.0.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.0.content.0.type").String())
+	require.Equal(t, "hello", gjson.Get(secondWrite, "input.0.content.0.text").String())
+	require.Equal(t, "message", gjson.Get(secondWrite, "input.1.type").String())
+	require.Equal(t, "input_text", gjson.Get(secondWrite, "input.1.content.0.type").String())
+	require.Equal(t, "world", gjson.Get(secondWrite, "input.1.content.0.text").String())
 }
 
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PreviousResponseNotFoundRecoveryRemovesDuplicatePrevID(t *testing.T) {

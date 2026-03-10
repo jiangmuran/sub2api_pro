@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 const (
@@ -521,6 +522,12 @@ func ConvertOpenAIResponsesSSEToLegacy(data string, protocol string, fallbackMod
 	finishReason := ""
 	if eventType == "response.output_text.delta" {
 		content = gjson.Get(trimmed, "delta").String()
+		if sanitized, changed := sanitizeOpenAIOutputText(content); changed {
+			content = sanitized
+			if strings.TrimSpace(content) == "" {
+				return "", false
+			}
+		}
 	} else if eventType == "response.output_text.done" {
 		finishReason = "stop"
 	} else if eventType == "response.completed" || eventType == "response.done" {
@@ -577,7 +584,11 @@ func extractResponsesOutputText(body []byte) string {
 		return ""
 	}
 	if v := gjson.GetBytes(body, "output_text"); v.Exists() {
-		return strings.TrimSpace(v.String())
+		text := strings.TrimSpace(v.String())
+		if sanitized, changed := sanitizeOpenAIOutputText(text); changed {
+			text = sanitized
+		}
+		return strings.TrimSpace(text)
 	}
 	output := gjson.GetBytes(body, "output")
 	if !output.Exists() || !output.IsArray() {
@@ -601,10 +612,191 @@ func extractResponsesOutputText(body []byte) string {
 			if text == "" {
 				continue
 			}
+			if sanitized, changed := sanitizeOpenAIOutputText(text); changed {
+				text = sanitized
+			}
+			if strings.TrimSpace(text) == "" {
+				continue
+			}
 			builder.WriteString(text)
 		}
 	}
 	return strings.TrimSpace(builder.String())
+}
+
+func sanitizeOpenAIOutputText(text string) (string, bool) {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return text, false
+	}
+	changed := false
+	if strings.Contains(strings.ToLower(trimmed), "<system-reminder>") {
+		sanitized := stripSystemReminderBlocks(trimmed)
+		changed = sanitized != trimmed
+		trimmed = sanitized
+		if trimmed == "" {
+			return trimmed, true
+		}
+	}
+	if !looksLikePollutedOpenAIOutput(trimmed) {
+		return trimmed, changed
+	}
+	sanitized := sanitizeUpstreamErrorMessage(trimmed)
+	return sanitized, changed || sanitized != text
+}
+
+func looksLikePollutedOpenAIOutput(text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "" {
+		return false
+	}
+	hasErrorPhrase := strings.Contains(lower, "an error occurred while processing your request")
+	hasHelpCenter := strings.Contains(lower, "help.openai.com")
+	hasRequestID := strings.Contains(lower, "request id") || strings.Contains(lower, "request_id")
+	hasPastedPrefix := strings.HasPrefix(lower, "pasted") || strings.HasPrefix(lower, "[pasted]")
+	if hasErrorPhrase {
+		return true
+	}
+	if hasHelpCenter && hasRequestID {
+		return true
+	}
+	if hasPastedPrefix && (hasHelpCenter || hasRequestID) {
+		return true
+	}
+	return false
+}
+
+func sanitizeOpenAIResponseBodyBytes(body []byte) []byte {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return body
+	}
+	updated := body
+	if outputText := gjson.GetBytes(updated, "output_text"); outputText.Exists() {
+		if sanitized, changed := sanitizeOpenAIOutputText(outputText.String()); changed {
+			if next, err := sjson.SetBytes(updated, "output_text", sanitized); err == nil {
+				updated = next
+			}
+		}
+	}
+	output := gjson.GetBytes(updated, "output")
+	if output.Exists() && output.IsArray() {
+		for itemIndex, item := range output.Array() {
+			if strings.TrimSpace(item.Get("type").String()) != "message" {
+				continue
+			}
+			content := item.Get("content")
+			if !content.Exists() || !content.IsArray() {
+				continue
+			}
+			for contentIndex, contentItem := range content.Array() {
+				typeVal := strings.TrimSpace(contentItem.Get("type").String())
+				if typeVal != "output_text" && typeVal != "text" {
+					continue
+				}
+				text := contentItem.Get("text").String()
+				if sanitized, changed := sanitizeOpenAIOutputText(text); changed {
+					path := fmt.Sprintf("output.%d.content.%d.text", itemIndex, contentIndex)
+					if next, err := sjson.SetBytes(updated, path, sanitized); err == nil {
+						updated = next
+					}
+				}
+			}
+		}
+	}
+	return updated
+}
+
+func openAIResponseBodyHasVisibleOutput(body []byte) bool {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return false
+	}
+	if strings.TrimSpace(gjson.GetBytes(body, "output_text").String()) != "" {
+		return true
+	}
+	output := gjson.GetBytes(body, "output")
+	if !output.Exists() || !output.IsArray() {
+		return false
+	}
+	for _, item := range output.Array() {
+		if strings.TrimSpace(item.Get("type").String()) != "message" {
+			continue
+		}
+		contents := item.Get("content")
+		if !contents.Exists() || !contents.IsArray() {
+			continue
+		}
+		for _, content := range contents.Array() {
+			typeVal := strings.TrimSpace(content.Get("type").String())
+			if typeVal != "output_text" && typeVal != "text" {
+				continue
+			}
+			if strings.TrimSpace(content.Get("text").String()) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func openAIResponseBodyHasToolLikeOutput(body []byte) bool {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return false
+	}
+	output := gjson.GetBytes(body, "output")
+	if !output.Exists() || !output.IsArray() {
+		return false
+	}
+	for _, item := range output.Array() {
+		typeVal := strings.TrimSpace(item.Get("type").String())
+		switch typeVal {
+		case "function_call", "computer_call", "custom_tool_call", "code_interpreter_call", "file_search_call", "web_search_call", "tool_search_call", "local_shell_call", "apply_patch_call":
+			return true
+		}
+	}
+	return false
+}
+
+func sanitizeOpenAIResponseEventBytes(message []byte) ([]byte, bool, bool) {
+	if len(message) == 0 || !gjson.ValidBytes(message) {
+		return message, false, false
+	}
+	eventType := strings.TrimSpace(gjson.GetBytes(message, "type").String())
+	switch eventType {
+	case "response.output_text.delta":
+		delta := gjson.GetBytes(message, "delta").String()
+		sanitized, changed := sanitizeOpenAIOutputText(delta)
+		if !changed {
+			return message, false, false
+		}
+		if strings.TrimSpace(sanitized) == "" {
+			return nil, true, true
+		}
+		next, err := sjson.SetBytes(message, "delta", sanitized)
+		if err != nil {
+			return message, false, false
+		}
+		return next, true, false
+	case "response.completed", "response.done":
+		response := gjson.GetBytes(message, "response")
+		if !response.Exists() || response.Type != gjson.JSON || response.Raw == "" {
+			return message, false, false
+		}
+		originalResponse := []byte(response.Raw)
+		sanitized := sanitizeOpenAIResponseBodyBytes(originalResponse)
+		if !openAIResponseBodyHasVisibleOutput(sanitized) && openAIResponseBodyHasVisibleOutput(originalResponse) {
+			return nil, true, true
+		}
+		if string(sanitized) == response.Raw {
+			return message, false, false
+		}
+		next, err := sjson.SetRawBytes(message, "response", sanitized)
+		if err != nil {
+			return message, false, false
+		}
+		return next, true, false
+	default:
+		return message, false, false
+	}
 }
 
 func extractResponsesToolCalls(body []byte) []any {

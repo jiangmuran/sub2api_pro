@@ -694,27 +694,7 @@ func normalizeMessage(msg any) (role string, content string) {
 }
 
 func sanitizeSecurityChatContent(content string) string {
-	const startTag = "<system-reminder>"
-	const endTag = "</system-reminder>"
-	if content == "" {
-		return content
-	}
-	for {
-		lower := strings.ToLower(content)
-		start := strings.Index(lower, startTag)
-		if start == -1 {
-			break
-		}
-		rest := lower[start+len(startTag):]
-		end := strings.Index(rest, endTag)
-		if end == -1 {
-			content = content[:start]
-			break
-		}
-		end = start + len(startTag) + end + len(endTag)
-		content = content[:start] + content[end:]
-	}
-	return strings.TrimSpace(content)
+	return strings.TrimSpace(stripSystemReminderBlocks(content))
 }
 
 func stringifyChatContent(v any) string {
