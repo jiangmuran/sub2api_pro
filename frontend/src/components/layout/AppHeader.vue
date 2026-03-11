@@ -149,7 +149,8 @@
                   :href="communityGroupUrl"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="flex items-center gap-2 text-xs text-gray-500 transition-colors hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-300"
+                  :title="communityGroupUrl"
+                  class="flex min-w-0 items-center gap-2 text-xs text-gray-500 transition-colors hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-300"
                 >
                   <svg
                     class="h-3.5 w-3.5 flex-shrink-0"
@@ -165,7 +166,7 @@
                     />
                   </svg>
                   <span>{{ t('common.contactSupport') }}:</span>
-                  <span class="font-medium text-gray-700 dark:text-gray-300">{{ communityGroupUrl }}</span>
+                  <span class="min-w-0 truncate font-medium text-gray-700 dark:text-gray-300">{{ communityGroupLabel }}</span>
                 </a>
               </div>
 
@@ -232,6 +233,17 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const communityGroupUrl = computed(() => normalizeCommunityLink(contactInfo.value))
+const communityGroupLabel = computed(() => {
+  if (!communityGroupUrl.value) return ''
+
+  try {
+    const url = new URL(communityGroupUrl.value)
+    const path = url.pathname && url.pathname !== '/' ? url.pathname : ''
+    return `${url.host}${path}`
+  } catch {
+    return communityGroupUrl.value
+  }
+})
 const docUrl = computed(() => appStore.docUrl)
 
 // 只在标准模式的管理员下显示新手引导按钮
