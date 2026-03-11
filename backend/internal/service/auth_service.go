@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -231,13 +232,13 @@ func (s *AuthService) GetInvitationCodeByUserID(ctx context.Context, userID int6
 		return "", nil
 	}
 
-	codes, err := s.redeemRepo.ListByUser(ctx, userID, 20)
+	codes, _, err := s.redeemRepo.ListByUserPaginated(ctx, userID, pagination.PaginationParams{Page: 1, PageSize: 1}, RedeemTypeInvitation)
 	if err != nil {
 		return "", err
 	}
 
 	for _, code := range codes {
-		if code.Type == RedeemTypeInvitation {
+		if code.Code != "" {
 			return strings.TrimSpace(code.Code), nil
 		}
 	}
