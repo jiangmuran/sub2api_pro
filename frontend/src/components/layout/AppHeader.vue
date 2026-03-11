@@ -140,12 +140,17 @@
                 </a>
               </div>
 
-              <!-- Contact Support (only show if configured) -->
+              <!-- Community Group (only show if configured) -->
               <div
-                v-if="contactInfo"
+                v-if="communityGroupUrl"
                 class="border-t border-gray-100 px-4 py-2.5 dark:border-dark-700"
               >
-                <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <a
+                  :href="communityGroupUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center gap-2 text-xs text-gray-500 transition-colors hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-300"
+                >
                   <svg
                     class="h-3.5 w-3.5 flex-shrink-0"
                     fill="none"
@@ -160,10 +165,8 @@
                     />
                   </svg>
                   <span>{{ t('common.contactSupport') }}:</span>
-                  <span class="font-medium text-gray-700 dark:text-gray-300">{{
-                    contactInfo
-                  }}</span>
-                </div>
+                  <span class="font-medium text-gray-700 dark:text-gray-300">{{ communityGroupUrl }}</span>
+                </a>
               </div>
 
               <div v-if="showOnboardingButton" class="border-t border-gray-100 py-1 dark:border-dark-700">
@@ -215,6 +218,7 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { normalizeCommunityLink } from '@/utils/community-link'
 
 const router = useRouter()
 const route = useRoute()
@@ -227,6 +231,7 @@ const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
+const communityGroupUrl = computed(() => normalizeCommunityLink(contactInfo.value))
 const docUrl = computed(() => appStore.docUrl)
 
 // 只在标准模式的管理员下显示新手引导按钮

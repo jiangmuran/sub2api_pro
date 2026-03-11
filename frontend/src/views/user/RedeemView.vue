@@ -184,12 +184,15 @@
                 <li>{{ t('redeem.codeRule2') }}</li>
                 <li>
                   {{ t('redeem.codeRule3') }}
-                  <span
-                    v-if="contactInfo"
-                    class="ml-1.5 inline-flex items-center rounded-md bg-primary-200/50 px-2 py-0.5 text-xs font-medium text-primary-800 dark:bg-primary-800/40 dark:text-primary-200"
+                  <a
+                    v-if="communityGroupUrl"
+                    :href="communityGroupUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ml-1.5 inline-flex items-center rounded-md bg-primary-200/50 px-2 py-0.5 text-xs font-medium text-primary-800 transition-colors hover:bg-primary-200 dark:bg-primary-800/40 dark:text-primary-200 dark:hover:bg-primary-800/60"
                   >
-                    {{ contactInfo }}
-                  </span>
+                    {{ t('common.contactSupport') }}
+                  </a>
                 </li>
                 <li>{{ t('redeem.codeRule4') }}</li>
               </ul>
@@ -351,6 +354,7 @@ import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
+import { normalizeCommunityLink } from '@/utils/community-link'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -376,6 +380,7 @@ const errorMessage = ref('')
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const contactInfo = ref('')
+const communityGroupUrl = computed(() => normalizeCommunityLink(contactInfo.value))
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {

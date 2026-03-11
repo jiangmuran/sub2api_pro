@@ -309,6 +309,14 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	// “购买订阅”页面配置验证
+	req.ContactInfo = strings.TrimSpace(req.ContactInfo)
+	if req.ContactInfo != "" {
+		if err := config.ValidateAbsoluteHTTPURL(req.ContactInfo); err != nil {
+			response.BadRequest(c, "Community Group URL must be an absolute http(s) URL")
+			return
+		}
+	}
+
 	purchaseEnabled := previousSettings.PurchaseSubscriptionEnabled
 	if req.PurchaseSubscriptionEnabled != nil {
 		purchaseEnabled = *req.PurchaseSubscriptionEnabled

@@ -823,15 +823,15 @@
               </p>
             </div>
 
-            <!-- Contact Info -->
+            <!-- Community Group URL -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 {{ t('admin.settings.site.contactInfo') }}
               </label>
               <input
                 v-model="form.contact_info"
-                type="text"
-                class="input"
+                type="url"
+                class="input font-mono text-sm"
                 :placeholder="t('admin.settings.site.contactInfoPlaceholder')"
               />
               <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
