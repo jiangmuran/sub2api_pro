@@ -95,7 +95,7 @@ const purchaseUrl = computed(() => {
     authStore.user?.id,
     authStore.token,
     purchaseTheme.value,
-    authStore.user?.invitation_code,
+    authStore.user?.registration_source_code || authStore.user?.invitation_code,
   )
 })
 
@@ -115,6 +115,19 @@ onMounted(async () => {
       attributes: true,
       attributeFilter: ['class'],
     })
+  }
+
+  if (
+    authStore.token &&
+    authStore.user &&
+    !authStore.user.registration_source_code &&
+    !authStore.user.invitation_code
+  ) {
+    try {
+      await authStore.refreshUser()
+    } catch (error) {
+      console.error('Failed to refresh user registration source code for purchase page:', error)
+    }
   }
 
   if (appStore.publicSettingsLoaded) return

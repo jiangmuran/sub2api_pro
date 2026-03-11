@@ -92,6 +92,14 @@ func (h *AuthHandler) userDTOWithInvitationCode(ctx context.Context, user *servi
 	if invitationCode != "" {
 		userDTO.InvitationCode = invitationCode
 	}
+	registrationSourceCode, err := h.authService.GetRegistrationSourceCodeByUserID(ctx, user.ID)
+	if err != nil {
+		slog.Warn("failed to load user registration source code", "user_id", user.ID, "error", err)
+		return userDTO
+	}
+	if registrationSourceCode != "" {
+		userDTO.RegistrationSourceCode = registrationSourceCode
+	}
 
 	return userDTO
 }

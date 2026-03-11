@@ -70,6 +70,22 @@ func (s *PromoService) ValidatePromoCode(ctx context.Context, code string) (*Pro
 	return promoCode, nil
 }
 
+func (s *PromoService) GetLatestPromoCodeByUserID(ctx context.Context, userID int64) (string, error) {
+	if s == nil || s.promoRepo == nil || userID <= 0 {
+		return "", nil
+	}
+
+	usage, err := s.promoRepo.GetLatestUsageByUser(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if usage == nil || usage.PromoCode == nil {
+		return "", nil
+	}
+
+	return strings.TrimSpace(usage.PromoCode.Code), nil
+}
+
 // validatePromoCodeStatus 验证优惠码状态
 func (s *PromoService) validatePromoCodeStatus(promoCode *PromoCode) error {
 	if !promoCode.CanUse() {

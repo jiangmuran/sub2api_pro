@@ -29,6 +29,7 @@ export interface User {
   username: string
   email: string
   invitation_code?: string
+  registration_source_code?: string
   role: 'admin' | 'user' // User role for authorization
   balance: number // User balance for API usage
   concurrency: number // Allowed concurrent requests

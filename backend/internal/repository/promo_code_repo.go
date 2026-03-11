@@ -183,6 +183,21 @@ func (r *promoCodeRepository) GetUsageByPromoCodeAndUser(ctx context.Context, pr
 	return promoCodeUsageEntityToService(m), nil
 }
 
+func (r *promoCodeRepository) GetLatestUsageByUser(ctx context.Context, userID int64) (*service.PromoCodeUsage, error) {
+	m, err := r.client.PromoCodeUsage.Query().
+		Where(promocodeusage.UserIDEQ(userID)).
+		WithPromoCode().
+		Order(dbent.Desc(promocodeusage.FieldUsedAt), dbent.Desc(promocodeusage.FieldID)).
+		First(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return promoCodeUsageEntityToService(m), nil
+}
+
 func (r *promoCodeRepository) ListUsagesByPromoCode(ctx context.Context, promoCodeID int64, params pagination.PaginationParams) ([]service.PromoCodeUsage, *pagination.PaginationResult, error) {
 	q := r.client.PromoCodeUsage.Query().
 		Where(promocodeusage.PromoCodeIDEQ(promoCodeID))
@@ -258,6 +273,9 @@ func promoCodeUsageEntityToService(m *dbent.PromoCodeUsage) *service.PromoCodeUs
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
+	}
+	if m.Edges.PromoCode != nil {
+		out.PromoCode = promoCodeEntityToService(m.Edges.PromoCode)
 	}
 	return out
 }

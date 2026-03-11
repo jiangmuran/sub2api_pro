@@ -50,6 +50,13 @@ func (r *promoStatsTestRepo) CreateUsage(_ context.Context, _ *PromoCodeUsage) e
 func (r *promoStatsTestRepo) GetUsageByPromoCodeAndUser(_ context.Context, _, _ int64) (*PromoCodeUsage, error) {
 	return nil, nil
 }
+func (r *promoStatsTestRepo) GetLatestUsageByUser(_ context.Context, _ int64) (*PromoCodeUsage, error) {
+	if len(r.usages) == 0 {
+		return nil, nil
+	}
+	copyUsage := r.usages[0]
+	return &copyUsage, nil
+}
 
 func (r *promoStatsTestRepo) ListUsagesByPromoCode(_ context.Context, promoCodeID int64, params pagination.PaginationParams) ([]PromoCodeUsage, *pagination.PaginationResult, error) {
 	if r.code == nil || r.code.ID != promoCodeID {

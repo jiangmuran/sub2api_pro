@@ -246,6 +246,22 @@ func (s *AuthService) GetInvitationCodeByUserID(ctx context.Context, userID int6
 	return "", nil
 }
 
+func (s *AuthService) GetRegistrationSourceCodeByUserID(ctx context.Context, userID int64) (string, error) {
+	invitationCode, err := s.GetInvitationCodeByUserID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if invitationCode != "" {
+		return invitationCode, nil
+	}
+
+	if s.promoService == nil {
+		return "", nil
+	}
+
+	return s.promoService.GetLatestPromoCodeByUserID(ctx, userID)
+}
+
 // SendVerifyCodeResult 发送验证码返回结果
 type SendVerifyCodeResult struct {
 	Countdown int `json:"countdown"` // 倒计时秒数
