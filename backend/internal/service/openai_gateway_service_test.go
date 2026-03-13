@@ -17,6 +17,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // 编译期接口断言
@@ -82,11 +83,17 @@ type failingGinWriter struct {
 }
 
 type queuedOpenAIHTTPUpstream struct {
-	responses []*http.Response
-	callCount int
+	responses     []*http.Response
+	callCount     int
+	requestBodies [][]byte
 }
 
 func (u *queuedOpenAIHTTPUpstream) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	if req != nil && req.Body != nil {
+		bodyBytes, _ := io.ReadAll(req.Body)
+		u.requestBodies = append(u.requestBodies, bodyBytes)
+		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	}
 	if u.callCount >= len(u.responses) {
 		return nil, errors.New("no queued response")
 	}
@@ -915,6 +922,81 @@ func TestOpenAIStreamingTimeout(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "stream_timeout") {
 		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
 	}
+}
+
+func TestOpenAIForward_AutoChatFallbackOnUnsupportedResponsesEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstream := &queuedOpenAIHTTPUpstream{
+		responses: []*http.Response{
+			{
+				StatusCode: http.StatusNotFound,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"error":{"message":"endpoint not supported"}}`)),
+			},
+			{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"id":"chatcmpl_1","model":"kimi-k2.5","choices":[{"message":{"role":"assistant","content":"pong"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)),
+			},
+		},
+	}
+	svc := &OpenAIGatewayService{httpUpstream: upstream, cfg: &config.Config{}}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", bytes.NewReader([]byte(`{"model":"kimi-k2.5","input":[{"role":"user","content":[{"type":"input_text","text":"ping"}]}]}`)))
+	account := &Account{
+		ID:          1,
+		Name:        "ark",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+		},
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, []byte(`{"model":"kimi-k2.5","input":[{"role":"user","content":[{"type":"input_text","text":"ping"}]}]}`))
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, 2, upstream.callCount)
+	require.Equal(t, "kimi-k2.5", gjson.GetBytes(upstream.requestBodies[0], "model").String())
+	require.Equal(t, "kimi-k2.5", gjson.GetBytes(upstream.requestBodies[1], "model").String())
+	require.Contains(t, rec.Body.String(), "\"object\":\"response\"")
+}
+
+func TestOpenAIForward_CustomBaseURLSkipsCodexModelNormalization(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	upstream := &queuedOpenAIHTTPUpstream{
+		responses: []*http.Response{{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"id":"resp_1","object":"response","model":"kimi-k2.5","output_text":"pong","usage":{"input_tokens":1,"output_tokens":1}}`)),
+		}},
+	}
+	svc := &OpenAIGatewayService{httpUpstream: upstream, cfg: &config.Config{}}
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	requestBody := []byte(`{"model":"kimi-k2.5","input":[{"role":"user","content":[{"type":"input_text","text":"ping"}]}]}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", bytes.NewReader(requestBody))
+	account := &Account{
+		ID:          1,
+		Name:        "ark",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+		},
+	}
+
+	_, err := svc.Forward(context.Background(), c, account, requestBody)
+	require.NoError(t, err)
+	require.Len(t, upstream.requestBodies, 1)
+	require.Equal(t, "kimi-k2.5", gjson.GetBytes(upstream.requestBodies[0], "model").String())
 }
 
 func TestOpenAIStreamingContextCanceledDoesNotInjectErrorEvent(t *testing.T) {

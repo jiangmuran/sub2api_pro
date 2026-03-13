@@ -4,6 +4,7 @@ package service
 import (
 	"encoding/json"
 	"hash/fnv"
+	"net/url"
 	"reflect"
 	"sort"
 	"strconv"
@@ -929,6 +930,31 @@ func (a *Account) GetOpenAICompatMode() string {
 
 func (a *Account) IsOpenAICompatChatFallback() bool {
 	return a.GetOpenAICompatMode() == OpenAICompatibleModeChatCompletionsFallback
+}
+
+func (a *Account) ShouldNormalizeOpenAIModel(isCodexCLI bool) bool {
+	if a == nil || !a.IsOpenAI() {
+		return false
+	}
+	if isCodexCLI || a.IsOpenAIOAuth() {
+		return true
+	}
+	if !a.IsOpenAIApiKey() {
+		return false
+	}
+	baseURL := strings.TrimSpace(a.GetOpenAIBaseURL())
+	if baseURL == "" {
+		return true
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	if host == "api.openai.com" || host == "openai.com" || strings.HasSuffix(host, ".openai.com") {
+		return true
+	}
+	return false
 }
 
 // IsOpenAIResponsesWebSocketV2Enabled 返回 OpenAI 账号是否开启 Responses WebSocket v2。

@@ -43,7 +43,7 @@ func TestProbeOpenAICompatibleResponsesNative(t *testing.T) {
 
 	client := server.Client()
 
-	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, &config.Config{})
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, nil, &config.Config{})
 	result, err := svc.ProbeOpenAICompatible(context.Background(), OpenAICompatibleProbeInput{
 		BaseURL: server.URL,
 		APIKey:  "sk-test",
@@ -79,7 +79,7 @@ func TestProbeOpenAICompatibleChatFallback(t *testing.T) {
 
 	client := server.Client()
 
-	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, &config.Config{})
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, nil, &config.Config{})
 	result, err := svc.ProbeOpenAICompatible(context.Background(), OpenAICompatibleProbeInput{
 		BaseURL: server.URL,
 		APIKey:  "sk-test",
@@ -126,7 +126,7 @@ func TestProbeOpenAICompatibleCustomVersionedBasePath(t *testing.T) {
 
 	client := server.Client()
 
-	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, &config.Config{})
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, nil, &config.Config{})
 	result, err := svc.ProbeOpenAICompatible(context.Background(), OpenAICompatibleProbeInput{
 		BaseURL: server.URL + "/api/coding/v3",
 		APIKey:  "sk-test",
@@ -145,5 +145,35 @@ func TestProbeOpenAICompatibleCustomVersionedBasePath(t *testing.T) {
 	}
 	if result.Checks[0].EndpointURL != server.URL+"/api/coding/v3/responses" {
 		t.Fatalf("unexpected responses endpoint: %s", result.Checks[0].EndpointURL)
+	}
+}
+
+func TestPreviewOpenAICompatibleModels(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/coding/v3/models":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"kimi-k2.5","status":"Active"},{"id":"glm-4.7","status":"Active"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := server.Client()
+	billing := NewBillingService(&config.Config{}, nil)
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, billing, &config.Config{})
+	models, err := svc.PreviewOpenAICompatibleModels(context.Background(), OpenAICompatibleProbeInput{
+		BaseURL: server.URL + "/api/coding/v3",
+		APIKey:  "sk-test",
+	}, 1.5)
+	if err != nil {
+		t.Fatalf("PreviewOpenAICompatibleModels error = %v", err)
+	}
+	if len(models) != 2 {
+		t.Fatalf("models len = %d, want 2", len(models))
+	}
+	if models[0].ID != "glm-4.7" && models[0].ID != "kimi-k2.5" {
+		t.Fatalf("unexpected model list: %+v", models)
 	}
 }

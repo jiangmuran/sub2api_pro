@@ -234,6 +234,30 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	return nil, fmt.Errorf("pricing not found for model: %s", model)
 }
 
+// GetPreviewModelPricing returns pricing only when a direct dynamic price exists.
+// It avoids fallback family pricing so preview UIs do not show misleading prices.
+func (s *BillingService) GetPreviewModelPricing(model string) *ModelPricing {
+	if s == nil || s.pricingService == nil {
+		return nil
+	}
+	pricing := s.pricingService.GetModelPricing(strings.ToLower(strings.TrimSpace(model)))
+	if pricing == nil {
+		return nil
+	}
+	price5m := pricing.CacheCreationInputTokenCost
+	price1h := pricing.CacheCreationInputTokenCostAbove1hr
+	enableBreakdown := price1h > 0 && price1h > price5m
+	return &ModelPricing{
+		InputPricePerToken:         pricing.InputCostPerToken,
+		OutputPricePerToken:        pricing.OutputCostPerToken,
+		CacheCreationPricePerToken: pricing.CacheCreationInputTokenCost,
+		CacheReadPricePerToken:     pricing.CacheReadInputTokenCost,
+		CacheCreation5mPrice:       price5m,
+		CacheCreation1hPrice:       price1h,
+		SupportsCacheBreakdown:     enableBreakdown,
+	}
+}
+
 // CalculateCost 计算使用费用
 func (s *BillingService) CalculateCost(model string, tokens UsageTokens, rateMultiplier float64) (*CostBreakdown, error) {
 	pricing, err := s.GetModelPricing(model)

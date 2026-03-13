@@ -931,71 +931,82 @@
           <p class="input-hint">{{ apiKeyHint }}</p>
         </div>
 
-        <div
-          v-if="form.platform === 'openai'"
-          class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20"
-        >
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div class="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-                {{ t('admin.accounts.openai.compatCheckTitle') }}
+        <div v-if="form.platform === 'openai' && accountCategory === 'apikey'" class="xl:grid xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start xl:gap-5">
+          <div class="space-y-4">
+            <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div class="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                    {{ t('admin.accounts.openai.compatCheckTitle') }}
+                  </div>
+                  <div class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+                    {{ t('admin.accounts.openai.compatCheckDesc') }}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary shrink-0"
+                  :disabled="openAICompatChecking"
+                  @click="handleCheckOpenAICompatible"
+                >
+                  {{
+                    openAICompatChecking
+                      ? t('admin.accounts.openai.compatChecking')
+                      : t('admin.accounts.openai.compatCheckAction')
+                  }}
+                </button>
               </div>
-              <div class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
-                {{ t('admin.accounts.openai.compatCheckDesc') }}
-              </div>
-            </div>
-            <button
-              type="button"
-              class="btn btn-secondary shrink-0"
-              :disabled="openAICompatChecking"
-              @click="handleCheckOpenAICompatible"
-            >
-              {{
-                openAICompatChecking
-                  ? t('admin.accounts.openai.compatChecking')
-                  : t('admin.accounts.openai.compatCheckAction')
-              }}
-            </button>
-          </div>
 
-          <div v-if="openAICompatCheckResult" class="mt-4 space-y-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
-                {{ t('admin.accounts.openai.compatOverallStatus') }}
-              </span>
-              <span
-                class="rounded-full px-2.5 py-1 text-xs font-semibold"
-                :class="compatStatusClass(openAICompatCheckResult.status)"
-              >
-                {{ compatStatusLabel(openAICompatCheckResult.status) }}
-              </span>
-              <span class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.accounts.openai.compatRecommendedMode') }}:
-                {{ compatModeLabel(openAICompatCheckResult.recommended_mode) }}
-              </span>
-            </div>
-
-            <div class="grid gap-2 sm:grid-cols-3">
-              <div
-                v-for="item in openAICompatCheckResult.checks"
-                :key="item.key"
-                class="rounded-lg border border-white/80 bg-white/80 p-3 dark:border-dark-600 dark:bg-dark-800/70"
-              >
-                <div class="flex items-center justify-between gap-2">
-                  <span class="text-sm font-medium text-gray-900 dark:text-white">{{ item.label }}</span>
-                  <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="compatCheckClass(item.status)">
-                    {{ compatCheckLabel(item.status) }}
+              <div v-if="openAICompatCheckResult" class="mt-4 space-y-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                    {{ t('admin.accounts.openai.compatOverallStatus') }}
+                  </span>
+                  <span
+                    class="rounded-full px-2.5 py-1 text-xs font-semibold"
+                    :class="compatStatusClass(openAICompatCheckResult.status)"
+                  >
+                    {{ compatStatusLabel(openAICompatCheckResult.status) }}
+                  </span>
+                  <span class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.accounts.openai.compatRecommendedMode') }}:
+                    {{ compatModeLabel(openAICompatCheckResult.recommended_mode) }}
                   </span>
                 </div>
-                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {{ item.message || t('admin.accounts.openai.compatNoDetail') }}
+
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <div
+                    v-for="item in openAICompatCheckResult.checks"
+                    :key="item.key"
+                    class="rounded-lg border border-white/80 bg-white/80 p-3 dark:border-dark-600 dark:bg-dark-800/70"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-sm font-medium text-gray-900 dark:text-white">{{ item.label }}</span>
+                      <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="compatCheckClass(item.status)">
+                        {{ compatCheckLabel(item.status) }}
+                      </span>
+                    </div>
+                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{ item.message || t('admin.accounts.openai.compatNoDetail') }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                  {{ t('admin.accounts.openai.compatAppliedHint', { mode: compatModeLabel(openAICompatCheckResult.recommended_mode) }) }}
                 </div>
               </div>
             </div>
+          </div>
 
-            <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
-              {{ t('admin.accounts.openai.compatAppliedHint', { mode: compatModeLabel(openAICompatCheckResult.recommended_mode) }) }}
-            </div>
+          <div class="mt-4 xl:mt-0 xl:sticky xl:top-0">
+            <OpenAICompatibleWorkbench
+              :base-url="apiKeyBaseUrl"
+              :api-key="apiKeyValue"
+              :proxy-id="form.proxy_id"
+              :rate-multiplier="form.rate_multiplier"
+              @apply-models="handleApplyOnlineModels"
+            />
           </div>
         </div>
 
@@ -2406,6 +2417,7 @@ import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
+import OpenAICompatibleWorkbench from '@/components/account/OpenAICompatibleWorkbench.vue'
 import { applyInterceptWarmup } from '@/components/account/credentialsBuilder'
 import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
@@ -3362,6 +3374,13 @@ const handleCheckOpenAICompatible = async () => {
   } finally {
     openAICompatChecking.value = false
   }
+}
+
+const handleApplyOnlineModels = (models: string[]) => {
+  if (models.length === 0) return
+  modelRestrictionMode.value = 'whitelist'
+  allowedModels.value = [...models]
+  appStore.showSuccess(t('admin.accounts.openai.onlineModelsApplied'))
 }
 
 const buildIdentityModelMapping = (models: string[]): Record<string, string> | undefined => {

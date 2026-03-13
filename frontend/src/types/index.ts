@@ -872,6 +872,43 @@ export interface OpenAICompatibleCheckResult {
   suggested_extra?: Record<string, unknown>
 }
 
+export interface OpenAICompatiblePreviewModel {
+  id: string
+  display_name: string
+  input_price_per_1m: number
+  output_price_per_1m: number
+  account_input_price_per_1m: number
+  account_output_price_per_1m: number
+  pricing_available: boolean
+}
+
+export interface OpenAICompatiblePreviewModelsRequest {
+  base_url: string
+  api_key: string
+  proxy_id?: number | null
+  user_agent?: string
+  rate_multiplier?: number | null
+}
+
+export interface OpenAICompatiblePreviewModelsResponse {
+  models: OpenAICompatiblePreviewModel[]
+}
+
+export interface OpenAICompatiblePreviewChatRequest {
+  base_url: string
+  api_key: string
+  proxy_id?: number | null
+  user_agent?: string
+  model: string
+  messages: Array<{ role: string; content: string }>
+}
+
+export interface OpenAICompatiblePreviewChatResponse {
+  model: string
+  reply: string
+  raw_body?: string
+}
+
 export interface CreateProxyRequest {
   name: string
   protocol: ProxyProtocol

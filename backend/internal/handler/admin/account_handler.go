@@ -640,6 +640,23 @@ type CheckOpenAICompatibleRequest struct {
 	UserAgent string `json:"user_agent"`
 }
 
+type PreviewOpenAICompatibleModelsRequest struct {
+	BaseURL        string   `json:"base_url" binding:"required"`
+	APIKey         string   `json:"api_key" binding:"required"`
+	ProxyID        *int64   `json:"proxy_id"`
+	UserAgent      string   `json:"user_agent"`
+	RateMultiplier *float64 `json:"rate_multiplier"`
+}
+
+type PreviewOpenAICompatibleChatRequest struct {
+	BaseURL   string           `json:"base_url" binding:"required"`
+	APIKey    string           `json:"api_key" binding:"required"`
+	ProxyID   *int64           `json:"proxy_id"`
+	UserAgent string           `json:"user_agent"`
+	Model     string           `json:"model" binding:"required"`
+	Messages  []map[string]any `json:"messages" binding:"required"`
+}
+
 // Test handles testing account connectivity with SSE streaming
 // POST /api/v1/admin/accounts/:id/test
 func (h *AccountHandler) Test(c *gin.Context) {
@@ -745,6 +762,72 @@ func (h *AccountHandler) CheckOpenAICompatible(c *gin.Context) {
 		return
 	}
 
+	response.Success(c, result)
+}
+
+func (h *AccountHandler) PreviewOpenAICompatibleModels(c *gin.Context) {
+	var req PreviewOpenAICompatibleModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	proxyURL := ""
+	if req.ProxyID != nil && *req.ProxyID > 0 {
+		proxy, err := h.adminService.GetProxy(c.Request.Context(), *req.ProxyID)
+		if err != nil {
+			response.BadRequest(c, "Invalid proxy")
+			return
+		}
+		if proxy != nil {
+			proxyURL = proxy.URL()
+		}
+	}
+	rateMultiplier := 1.0
+	if req.RateMultiplier != nil && *req.RateMultiplier > 0 {
+		rateMultiplier = *req.RateMultiplier
+	}
+	models, err := h.accountTestService.PreviewOpenAICompatibleModels(c.Request.Context(), service.OpenAICompatibleProbeInput{
+		BaseURL:   req.BaseURL,
+		APIKey:    req.APIKey,
+		ProxyURL:  proxyURL,
+		UserAgent: req.UserAgent,
+	}, rateMultiplier)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"models": models})
+}
+
+func (h *AccountHandler) PreviewOpenAICompatibleChat(c *gin.Context) {
+	var req PreviewOpenAICompatibleChatRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	proxyURL := ""
+	if req.ProxyID != nil && *req.ProxyID > 0 {
+		proxy, err := h.adminService.GetProxy(c.Request.Context(), *req.ProxyID)
+		if err != nil {
+			response.BadRequest(c, "Invalid proxy")
+			return
+		}
+		if proxy != nil {
+			proxyURL = proxy.URL()
+		}
+	}
+	result, err := h.accountTestService.PreviewOpenAICompatibleChat(c.Request.Context(), service.OpenAICompatibleChatPreviewInput{
+		BaseURL:   req.BaseURL,
+		APIKey:    req.APIKey,
+		ProxyURL:  proxyURL,
+		UserAgent: req.UserAgent,
+		Model:     req.Model,
+		Messages:  req.Messages,
+	})
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	response.Success(c, result)
 }
 

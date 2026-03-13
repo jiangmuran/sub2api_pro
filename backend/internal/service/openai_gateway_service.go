@@ -1571,7 +1571,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	// 针对所有 OpenAI 账号执行 Codex 模型名规范化，确保上游识别一致。
-	if model, ok := reqBody["model"].(string); ok {
+	if model, ok := reqBody["model"].(string); ok && account.ShouldNormalizeOpenAIModel(isCodexCLI) {
 		normalizedModel := normalizeCodexModel(model)
 		if normalizedModel != "" && normalizedModel != model {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
@@ -1969,6 +1969,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			if retryResult, retryErr, retried := s.retryOpenAIOAuthInvalidBearerOnce(ctx, c, account, body); retried {
 				return retryResult, retryErr
 			}
+		}
+		if retryResult, retryErr, retried := s.retryOpenAICompatibleChatFallbackOnce(ctx, c, account, body, resp.StatusCode, respBody); retried {
+			return retryResult, retryErr
 		}
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
@@ -4197,6 +4200,62 @@ func dropOpenAIItemReferences(body []byte) ([]byte, bool, error) {
 }
 
 const openAIOAuthInvalidBearerRetryKey = "openai_oauth_invalid_bearer_retry"
+
+const openAICompatibleChatFallbackRetryKey = "openai_compatible_chat_fallback_retry"
+
+func (s *OpenAIGatewayService) retryOpenAICompatibleChatFallbackOnce(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	requestBody []byte,
+	statusCode int,
+	responseBody []byte,
+) (*OpenAIForwardResult, error, bool) {
+	if account == nil || c == nil {
+		return nil, nil, false
+	}
+	if account.IsOpenAICompatChatFallback() || !account.IsOpenAIApiKey() {
+		return nil, nil, false
+	}
+	if strings.TrimSpace(account.GetOpenAIBaseURL()) == "" || account.GetOpenAIBaseURL() == "https://api.openai.com" {
+		return nil, nil, false
+	}
+	if statusCode != http.StatusNotFound && statusCode != http.StatusMethodNotAllowed && statusCode != http.StatusNotImplemented {
+		return nil, nil, false
+	}
+	if v, ok := c.Get(openAICompatibleChatFallbackRetryKey); ok {
+		if done, ok := v.(bool); ok && done {
+			return nil, nil, false
+		}
+	}
+	if !isLikelyUnsupportedEndpoint(statusCode, responseBody) {
+		return nil, nil, false
+	}
+
+	c.Set(openAICompatibleChatFallbackRetryKey, true)
+	retryAccount := cloneAccountWithCompatMode(account, OpenAICompatibleModeChatCompletionsFallback)
+	logger.LegacyPrintf("service.openai_gateway", "[OpenAI Compat] Falling back to chat/completions after unsupported responses endpoint: account=%d name=%s status=%d",
+		account.ID, account.Name, statusCode)
+	result, err := s.Forward(ctx, c, retryAccount, requestBody)
+	return result, err, true
+}
+
+func cloneAccountWithCompatMode(account *Account, compatMode string) *Account {
+	if account == nil {
+		return nil
+	}
+	clone := *account
+	if len(account.Extra) == 0 {
+		clone.Extra = map[string]any{"openai_compat_mode": compatMode}
+		return &clone
+	}
+	clone.Extra = make(map[string]any, len(account.Extra)+1)
+	for key, value := range account.Extra {
+		clone.Extra[key] = value
+	}
+	clone.Extra["openai_compat_mode"] = compatMode
+	return &clone
+}
 
 func (s *OpenAIGatewayService) retryOpenAIOAuthInvalidBearerOnce(
 	ctx context.Context,

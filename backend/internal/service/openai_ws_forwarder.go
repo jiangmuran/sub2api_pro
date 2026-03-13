@@ -2403,6 +2403,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return rebuilt, nil
 	}
 
+	isCodexCLI := openai.IsCodexCLIRequest(c.GetHeader("User-Agent")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
+
 	parseClientPayload := func(raw []byte) (openAIWSClientPayload, error) {
 		trimmed := bytes.TrimSpace(raw)
 		if len(trimmed) == 0 {
@@ -2464,8 +2466,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			normalized = next
 		}
 		mappedModel := account.GetMappedModel(originalModel)
-		if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
-			mappedModel = normalizedModel
+		if account.ShouldNormalizeOpenAIModel(isCodexCLI) {
+			if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
+				mappedModel = normalizedModel
+			}
 		}
 		var payload map[string]any
 		if err := json.Unmarshal(normalized, &payload); err == nil {
@@ -2525,7 +2529,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 	}
 
-	isCodexCLI := openai.IsCodexCLIRequest(c.GetHeader("User-Agent")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
 	wsHeaders, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, isCodexCLI, turnState, strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)), firstPayload.promptCacheKey)
 	baseAcquireReq := openAIWSAcquireRequest{
 		Account: account,
@@ -2731,8 +2734,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		var mappedModelBytes []byte
 		if originalModel != "" {
 			mappedModel = account.GetMappedModel(originalModel)
-			if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
-				mappedModel = normalizedModel
+			if account.ShouldNormalizeOpenAIModel(isCodexCLI) {
+				if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
+					mappedModel = normalizedModel
+				}
 			}
 			needModelReplace = mappedModel != "" && mappedModel != originalModel
 			if needModelReplace {

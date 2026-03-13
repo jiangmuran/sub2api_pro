@@ -238,6 +238,8 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		accounts.POST("", h.Admin.Account.Create)
 		accounts.POST("/check-mixed-channel", h.Admin.Account.CheckMixedChannel)
 		accounts.POST("/check-openai-compatible", h.Admin.Account.CheckOpenAICompatible)
+		accounts.POST("/preview-openai-compatible/models", h.Admin.Account.PreviewOpenAICompatibleModels)
+		accounts.POST("/preview-openai-compatible/chat", h.Admin.Account.PreviewOpenAICompatibleChat)
 		accounts.POST("/sync/crs", h.Admin.Account.SyncFromCRS)
 		accounts.POST("/sync/crs/preview", h.Admin.Account.PreviewFromCRS)
 		accounts.PUT("/:id", h.Admin.Account.Update)

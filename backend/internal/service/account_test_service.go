@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
 )
 
 // sseDataPrefix matches SSE data lines with optional whitespace after colon.
@@ -60,6 +61,7 @@ type AccountTestService struct {
 	geminiTokenProvider       *GeminiTokenProvider
 	antigravityGatewayService *AntigravityGatewayService
 	httpUpstream              HTTPUpstream
+	billingService            *BillingService
 	cfg                       *config.Config
 	soraTestGuardMu           sync.Mutex
 	soraTestLastRun           map[int64]time.Time
@@ -74,6 +76,7 @@ func NewAccountTestService(
 	geminiTokenProvider *GeminiTokenProvider,
 	antigravityGatewayService *AntigravityGatewayService,
 	httpUpstream HTTPUpstream,
+	billingService *BillingService,
 	cfg *config.Config,
 ) *AccountTestService {
 	return &AccountTestService{
@@ -81,10 +84,119 @@ func NewAccountTestService(
 		geminiTokenProvider:       geminiTokenProvider,
 		antigravityGatewayService: antigravityGatewayService,
 		httpUpstream:              httpUpstream,
+		billingService:            billingService,
 		cfg:                       cfg,
 		soraTestLastRun:           make(map[int64]time.Time),
 		soraTestCooldown:          defaultSoraTestCooldown,
 	}
+}
+
+type OpenAICompatiblePreviewModel struct {
+	ID                      string  `json:"id"`
+	DisplayName             string  `json:"display_name"`
+	InputPricePer1M         float64 `json:"input_price_per_1m"`
+	OutputPricePer1M        float64 `json:"output_price_per_1m"`
+	AccountInputPricePer1M  float64 `json:"account_input_price_per_1m"`
+	AccountOutputPricePer1M float64 `json:"account_output_price_per_1m"`
+	PricingAvailable        bool    `json:"pricing_available"`
+}
+
+type OpenAICompatibleChatPreviewInput struct {
+	BaseURL   string
+	APIKey    string
+	ProxyURL  string
+	UserAgent string
+	Model     string
+	Messages  []map[string]any
+}
+
+type OpenAICompatibleChatPreviewResult struct {
+	Model   string `json:"model"`
+	Reply   string `json:"reply"`
+	RawBody string `json:"raw_body,omitempty"`
+}
+
+func (s *AccountTestService) PreviewOpenAICompatibleModels(ctx context.Context, input OpenAICompatibleProbeInput, rateMultiplier float64) ([]OpenAICompatiblePreviewModel, error) {
+	models := s.DiscoverOpenAICompatibleModels(ctx, input.BaseURL, input.APIKey, input.ProxyURL, input.UserAgent)
+	if len(models) == 0 {
+		return nil, nil
+	}
+	if rateMultiplier <= 0 {
+		rateMultiplier = 1
+	}
+	result := make([]OpenAICompatiblePreviewModel, 0, len(models))
+	for _, model := range models {
+		item := OpenAICompatiblePreviewModel{ID: model, DisplayName: model}
+		if s.billingService != nil {
+			if pricing := s.billingService.GetPreviewModelPricing(model); pricing != nil {
+				item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000
+				item.OutputPricePer1M = pricing.OutputPricePerToken * 1_000_000
+				item.AccountInputPricePer1M = item.InputPricePer1M * rateMultiplier
+				item.AccountOutputPricePer1M = item.OutputPricePer1M * rateMultiplier
+				item.PricingAvailable = true
+			}
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
+func (s *AccountTestService) PreviewOpenAICompatibleChat(ctx context.Context, input OpenAICompatibleChatPreviewInput) (*OpenAICompatibleChatPreviewResult, error) {
+	baseURL, err := s.validateUpstreamBaseURL(strings.TrimSpace(input.BaseURL))
+	if err != nil {
+		return nil, fmt.Errorf("invalid base_url: %w", err)
+	}
+	apiKey := strings.TrimSpace(input.APIKey)
+	if apiKey == "" {
+		return nil, fmt.Errorf("api_key is required")
+	}
+	model := strings.TrimSpace(input.Model)
+	if model == "" {
+		return nil, fmt.Errorf("model is required")
+	}
+	if len(input.Messages) == 0 {
+		return nil, fmt.Errorf("messages are required")
+	}
+	chatURLs := buildOpenAIProbeEndpointCandidates(baseURL, "chat/completions")
+	bodyPayload := map[string]any{
+		"model":      model,
+		"messages":   input.Messages,
+		"max_tokens": 1024,
+		"stream":     false,
+	}
+	bodyBytes, _ := json.Marshal(bodyPayload)
+	var lastErr error
+	for _, targetURL := range chatURLs {
+		req, reqErr := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
+		if reqErr != nil {
+			lastErr = reqErr
+			continue
+		}
+		applyOpenAIProbeHeaders(req, apiKey, input.UserAgent)
+		resp, respErr := s.httpUpstream.Do(req, input.ProxyURL, 0, 1)
+		if respErr != nil {
+			lastErr = respErr
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512<<10))
+		_ = resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			if isLikelyUnsupportedEndpoint(resp.StatusCode, body) {
+				lastErr = fmt.Errorf("endpoint not supported")
+				continue
+			}
+			return nil, errors.New(normalizeOpenAICompatibleErrorMessage(body))
+		}
+		reply := strings.TrimSpace(gjson.GetBytes(body, "choices.0.message.content").String())
+		if reply == "" {
+			reply = strings.TrimSpace(gjson.GetBytes(body, "output_text").String())
+		}
+		return &OpenAICompatibleChatPreviewResult{Model: model, Reply: reply, RawBody: string(body)}, nil
+	}
+	if lastErr == nil {
+		lastErr = errors.New("no compatible chat endpoint found")
+	}
+	return nil, lastErr
 }
 
 func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error) {

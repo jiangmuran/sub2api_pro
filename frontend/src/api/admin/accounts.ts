@@ -19,7 +19,11 @@ import type {
   CheckMixedChannelRequest,
   CheckMixedChannelResponse,
   OpenAICompatibleCheckRequest,
-  OpenAICompatibleCheckResult
+  OpenAICompatibleCheckResult,
+  OpenAICompatiblePreviewChatRequest,
+  OpenAICompatiblePreviewChatResponse,
+  OpenAICompatiblePreviewModelsRequest,
+  OpenAICompatiblePreviewModelsResponse
 } from '@/types'
 
 /**
@@ -151,6 +155,20 @@ export async function checkOpenAICompatible(
   payload: OpenAICompatibleCheckRequest
 ): Promise<OpenAICompatibleCheckResult> {
   const { data } = await apiClient.post<OpenAICompatibleCheckResult>('/admin/accounts/check-openai-compatible', payload)
+  return data
+}
+
+export async function previewOpenAICompatibleModels(
+  payload: OpenAICompatiblePreviewModelsRequest
+): Promise<OpenAICompatiblePreviewModelsResponse> {
+  const { data } = await apiClient.post<OpenAICompatiblePreviewModelsResponse>('/admin/accounts/preview-openai-compatible/models', payload)
+  return data
+}
+
+export async function previewOpenAICompatibleChat(
+  payload: OpenAICompatiblePreviewChatRequest
+): Promise<OpenAICompatiblePreviewChatResponse> {
+  const { data } = await apiClient.post<OpenAICompatiblePreviewChatResponse>('/admin/accounts/preview-openai-compatible/chat', payload)
   return data
 }
 
@@ -574,6 +592,8 @@ export const accountsAPI = {
   update,
   checkMixedChannelRisk,
   checkOpenAICompatible,
+  previewOpenAICompatibleModels,
+  previewOpenAICompatibleChat,
   delete: deleteAccount,
   toggleStatus,
   testAccount,
