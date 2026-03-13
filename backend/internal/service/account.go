@@ -840,6 +840,18 @@ func (a *Account) IsOpenAIPassthroughEnabled() bool {
 	return false
 }
 
+func (a *Account) GetOpenAICompatMode() string {
+	if a == nil || !a.IsOpenAI() || a.Extra == nil {
+		return ""
+	}
+	mode, _ := a.Extra["openai_compat_mode"].(string)
+	return strings.TrimSpace(mode)
+}
+
+func (a *Account) IsOpenAICompatChatFallback() bool {
+	return a.GetOpenAICompatMode() == OpenAICompatibleModeChatCompletionsFallback
+}
+
 // IsOpenAIResponsesWebSocketV2Enabled 返回 OpenAI 账号是否开启 Responses WebSocket v2。
 //
 // 分类型新字段：

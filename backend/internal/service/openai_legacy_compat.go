@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -166,6 +167,42 @@ func ConvertOpenAILegacyRequestBody(body []byte, protocol string) ([]byte, error
 		return body, fmt.Errorf("serialize request: %w", err)
 	}
 	return converted, nil
+}
+
+func ConvertOpenAIResponsesRequestToLegacy(body []byte, protocol string) ([]byte, error) {
+	if len(body) == 0 {
+		return body, nil
+	}
+	if !gjson.ValidBytes(body) {
+		return body, fmt.Errorf("invalid json body")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return body, fmt.Errorf("parse request: %w", err)
+	}
+
+	legacy := map[string]any{}
+	for key, value := range payload {
+		switch key {
+		case "input", "max_output_tokens", "store", "previous_response_id", "reasoning", "text", "include", "parallel_tool_calls", "prompt_cache_key":
+			continue
+		default:
+			legacy[key] = value
+		}
+	}
+
+	if value, ok := payload["max_output_tokens"]; ok {
+		legacy["max_tokens"] = value
+	}
+
+	if protocol == OpenAILegacyProtocolCompletions {
+		legacy["prompt"] = extractResponsesPromptValue(payload["input"])
+		return json.Marshal(legacy)
+	}
+
+	legacy["messages"] = extractResponsesMessagesValue(payload["input"])
+	return json.Marshal(legacy)
 }
 
 func normalizeOpenAICompatibilityPayload(payload map[string]any) bool {
@@ -577,6 +614,247 @@ func ConvertOpenAIResponsesSSEToLegacy(data string, protocol string, fallbackMod
 		return "", false
 	}
 	return string(encoded), true
+}
+
+func ConvertOpenAILegacyResponseToResponses(body []byte, protocol string, fallbackModel string) ([]byte, error) {
+	if len(body) == 0 {
+		return body, nil
+	}
+	if !gjson.ValidBytes(body) {
+		return body, fmt.Errorf("invalid json response")
+	}
+
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if model == "" {
+		model = strings.TrimSpace(fallbackModel)
+	}
+	id := strings.TrimSpace(gjson.GetBytes(body, "id").String())
+	created := gjson.GetBytes(body, "created").Int()
+	if created == 0 {
+		created = time.Now().Unix()
+	}
+
+	content := ""
+	toolCalls := []any(nil)
+	if protocol == OpenAILegacyProtocolCompletions {
+		content = gjson.GetBytes(body, "choices.0.text").String()
+	} else {
+		content = gjson.GetBytes(body, "choices.0.message.content").String()
+		toolCalls = extractLegacyToolCalls(body)
+	}
+
+	usage := map[string]any{
+		"input_tokens":  gjson.GetBytes(body, "usage.prompt_tokens").Int(),
+		"output_tokens": gjson.GetBytes(body, "usage.completion_tokens").Int(),
+	}
+	if usage["input_tokens"] == int64(0) && usage["output_tokens"] == int64(0) {
+		usage = map[string]any{}
+	}
+
+	output := make([]any, 0, 1+len(toolCalls))
+	messageItem := map[string]any{
+		"id":      responseIDWithSuffix(id, "msg_1"),
+		"type":    "message",
+		"role":    "assistant",
+		"status":  "completed",
+		"content": []any{},
+	}
+	if strings.TrimSpace(content) != "" {
+		messageItem["content"] = []any{map[string]any{"type": "output_text", "text": content}}
+		output = append(output, messageItem)
+	}
+	for _, toolCall := range toolCalls {
+		output = append(output, toolCall)
+	}
+	if len(output) == 0 {
+		output = append(output, messageItem)
+	}
+
+	response := map[string]any{
+		"id":          id,
+		"object":      "response",
+		"created":     created,
+		"model":       model,
+		"output":      output,
+		"output_text": content,
+		"usage":       usage,
+	}
+	return json.Marshal(response)
+}
+
+func ConvertOpenAILegacySSEToResponses(data string, protocol string, fallbackModel string) (string, bool) {
+	trimmed := strings.TrimSpace(data)
+	if trimmed == "" {
+		return "", false
+	}
+	if trimmed == "[DONE]" {
+		payload := map[string]any{
+			"type": "response.completed",
+			"response": map[string]any{
+				"id":          responseIDWithSuffix("", "resp_fallback"),
+				"object":      "response",
+				"created":     time.Now().Unix(),
+				"model":       strings.TrimSpace(fallbackModel),
+				"output":      []any{},
+				"output_text": "",
+				"usage":       map[string]any{},
+			},
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(encoded), true
+	}
+	if !gjson.Valid(trimmed) {
+		return "", false
+	}
+
+	model := strings.TrimSpace(gjson.Get(trimmed, "model").String())
+	if model == "" {
+		model = strings.TrimSpace(fallbackModel)
+	}
+	id := strings.TrimSpace(gjson.Get(trimmed, "id").String())
+	created := gjson.Get(trimmed, "created").Int()
+	if created == 0 {
+		created = time.Now().Unix()
+	}
+
+	if protocol == OpenAILegacyProtocolCompletions {
+		text := gjson.Get(trimmed, "choices.0.text").String()
+		if text == "" {
+			return "", false
+		}
+		payload := map[string]any{
+			"type":  "response.output_text.delta",
+			"delta": text,
+			"response": map[string]any{
+				"id":      id,
+				"created": created,
+				"model":   model,
+			},
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(encoded), true
+	}
+
+	content := gjson.Get(trimmed, "choices.0.delta.content").String()
+	if content != "" {
+		payload := map[string]any{
+			"type":  "response.output_text.delta",
+			"delta": content,
+			"response": map[string]any{
+				"id":      id,
+				"created": created,
+				"model":   model,
+			},
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(encoded), true
+	}
+	return "", false
+}
+
+func extractResponsesMessagesValue(input any) []map[string]any {
+	items, ok := input.([]any)
+	if !ok || len(items) == 0 {
+		return []map[string]any{{"role": "user", "content": ""}}
+	}
+	messages := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		role, _ := entry["role"].(string)
+		if strings.TrimSpace(role) == "" {
+			role = "user"
+		}
+		messages = append(messages, map[string]any{
+			"role":    role,
+			"content": extractInputTextContent(entry["content"]),
+		})
+	}
+	if len(messages) == 0 {
+		return []map[string]any{{"role": "user", "content": ""}}
+	}
+	return messages
+}
+
+func extractResponsesPromptValue(input any) string {
+	messages := extractResponsesMessagesValue(input)
+	parts := make([]string, 0, len(messages))
+	for _, msg := range messages {
+		parts = append(parts, strings.TrimSpace(fmt.Sprintf("%v", msg["content"])))
+	}
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+func extractInputTextContent(content any) string {
+	if value, ok := content.(string); ok {
+		return value
+	}
+	items, ok := content.([]any)
+	if !ok {
+		return ""
+	}
+	var builder strings.Builder
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		typeValue, _ := entry["type"].(string)
+		if typeValue != "input_text" && typeValue != "text" && typeValue != "output_text" {
+			continue
+		}
+		text, _ := entry["text"].(string)
+		builder.WriteString(text)
+	}
+	return builder.String()
+}
+
+func extractLegacyToolCalls(body []byte) []any {
+	toolCalls := gjson.GetBytes(body, "choices.0.message.tool_calls")
+	if !toolCalls.Exists() || !toolCalls.IsArray() {
+		return nil
+	}
+	result := make([]any, 0, len(toolCalls.Array()))
+	for _, item := range toolCalls.Array() {
+		name := strings.TrimSpace(item.Get("function.name").String())
+		if name == "" {
+			continue
+		}
+		arguments := item.Get("function.arguments").String()
+		if arguments == "" {
+			arguments = "{}"
+		}
+		result = append(result, map[string]any{
+			"id":        responseIDWithSuffix(item.Get("id").String(), "call_"+name),
+			"type":      "function_call",
+			"call_id":   responseIDWithSuffix(item.Get("id").String(), "call_"+name),
+			"name":      name,
+			"arguments": arguments,
+		})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func responseIDWithSuffix(value, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value != "" {
+		return value
+	}
+	return fallback
 }
 
 func extractResponsesOutputText(body []byte) string {

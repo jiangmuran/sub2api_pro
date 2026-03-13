@@ -230,3 +230,77 @@ func TestImportDataReusesProxyAndSkipsDefaultGroup(t *testing.T) {
 	require.Len(t, adminSvc.createdAccounts, 1)
 	require.True(t, adminSvc.createdAccounts[0].SkipDefaultGroupBind)
 }
+
+func TestImportDataSupportsOpenAICompatibleFormat(t *testing.T) {
+	router, adminSvc := setupAccountDataRouter()
+
+	dataPayload := map[string]any{
+		"data": map[string]any{
+			"type":    openAICompatibleDataType,
+			"version": dataVersion,
+			"accounts": []map[string]any{
+				{
+					"name":        "router-main",
+					"base_url":    "https://openrouter.ai/api/v1",
+					"api_key":     "sk-test",
+					"passthrough": true,
+					"concurrency": 4,
+					"priority":    7,
+					"model_mapping": map[string]any{
+						"gpt-4.1": "openai/gpt-4.1",
+					},
+					"extra": map[string]any{
+						"responses_websockets_v2_enabled": true,
+					},
+				},
+			},
+		},
+	}
+
+	body, _ := json.Marshal(dataPayload)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.Len(t, adminSvc.createdAccounts, 1)
+	created := adminSvc.createdAccounts[0]
+	require.Equal(t, service.PlatformOpenAI, created.Platform)
+	require.Equal(t, service.AccountTypeAPIKey, created.Type)
+	require.Equal(t, "https://openrouter.ai/api/v1", created.Credentials["base_url"])
+	require.Equal(t, "sk-test", created.Credentials["api_key"])
+	require.Equal(t, true, created.Extra["openai_passthrough"])
+	require.Equal(t, true, created.Extra["responses_websockets_v2_enabled"])
+	require.Equal(t, 4, created.Concurrency)
+	require.Equal(t, 7, created.Priority)
+
+	mapping, ok := created.Credentials["model_mapping"].(map[string]string)
+	require.True(t, ok)
+	require.Equal(t, "openai/gpt-4.1", mapping["gpt-4.1"])
+}
+
+func TestImportDataRejectsOpenAICompatibleWithoutBaseURL(t *testing.T) {
+	router, _ := setupAccountDataRouter()
+
+	dataPayload := map[string]any{
+		"data": map[string]any{
+			"type":    openAICompatibleDataType,
+			"version": dataVersion,
+			"accounts": []map[string]any{
+				{
+					"name":    "broken",
+					"api_key": "sk-test",
+				},
+			},
+		},
+	}
+
+	body, _ := json.Marshal(dataPayload)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Contains(t, rec.Body.String(), "accounts[0]: base_url is required")
+}

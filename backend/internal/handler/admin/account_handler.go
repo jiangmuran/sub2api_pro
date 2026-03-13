@@ -633,6 +633,13 @@ type PreviewFromCRSRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type CheckOpenAICompatibleRequest struct {
+	BaseURL   string `json:"base_url" binding:"required"`
+	APIKey    string `json:"api_key" binding:"required"`
+	ProxyID   *int64 `json:"proxy_id"`
+	UserAgent string `json:"user_agent"`
+}
+
 // Test handles testing account connectivity with SSE streaming
 // POST /api/v1/admin/accounts/:id/test
 func (h *AccountHandler) Test(c *gin.Context) {
@@ -700,6 +707,41 @@ func (h *AccountHandler) PreviewFromCRS(c *gin.Context) {
 	})
 	if err != nil {
 		response.InternalError(c, "CRS preview failed: "+err.Error())
+		return
+	}
+
+	response.Success(c, result)
+}
+
+// CheckOpenAICompatible handles probing a manual OpenAI-compatible upstream.
+// POST /api/v1/admin/accounts/check-openai-compatible
+func (h *AccountHandler) CheckOpenAICompatible(c *gin.Context) {
+	var req CheckOpenAICompatibleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	proxyURL := ""
+	if req.ProxyID != nil && *req.ProxyID > 0 {
+		proxy, err := h.adminService.GetProxy(c.Request.Context(), *req.ProxyID)
+		if err != nil {
+			response.BadRequest(c, "Invalid proxy")
+			return
+		}
+		if proxy != nil {
+			proxyURL = proxy.URL()
+		}
+	}
+
+	result, err := h.accountTestService.ProbeOpenAICompatible(c.Request.Context(), service.OpenAICompatibleProbeInput{
+		BaseURL:   req.BaseURL,
+		APIKey:    req.APIKey,
+		ProxyURL:  proxyURL,
+		UserAgent: req.UserAgent,
+	})
+	if err != nil {
+		response.BadRequest(c, err.Error())
 		return
 	}
 

@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -14,10 +15,11 @@ import (
 )
 
 const (
-	dataType       = "sub2api-data"
-	legacyDataType = "sub2api-bundle"
-	dataVersion    = 1
-	dataPageCap    = 1000
+	dataType                 = "sub2api-data"
+	legacyDataType           = "sub2api-bundle"
+	openAICompatibleDataType = "openai-compatible-import"
+	dataVersion              = 1
+	dataPageCap              = 1000
 )
 
 type DataPayload struct {
@@ -55,8 +57,13 @@ type DataAccount struct {
 }
 
 type DataImportRequest struct {
-	Data                 DataPayload `json:"data"`
-	SkipDefaultGroupBind *bool       `json:"skip_default_group_bind"`
+	Data                 json.RawMessage `json:"data"`
+	SkipDefaultGroupBind *bool           `json:"skip_default_group_bind"`
+}
+
+type normalizedDataImportRequest struct {
+	Data                 DataPayload
+	SkipDefaultGroupBind *bool
 }
 
 type DataImportResult struct {
@@ -175,17 +182,18 @@ func (h *AccountHandler) ImportData(c *gin.Context) {
 		return
 	}
 
-	if err := validateDataHeader(req.Data); err != nil {
+	normalizedReq, err := normalizeDataImportRequest(req)
+	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
 	executeAdminIdempotentJSON(c, "admin.accounts.import_data", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
-		return h.importData(ctx, req)
+		return h.importData(ctx, normalizedReq)
 	})
 }
 
-func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) (DataImportResult, error) {
+func (h *AccountHandler) importData(ctx context.Context, req normalizedDataImportRequest) (DataImportResult, error) {
 	skipDefaultGroupBind := true
 	if req.SkipDefaultGroupBind != nil {
 		skipDefaultGroupBind = *req.SkipDefaultGroupBind
@@ -324,6 +332,375 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 	return result, nil
 }
 
+func normalizeDataImportRequest(req DataImportRequest) (normalizedDataImportRequest, error) {
+	dataPayload, err := normalizeImportedDataPayload(req.Data)
+	if err != nil {
+		return normalizedDataImportRequest{}, err
+	}
+	return normalizedDataImportRequest{
+		Data:                 dataPayload,
+		SkipDefaultGroupBind: req.SkipDefaultGroupBind,
+	}, nil
+}
+
+func normalizeImportedDataPayload(raw json.RawMessage) (DataPayload, error) {
+	var header struct {
+		Type string `json:"type"`
+	}
+	if len(raw) == 0 {
+		return DataPayload{}, errors.New("data is required")
+	}
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return DataPayload{}, fmt.Errorf("invalid data payload: %w", err)
+	}
+
+	dataTypeValue := strings.TrimSpace(header.Type)
+	switch dataTypeValue {
+	case "", dataType, legacyDataType:
+		var payload DataPayload
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return DataPayload{}, fmt.Errorf("invalid data payload: %w", err)
+		}
+		if err := validateDataHeader(payload); err != nil {
+			return DataPayload{}, err
+		}
+		return payload, nil
+	case openAICompatibleDataType:
+		payload, err := normalizeOpenAICompatibleDataPayload(raw)
+		if err != nil {
+			return DataPayload{}, err
+		}
+		if err := validateDataHeader(payload); err != nil {
+			return DataPayload{}, err
+		}
+		return payload, nil
+	default:
+		return DataPayload{}, fmt.Errorf("unsupported data type: %s", dataTypeValue)
+	}
+}
+
+func normalizeOpenAICompatibleDataPayload(raw json.RawMessage) (DataPayload, error) {
+	var payload struct {
+		Type       string           `json:"type"`
+		Version    int              `json:"version"`
+		ExportedAt string           `json:"exported_at"`
+		Proxies    []DataProxy      `json:"proxies"`
+		Accounts   []map[string]any `json:"accounts"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return DataPayload{}, fmt.Errorf("invalid compatible import payload: %w", err)
+	}
+	if payload.Version != 0 && payload.Version != dataVersion {
+		return DataPayload{}, fmt.Errorf("unsupported data version: %d", payload.Version)
+	}
+	if payload.Accounts == nil {
+		return DataPayload{}, errors.New("accounts is required")
+	}
+
+	normalizedAccounts := make([]DataAccount, 0, len(payload.Accounts))
+	for idx := range payload.Accounts {
+		item, err := normalizeOpenAICompatibleAccount(payload.Accounts[idx])
+		if err != nil {
+			return DataPayload{}, fmt.Errorf("accounts[%d]: %w", idx, err)
+		}
+		normalizedAccounts = append(normalizedAccounts, item)
+	}
+
+	proxies := payload.Proxies
+	if proxies == nil {
+		proxies = []DataProxy{}
+	}
+
+	return DataPayload{
+		Type:       openAICompatibleDataType,
+		Version:    dataVersion,
+		ExportedAt: payload.ExportedAt,
+		Proxies:    proxies,
+		Accounts:   normalizedAccounts,
+	}, nil
+}
+
+func normalizeOpenAICompatibleAccount(raw map[string]any) (DataAccount, error) {
+	name := strings.TrimSpace(getStringAlias(raw, "name"))
+	if name == "" {
+		return DataAccount{}, errors.New("name is required")
+	}
+
+	baseURL := strings.TrimSpace(getStringAlias(raw, "base_url", "baseURL"))
+	if baseURL == "" {
+		return DataAccount{}, errors.New("base_url is required")
+	}
+	apiKey := strings.TrimSpace(getStringAlias(raw, "api_key", "apiKey"))
+	if apiKey == "" {
+		return DataAccount{}, errors.New("api_key is required")
+	}
+
+	credentials := cloneMapAny(getMapAlias(raw, "credentials"))
+	if credentials == nil {
+		credentials = make(map[string]any, 4)
+	}
+	credentials["base_url"] = baseURL
+	credentials["api_key"] = apiKey
+	if userAgent := strings.TrimSpace(getStringAlias(raw, "user_agent", "userAgent")); userAgent != "" {
+		credentials["user_agent"] = userAgent
+	}
+	if modelMapping := normalizeStringMap(getMapAlias(raw, "model_mapping", "modelMap")); len(modelMapping) > 0 {
+		credentials["model_mapping"] = modelMapping
+	}
+
+	extra := cloneMapAny(getMapAlias(raw, "extra"))
+	if extra == nil {
+		extra = make(map[string]any, 4)
+	}
+	passthrough, ok := getBoolAlias(raw, "passthrough", "openai_passthrough")
+	if !ok {
+		passthrough = true
+	}
+	extra["openai_passthrough"] = passthrough
+	if compatMode := strings.TrimSpace(getStringAlias(raw, "compat_mode", "compatMode")); compatMode != "" {
+		extra["openai_compat_mode"] = compatMode
+	}
+	if capabilities := cloneMapAny(getMapAlias(raw, "compat_capabilities", "compatCapabilities")); len(capabilities) > 0 {
+		extra["openai_compat_capabilities"] = capabilities
+	}
+
+	var notes *string
+	if noteValue := strings.TrimSpace(getStringAlias(raw, "notes")); noteValue != "" {
+		noteCopy := noteValue
+		notes = &noteCopy
+	}
+
+	var proxyKey *string
+	if proxyValue := strings.TrimSpace(getStringAlias(raw, "proxy_key", "proxyKey")); proxyValue != "" {
+		proxyCopy := proxyValue
+		proxyKey = &proxyCopy
+	}
+
+	concurrency, err := getOptionalIntAlias(raw, "concurrency")
+	if err != nil {
+		return DataAccount{}, fmt.Errorf("concurrency invalid: %w", err)
+	}
+	priority, err := getOptionalIntAlias(raw, "priority")
+	if err != nil {
+		return DataAccount{}, fmt.Errorf("priority invalid: %w", err)
+	}
+	rateMultiplier, err := getOptionalFloatAlias(raw, "rate_multiplier", "rateMultiplier")
+	if err != nil {
+		return DataAccount{}, fmt.Errorf("rate_multiplier invalid: %w", err)
+	}
+	expiresAt, err := getOptionalInt64Alias(raw, "expires_at", "expiresAt")
+	if err != nil {
+		return DataAccount{}, fmt.Errorf("expires_at invalid: %w", err)
+	}
+	autoPauseOnExpired, err := getOptionalBoolAlias(raw, "auto_pause_on_expired", "autoPauseOnExpired")
+	if err != nil {
+		return DataAccount{}, fmt.Errorf("auto_pause_on_expired invalid: %w", err)
+	}
+
+	return DataAccount{
+		Name:               name,
+		Notes:              notes,
+		Platform:           service.PlatformOpenAI,
+		Type:               service.AccountTypeAPIKey,
+		Credentials:        credentials,
+		Extra:              extra,
+		ProxyKey:           proxyKey,
+		Concurrency:        concurrency,
+		Priority:           priority,
+		RateMultiplier:     rateMultiplier,
+		ExpiresAt:          expiresAt,
+		AutoPauseOnExpired: autoPauseOnExpired,
+	}, nil
+}
+
+func getStringAlias(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if values == nil {
+			return ""
+		}
+		if raw, ok := values[key]; ok && raw != nil {
+			switch v := raw.(type) {
+			case string:
+				return v
+			case json.Number:
+				return v.String()
+			}
+		}
+	}
+	return ""
+}
+
+func getMapAlias(values map[string]any, keys ...string) map[string]any {
+	for _, key := range keys {
+		if values == nil {
+			return nil
+		}
+		if raw, ok := values[key]; ok && raw != nil {
+			if mapped, ok := raw.(map[string]any); ok {
+				return mapped
+			}
+		}
+	}
+	return nil
+}
+
+func getBoolAlias(values map[string]any, keys ...string) (bool, bool) {
+	for _, key := range keys {
+		if values == nil {
+			return false, false
+		}
+		if raw, ok := values[key]; ok && raw != nil {
+			if v, ok := raw.(bool); ok {
+				return v, true
+			}
+		}
+	}
+	return false, false
+}
+
+func getOptionalBoolAlias(values map[string]any, keys ...string) (*bool, error) {
+	for _, key := range keys {
+		if values == nil {
+			return nil, nil
+		}
+		raw, ok := values[key]
+		if !ok || raw == nil {
+			continue
+		}
+		v, ok := raw.(bool)
+		if !ok {
+			return nil, fmt.Errorf("expected boolean")
+		}
+		return &v, nil
+	}
+	return nil, nil
+}
+
+func getOptionalIntAlias(values map[string]any, keys ...string) (int, error) {
+	for _, key := range keys {
+		if values == nil {
+			return 0, nil
+		}
+		raw, ok := values[key]
+		if !ok || raw == nil {
+			continue
+		}
+		switch v := raw.(type) {
+		case float64:
+			return int(v), nil
+		case int:
+			return v, nil
+		case int64:
+			return int(v), nil
+		case json.Number:
+			iv, err := v.Int64()
+			if err != nil {
+				return 0, err
+			}
+			return int(iv), nil
+		default:
+			return 0, fmt.Errorf("expected number")
+		}
+	}
+	return 0, nil
+}
+
+func getOptionalInt64Alias(values map[string]any, keys ...string) (*int64, error) {
+	for _, key := range keys {
+		if values == nil {
+			return nil, nil
+		}
+		raw, ok := values[key]
+		if !ok || raw == nil {
+			continue
+		}
+		var out int64
+		switch v := raw.(type) {
+		case float64:
+			out = int64(v)
+		case int:
+			out = int64(v)
+		case int64:
+			out = v
+		case json.Number:
+			parsed, err := v.Int64()
+			if err != nil {
+				return nil, err
+			}
+			out = parsed
+		default:
+			return nil, fmt.Errorf("expected number")
+		}
+		return &out, nil
+	}
+	return nil, nil
+}
+
+func getOptionalFloatAlias(values map[string]any, keys ...string) (*float64, error) {
+	for _, key := range keys {
+		if values == nil {
+			return nil, nil
+		}
+		raw, ok := values[key]
+		if !ok || raw == nil {
+			continue
+		}
+		var out float64
+		switch v := raw.(type) {
+		case float64:
+			out = v
+		case int:
+			out = float64(v)
+		case int64:
+			out = float64(v)
+		case json.Number:
+			parsed, err := v.Float64()
+			if err != nil {
+				return nil, err
+			}
+			out = parsed
+		default:
+			return nil, fmt.Errorf("expected number")
+		}
+		return &out, nil
+	}
+	return nil, nil
+}
+
+func cloneMapAny(src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(src))
+	for key, value := range src {
+		out[key] = value
+	}
+	return out
+}
+
+func normalizeStringMap(src map[string]any) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(src))
+	for key, value := range src {
+		strValue, ok := value.(string)
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		strValue = strings.TrimSpace(strValue)
+		if key == "" || strValue == "" {
+			continue
+		}
+		out[key] = strValue
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func (h *AccountHandler) listAllProxies(ctx context.Context) ([]service.Proxy, error) {
 	page := 1
 	pageSize := dataPageCap
@@ -459,7 +836,7 @@ func parseIncludeProxies(c *gin.Context) (bool, error) {
 }
 
 func validateDataHeader(payload DataPayload) error {
-	if payload.Type != "" && payload.Type != dataType && payload.Type != legacyDataType {
+	if payload.Type != "" && payload.Type != dataType && payload.Type != legacyDataType && payload.Type != openAICompatibleDataType {
 		return fmt.Errorf("unsupported data type: %s", payload.Type)
 	}
 	if payload.Version != 0 && payload.Version != dataVersion {

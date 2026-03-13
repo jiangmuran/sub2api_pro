@@ -413,3 +413,22 @@ func TestConvertOpenAIResponsesToLegacy_Completions(t *testing.T) {
 		t.Fatalf("expected text_completion object")
 	}
 }
+
+func TestConvertOpenAIResponsesRequestToLegacy_Chat(t *testing.T) {
+	body := []byte(`{"model":"gpt-4.1","input":[{"role":"user","content":[{"type":"input_text","text":"hello"}]}],"max_output_tokens":16,"store":true}`)
+	converted, err := ConvertOpenAIResponsesRequestToLegacy(body, OpenAILegacyProtocolChat)
+	require.NoError(t, err)
+	require.Equal(t, "hello", gjson.GetBytes(converted, "messages.0.content").String())
+	require.Equal(t, int64(16), gjson.GetBytes(converted, "max_tokens").Int())
+	require.False(t, gjson.GetBytes(converted, "store").Exists())
+}
+
+func TestConvertOpenAILegacyResponseToResponses_Chat(t *testing.T) {
+	body := []byte(`{"id":"chatcmpl_1","model":"gpt-4.1","choices":[{"message":{"role":"assistant","content":"pong"}}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`)
+	converted, err := ConvertOpenAILegacyResponseToResponses(body, OpenAILegacyProtocolChat, "gpt-4.1")
+	require.NoError(t, err)
+	require.Equal(t, "response", gjson.GetBytes(converted, "object").String())
+	require.Equal(t, "pong", gjson.GetBytes(converted, "output_text").String())
+	require.Equal(t, int64(3), gjson.GetBytes(converted, "usage.input_tokens").Int())
+	require.Equal(t, int64(4), gjson.GetBytes(converted, "usage.output_tokens").Int())
+}

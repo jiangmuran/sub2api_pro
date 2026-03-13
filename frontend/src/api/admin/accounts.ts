@@ -17,7 +17,9 @@ import type {
   AdminDataPayload,
   AdminDataImportResult,
   CheckMixedChannelRequest,
-  CheckMixedChannelResponse
+  CheckMixedChannelResponse,
+  OpenAICompatibleCheckRequest,
+  OpenAICompatibleCheckResult
 } from '@/types'
 
 /**
@@ -142,6 +144,13 @@ export async function checkMixedChannelRisk(
   payload: CheckMixedChannelRequest
 ): Promise<CheckMixedChannelResponse> {
   const { data } = await apiClient.post<CheckMixedChannelResponse>('/admin/accounts/check-mixed-channel', payload)
+  return data
+}
+
+export async function checkOpenAICompatible(
+  payload: OpenAICompatibleCheckRequest
+): Promise<OpenAICompatibleCheckResult> {
+  const { data } = await apiClient.post<OpenAICompatibleCheckResult>('/admin/accounts/check-openai-compatible', payload)
   return data
 }
 
@@ -564,6 +573,7 @@ export const accountsAPI = {
   create,
   update,
   checkMixedChannelRisk,
+  checkOpenAICompatible,
   delete: deleteAccount,
   toggleStatus,
   testAccount,

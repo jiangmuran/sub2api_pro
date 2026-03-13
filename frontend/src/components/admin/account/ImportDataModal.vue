@@ -11,6 +11,11 @@
         {{ t('admin.accounts.dataImportHint') }}
       </div>
       <div
+        class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-300"
+      >
+        {{ t('admin.accounts.dataImportSupportedFormats') }}
+      </div>
+      <div
         class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-600 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
       >
         {{ t('admin.accounts.dataImportWarning') }}

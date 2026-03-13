@@ -835,6 +835,41 @@ export interface CheckMixedChannelResponse {
   details?: MixedChannelWarningDetails
 }
 
+export interface OpenAICompatibleCheckRequest {
+  base_url: string
+  api_key: string
+  proxy_id?: number | null
+  user_agent?: string
+}
+
+export interface OpenAICompatibleCheckItem {
+  key: string
+  label: string
+  status: 'success' | 'partial' | 'unsupported' | 'failed'
+  http_status?: number
+  message?: string
+  endpoint_url?: string
+}
+
+export interface OpenAICompatibleCheckCapabilities {
+  responses: boolean
+  responses_stream: boolean
+  chat_completions: boolean
+}
+
+export interface OpenAICompatibleCheckResult {
+  normalized_base_url: string
+  status: 'compatible' | 'partial' | 'legacy_only' | 'incompatible'
+  recommended_mode:
+    | 'responses_native'
+    | 'responses_passthrough'
+    | 'chat_completions_fallback'
+    | 'unsupported'
+  checks: OpenAICompatibleCheckItem[]
+  capabilities: OpenAICompatibleCheckCapabilities
+  suggested_extra?: Record<string, unknown>
+}
+
 export interface CreateProxyRequest {
   name: string
   protocol: ProxyProtocol

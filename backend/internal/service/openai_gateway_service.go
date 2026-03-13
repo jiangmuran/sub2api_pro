@@ -1476,7 +1476,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
 	}
-	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
+	passthroughEnabled := account.IsOpenAIPassthroughEnabled() && !account.IsOpenAICompatChatFallback()
 	if passthroughEnabled {
 		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
 		reasoningEffort := extractOpenAIReasoningEffortFromBody(body, reqModel)
@@ -1729,6 +1729,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				return nil, fmt.Errorf("serialize request body: %w", marshalErr)
 			}
 		}
+	}
+
+	if account.IsOpenAICompatChatFallback() {
+		legacyBody, convertErr := ConvertOpenAIResponsesRequestToLegacy(body, OpenAILegacyProtocolChat)
+		if convertErr != nil {
+			return nil, fmt.Errorf("convert responses request to chat fallback: %w", convertErr)
+		}
+		body = legacyBody
 	}
 
 	// Get access token
@@ -2661,13 +2669,21 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		// API Key accounts use Platform API or custom base URL
 		baseURL := account.GetOpenAIBaseURL()
 		if baseURL == "" {
-			targetURL = openaiPlatformAPIURL
+			if account.IsOpenAICompatChatFallback() {
+				targetURL = buildOpenAIChatCompletionsURL("https://api.openai.com")
+			} else {
+				targetURL = openaiPlatformAPIURL
+			}
 		} else {
 			validatedURL, err := s.validateUpstreamBaseURL(baseURL)
 			if err != nil {
 				return nil, err
 			}
-			targetURL = buildOpenAIResponsesURL(validatedURL)
+			if account.IsOpenAICompatChatFallback() {
+				targetURL = buildOpenAIChatCompletionsURL(validatedURL)
+			} else {
+				targetURL = buildOpenAIResponsesURL(validatedURL)
+			}
 		}
 	default:
 		targetURL = openaiPlatformAPIURL
@@ -3062,6 +3078,14 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 		// Extract data from SSE line (supports both "data: " and "data:" formats)
 		if data, ok := extractOpenAISSEDataLine(line); ok {
+			if account.IsOpenAICompatChatFallback() {
+				if converted, convertedOK := ConvertOpenAILegacySSEToResponses(data, OpenAILegacyProtocolChat, mappedModel); convertedOK {
+					data = converted
+					line = "data: " + converted
+				} else if strings.TrimSpace(data) == "[DONE]" {
+					return
+				}
+			}
 			usageData := data
 			if legacyProtocol != "" {
 				if converted, ok := ConvertOpenAIResponsesSSEToLegacy(data, legacyProtocol, originalModel); ok {
@@ -3370,6 +3394,14 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		if isEventStreamResponse(resp.Header) || bodyLooksLikeSSE {
 			return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel, legacyProtocol)
 		}
+	}
+
+	if account.IsOpenAICompatChatFallback() {
+		convertedBody, convertErr := ConvertOpenAILegacyResponseToResponses(body, OpenAILegacyProtocolChat, mappedModel)
+		if convertErr != nil {
+			return nil, fmt.Errorf("convert chat fallback response: %w", convertErr)
+		}
+		body = convertedBody
 	}
 
 	sanitizedBody := sanitizeOpenAIResponseBodyBytes(body)

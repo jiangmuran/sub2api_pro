@@ -931,6 +931,74 @@
           <p class="input-hint">{{ apiKeyHint }}</p>
         </div>
 
+        <div
+          v-if="form.platform === 'openai'"
+          class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20"
+        >
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div class="text-sm font-medium text-emerald-900 dark:text-emerald-200">
+                {{ t('admin.accounts.openai.compatCheckTitle') }}
+              </div>
+              <div class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">
+                {{ t('admin.accounts.openai.compatCheckDesc') }}
+              </div>
+            </div>
+            <button
+              type="button"
+              class="btn btn-secondary shrink-0"
+              :disabled="openAICompatChecking"
+              @click="handleCheckOpenAICompatible"
+            >
+              {{
+                openAICompatChecking
+                  ? t('admin.accounts.openai.compatChecking')
+                  : t('admin.accounts.openai.compatCheckAction')
+              }}
+            </button>
+          </div>
+
+          <div v-if="openAICompatCheckResult" class="mt-4 space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                {{ t('admin.accounts.openai.compatOverallStatus') }}
+              </span>
+              <span
+                class="rounded-full px-2.5 py-1 text-xs font-semibold"
+                :class="compatStatusClass(openAICompatCheckResult.status)"
+              >
+                {{ compatStatusLabel(openAICompatCheckResult.status) }}
+              </span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.openai.compatRecommendedMode') }}:
+                {{ compatModeLabel(openAICompatCheckResult.recommended_mode) }}
+              </span>
+            </div>
+
+            <div class="grid gap-2 sm:grid-cols-3">
+              <div
+                v-for="item in openAICompatCheckResult.checks"
+                :key="item.key"
+                class="rounded-lg border border-white/80 bg-white/80 p-3 dark:border-dark-600 dark:bg-dark-800/70"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-sm font-medium text-gray-900 dark:text-white">{{ item.label }}</span>
+                  <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="compatCheckClass(item.status)">
+                    {{ compatCheckLabel(item.status) }}
+                  </span>
+                </div>
+                <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ item.message || t('admin.accounts.openai.compatNoDetail') }}
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+              {{ t('admin.accounts.openai.compatAppliedHint', { mode: compatModeLabel(openAICompatCheckResult.recommended_mode) }) }}
+            </div>
+          </div>
+        </div>
+
         <!-- Gemini API Key tier selection -->
         <div v-if="form.platform === 'gemini'">
           <label class="input-label">{{ t('admin.accounts.gemini.tier.label') }}</label>
@@ -2328,7 +2396,8 @@ import type {
   AccountPlatform,
   AccountType,
   CheckMixedChannelResponse,
-  CreateAccountRequest
+  CreateAccountRequest,
+  OpenAICompatibleCheckResult
 } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -2459,6 +2528,9 @@ const accountCategory = ref<'oauth-based' | 'apikey'>('oauth-based') // UI selec
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+const openAICompatChecking = ref(false)
+const openAICompatCheckResult = ref<OpenAICompatibleCheckResult | null>(null)
+const suspendOpenAICompatReset = ref(false)
 const modelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
@@ -2564,6 +2636,71 @@ const openaiResponsesWebSocketV2Mode = computed({
 const isOpenAIModelRestrictionDisabled = computed(() =>
   form.platform === 'openai' && openaiPassthroughEnabled.value
 )
+
+const compatStatusLabel = (status: OpenAICompatibleCheckResult['status']) => {
+  switch (status) {
+    case 'compatible':
+      return t('admin.accounts.openai.compatStatusCompatible')
+    case 'partial':
+      return t('admin.accounts.openai.compatStatusPartial')
+    case 'legacy_only':
+      return t('admin.accounts.openai.compatStatusLegacyOnly')
+    default:
+      return t('admin.accounts.openai.compatStatusIncompatible')
+  }
+}
+
+const compatModeLabel = (mode: OpenAICompatibleCheckResult['recommended_mode']) => {
+  switch (mode) {
+    case 'responses_native':
+      return t('admin.accounts.openai.compatModeResponsesNative')
+    case 'responses_passthrough':
+      return t('admin.accounts.openai.compatModeResponsesPassthrough')
+    case 'chat_completions_fallback':
+      return t('admin.accounts.openai.compatModeChatFallback')
+    default:
+      return t('admin.accounts.openai.compatModeUnsupported')
+  }
+}
+
+const compatStatusClass = (status: OpenAICompatibleCheckResult['status']) => {
+  switch (status) {
+    case 'compatible':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+    case 'partial':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+    case 'legacy_only':
+      return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+    default:
+      return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+  }
+}
+
+const compatCheckLabel = (status: 'success' | 'partial' | 'unsupported' | 'failed') => {
+  switch (status) {
+    case 'success':
+      return t('admin.accounts.openai.compatCheckSuccess')
+    case 'partial':
+      return t('admin.accounts.openai.compatCheckPartial')
+    case 'unsupported':
+      return t('admin.accounts.openai.compatCheckUnsupported')
+    default:
+      return t('admin.accounts.openai.compatCheckFailed')
+  }
+}
+
+const compatCheckClass = (status: 'success' | 'partial' | 'unsupported' | 'failed') => {
+  switch (status) {
+    case 'success':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+    case 'partial':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+    case 'unsupported':
+      return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'
+    default:
+      return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+  }
+}
 
 const mixedChannelWarningMessageText = computed(() => {
   if (mixedChannelWarningDetails.value) {
@@ -2715,6 +2852,13 @@ watch(
   { immediate: true }
 )
 
+watch([apiKeyBaseUrl, apiKeyValue, () => form.proxy_id, () => form.platform, accountCategory], () => {
+  if (suspendOpenAICompatReset.value) {
+    return
+  }
+  openAICompatCheckResult.value = null
+})
+
 // Reset platform-specific settings when platform changes
 watch(
   () => form.platform,
@@ -2756,6 +2900,7 @@ watch(
     }
     if (newPlatform !== 'openai') {
       openaiPassthroughEnabled.value = false
+      openAICompatCheckResult.value = null
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       codexCLIOnlyEnabled.value = false
@@ -3129,6 +3274,8 @@ const resetForm = () => {
   interceptWarmupRequests.value = false
   autoPauseOnExpired.value = true
   openaiPassthroughEnabled.value = false
+  openAICompatChecking.value = false
+  openAICompatCheckResult.value = null
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
@@ -3174,6 +3321,49 @@ const handleClose = () => {
   emit('close')
 }
 
+const applyOpenAICompatSuggestion = (result: OpenAICompatibleCheckResult) => {
+  suspendOpenAICompatReset.value = true
+  apiKeyBaseUrl.value = result.normalized_base_url || apiKeyBaseUrl.value
+  openaiPassthroughEnabled.value = result.suggested_extra?.openai_passthrough === true
+  if (result.recommended_mode !== 'responses_native') {
+    openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
+  }
+  suspendOpenAICompatReset.value = false
+}
+
+const handleCheckOpenAICompatible = async () => {
+  if (form.platform !== 'openai' || form.type !== 'apikey') {
+    return
+  }
+  if (!apiKeyBaseUrl.value.trim()) {
+    appStore.showError(t('admin.accounts.openai.compatBaseUrlRequired'))
+    return
+  }
+  if (!apiKeyValue.value.trim()) {
+    appStore.showError(t('admin.accounts.openai.compatApiKeyRequired'))
+    return
+  }
+
+  openAICompatChecking.value = true
+  try {
+    const result = await adminAPI.accounts.checkOpenAICompatible({
+      base_url: apiKeyBaseUrl.value.trim(),
+      api_key: apiKeyValue.value.trim(),
+      proxy_id: form.proxy_id
+    })
+    openAICompatCheckResult.value = result
+    applyOpenAICompatSuggestion(result)
+    appStore.showSuccess(t('admin.accounts.openai.compatCheckDone'))
+  } catch (error: any) {
+    openAICompatCheckResult.value = null
+    appStore.showError(
+      error.response?.data?.message || error.response?.data?.detail || t('admin.accounts.openai.compatCheckFailedToast')
+    )
+  } finally {
+    openAICompatChecking.value = false
+  }
+}
+
 const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknown> | undefined => {
   if (form.platform !== 'openai') {
     return base
@@ -3198,6 +3388,13 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     extra.codex_cli_only = true
   } else {
     delete extra.codex_cli_only
+  }
+
+  if (accountCategory.value === 'apikey' && openAICompatCheckResult.value?.suggested_extra) {
+    extra.openai_compat_mode = openAICompatCheckResult.value.recommended_mode
+    if (openAICompatCheckResult.value.suggested_extra.openai_compat_capabilities) {
+      extra.openai_compat_capabilities = openAICompatCheckResult.value.suggested_extra.openai_compat_capabilities
+    }
   }
 
   return Object.keys(extra).length > 0 ? extra : undefined
