@@ -1512,6 +1512,39 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		// For API Key accounts: check model_mapping
 		mapping := account.GetModelMapping()
 		if len(mapping) == 0 {
+			if account.IsOpenAIApiKey() && strings.TrimSpace(account.GetOpenAIBaseURL()) != "" {
+				proxyURL := ""
+				if account.ProxyID != nil && *account.ProxyID > 0 {
+					if proxy, proxyErr := h.adminService.GetProxy(c.Request.Context(), *account.ProxyID); proxyErr == nil && proxy != nil {
+						proxyURL = proxy.URL()
+					}
+				}
+				models := h.accountTestService.DiscoverOpenAICompatibleModels(
+					c.Request.Context(),
+					account.GetOpenAIBaseURL(),
+					account.GetOpenAIApiKey(),
+					proxyURL,
+					account.GetOpenAIUserAgent(),
+				)
+				if len(models) > 0 {
+					var discovered []openai.Model
+					for _, modelID := range models {
+						var found bool
+						for _, dm := range openai.DefaultModels {
+							if dm.ID == modelID {
+								discovered = append(discovered, dm)
+								found = true
+								break
+							}
+						}
+						if !found {
+							discovered = append(discovered, openai.Model{ID: modelID, Object: "model", Type: "model", DisplayName: modelID})
+						}
+					}
+					response.Success(c, discovered)
+					return
+				}
+			}
 			response.Success(c, openai.DefaultModels)
 			return
 		}

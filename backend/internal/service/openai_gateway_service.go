@@ -3035,6 +3035,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 	legacyProtocol := GetOpenAILegacyProtocol(c)
 	needModelReplace := legacyProtocol == "" && originalModel != mappedModel
+	var legacyToResponsesBridge *openAILegacyResponsesStreamState
+	if account.IsOpenAICompatChatFallback() {
+		legacyToResponsesBridge = &openAILegacyResponsesStreamState{
+			Protocol:      OpenAILegacyProtocolChat,
+			FallbackModel: mappedModel,
+		}
+	}
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
 	}
@@ -3078,8 +3085,8 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 		// Extract data from SSE line (supports both "data: " and "data:" formats)
 		if data, ok := extractOpenAISSEDataLine(line); ok {
-			if account.IsOpenAICompatChatFallback() {
-				if converted, convertedOK := ConvertOpenAILegacySSEToResponses(data, OpenAILegacyProtocolChat, mappedModel); convertedOK {
+			if legacyToResponsesBridge != nil {
+				if converted, convertedOK := legacyToResponsesBridge.Convert(data); convertedOK {
 					data = converted
 					line = "data: " + converted
 				} else if strings.TrimSpace(data) == "[DONE]" {

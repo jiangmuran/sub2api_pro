@@ -100,3 +100,50 @@ func TestProbeOpenAICompatibleChatFallback(t *testing.T) {
 		t.Fatalf("unexpected capabilities: %+v", result.Capabilities)
 	}
 }
+
+func TestProbeOpenAICompatibleCustomVersionedBasePath(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/coding/v3/models":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"kimi-k2.5","status":"Active"},{"id":"old-model","status":"Shutdown"}]}`))
+		case "/api/coding/v3/responses":
+			if r.Header.Get("Accept") == "text/event-stream" {
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\ndata: [DONE]\n\n"))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"resp_1","object":"response","usage":{"input_tokens":1,"output_tokens":1}}`))
+		case "/api/coding/v3/chat/completions":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"chatcmpl_1","choices":[{"message":{"role":"assistant","content":"pong"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := server.Client()
+
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, &config.Config{})
+	result, err := svc.ProbeOpenAICompatible(context.Background(), OpenAICompatibleProbeInput{
+		BaseURL: server.URL + "/api/coding/v3",
+		APIKey:  "sk-test",
+	})
+	if err != nil {
+		t.Fatalf("ProbeOpenAICompatible error = %v", err)
+	}
+	if result.Status != OpenAICompatibleProbeStatusCompatible {
+		t.Fatalf("status = %s, want %s", result.Status, OpenAICompatibleProbeStatusCompatible)
+	}
+	if result.ProbeModel != "kimi-k2.5" {
+		t.Fatalf("probe model = %s, want kimi-k2.5", result.ProbeModel)
+	}
+	if len(result.DiscoveredModels) == 0 || result.DiscoveredModels[0] != "kimi-k2.5" {
+		t.Fatalf("unexpected discovered models: %+v", result.DiscoveredModels)
+	}
+	if result.Checks[0].EndpointURL != server.URL+"/api/coding/v3/responses" {
+		t.Fatalf("unexpected responses endpoint: %s", result.Checks[0].EndpointURL)
+	}
+}

@@ -859,6 +859,8 @@ export interface OpenAICompatibleCheckCapabilities {
 
 export interface OpenAICompatibleCheckResult {
   normalized_base_url: string
+  probe_model?: string
+  discovered_models?: string[]
   status: 'compatible' | 'partial' | 'legacy_only' | 'incompatible'
   recommended_mode:
     | 'responses_native'

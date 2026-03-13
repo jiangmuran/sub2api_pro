@@ -280,6 +280,38 @@ func TestImportDataSupportsOpenAICompatibleFormat(t *testing.T) {
 	require.Equal(t, "openai/gpt-4.1", mapping["gpt-4.1"])
 }
 
+func TestImportDataSupportsOpenAICompatibleModelsList(t *testing.T) {
+	router, adminSvc := setupAccountDataRouter()
+
+	dataPayload := map[string]any{
+		"data": map[string]any{
+			"type":    openAICompatibleDataType,
+			"version": dataVersion,
+			"accounts": []map[string]any{
+				{
+					"name":     "ark-coding",
+					"base_url": "https://ark.cn-beijing.volces.com/api/coding/v3",
+					"api_key":  "sk-test",
+					"models":   []string{"kimi-k2.5", "glm-4.7"},
+				},
+			},
+		},
+	}
+
+	body, _ := json.Marshal(dataPayload)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/data", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.Len(t, adminSvc.createdAccounts, 1)
+	mapping, ok := adminSvc.createdAccounts[0].Credentials["model_mapping"].(map[string]string)
+	require.True(t, ok)
+	require.Equal(t, "kimi-k2.5", mapping["kimi-k2.5"])
+	require.Equal(t, "glm-4.7", mapping["glm-4.7"])
+}
+
 func TestImportDataRejectsOpenAICompatibleWithoutBaseURL(t *testing.T) {
 	router, _ := setupAccountDataRouter()
 

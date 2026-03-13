@@ -432,3 +432,27 @@ func TestConvertOpenAILegacyResponseToResponses_Chat(t *testing.T) {
 	require.Equal(t, int64(3), gjson.GetBytes(converted, "usage.input_tokens").Int())
 	require.Equal(t, int64(4), gjson.GetBytes(converted, "usage.output_tokens").Int())
 }
+
+func TestOpenAILegacyResponsesStreamState_ConvertsFinishAndDone(t *testing.T) {
+	state := &openAILegacyResponsesStreamState{FallbackModel: "kimi-k2.5"}
+
+	ignored, ok := state.Convert(`{"id":"chatcmpl_1","model":"kimi-k2.5","created":123,"choices":[{"delta":{"content":"","reasoning_content":"think","role":"assistant"},"index":0}],"object":"chat.completion.chunk"}`)
+	require.False(t, ok)
+	require.Empty(t, ignored)
+
+	first, ok := state.Convert(`{"id":"chatcmpl_1","model":"kimi-k2.5","created":123,"choices":[{"delta":{"content":"pong","role":"assistant"},"index":0}],"object":"chat.completion.chunk"}`)
+	require.True(t, ok)
+	require.Equal(t, "response.output_text.delta", gjson.Get(first, "type").String())
+	require.Equal(t, "pong", gjson.Get(first, "delta").String())
+
+	second, ok := state.Convert(`{"id":"chatcmpl_1","model":"kimi-k2.5","created":123,"choices":[{"delta":{"content":"","role":"assistant"},"finish_reason":"stop","index":0}],"object":"chat.completion.chunk"}`)
+	require.True(t, ok)
+	require.Equal(t, "response.output_text.done", gjson.Get(second, "type").String())
+	require.Equal(t, "pong", gjson.Get(second, "text").String())
+
+	third, ok := state.Convert(`[DONE]`)
+	require.True(t, ok)
+	require.Equal(t, "response.completed", gjson.Get(third, "type").String())
+	require.Equal(t, "pong", gjson.Get(third, "response.output_text").String())
+	require.Equal(t, "kimi-k2.5", gjson.Get(third, "response.model").String())
+}

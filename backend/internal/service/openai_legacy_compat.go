@@ -761,6 +761,158 @@ func ConvertOpenAILegacySSEToResponses(data string, protocol string, fallbackMod
 	return "", false
 }
 
+type openAILegacyResponsesStreamState struct {
+	Protocol      string
+	FallbackModel string
+	ResponseID    string
+	Model         string
+	Created       int64
+	OutputText    strings.Builder
+	Usage         map[string]any
+}
+
+func (s *openAILegacyResponsesStreamState) Convert(data string) (string, bool) {
+	trimmed := strings.TrimSpace(data)
+	if trimmed == "" {
+		return "", false
+	}
+	if trimmed == "[DONE]" {
+		payload := map[string]any{
+			"type": "response.completed",
+			"response": map[string]any{
+				"id":          s.responseID(),
+				"object":      "response",
+				"created":     s.createdAt(),
+				"model":       s.modelName(),
+				"output":      s.outputItems(),
+				"output_text": s.OutputText.String(),
+				"usage":       s.usageMap(),
+			},
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(encoded), true
+	}
+	if !gjson.Valid(trimmed) {
+		return "", false
+	}
+
+	s.captureMetadata(trimmed)
+	s.captureUsage(trimmed)
+	content := gjson.Get(trimmed, "choices.0.delta.content").String()
+	if content != "" {
+		s.OutputText.WriteString(content)
+		payload := map[string]any{
+			"type":  "response.output_text.delta",
+			"delta": content,
+			"response": map[string]any{
+				"id":      s.responseID(),
+				"created": s.createdAt(),
+				"model":   s.modelName(),
+			},
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(encoded), true
+	}
+	finishReason := strings.TrimSpace(gjson.Get(trimmed, "choices.0.finish_reason").String())
+	if finishReason != "" {
+		payload := map[string]any{
+			"type": "response.output_text.done",
+			"text": s.OutputText.String(),
+			"response": map[string]any{
+				"id":      s.responseID(),
+				"created": s.createdAt(),
+				"model":   s.modelName(),
+			},
+		}
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return "", false
+		}
+		return string(encoded), true
+	}
+	return "", false
+}
+
+func (s *openAILegacyResponsesStreamState) captureMetadata(payload string) {
+	if id := strings.TrimSpace(gjson.Get(payload, "id").String()); id != "" {
+		s.ResponseID = id
+	}
+	if model := strings.TrimSpace(gjson.Get(payload, "model").String()); model != "" {
+		s.Model = model
+	}
+	if created := gjson.Get(payload, "created").Int(); created > 0 {
+		s.Created = created
+	}
+}
+
+func (s *openAILegacyResponsesStreamState) captureUsage(payload string) {
+	usage := gjson.Get(payload, "usage")
+	if !usage.Exists() || usage.Type != gjson.JSON || usage.Raw == "" || usage.Raw == "null" {
+		return
+	}
+	inputTokens := gjson.Get(payload, "usage.prompt_tokens").Int()
+	outputTokens := gjson.Get(payload, "usage.completion_tokens").Int()
+	totalTokens := gjson.Get(payload, "usage.total_tokens").Int()
+	usageMap := map[string]any{}
+	if inputTokens > 0 {
+		usageMap["input_tokens"] = inputTokens
+	}
+	if outputTokens > 0 {
+		usageMap["output_tokens"] = outputTokens
+	}
+	if totalTokens > 0 {
+		usageMap["total_tokens"] = totalTokens
+	}
+	if len(usageMap) > 0 {
+		s.Usage = usageMap
+	}
+}
+
+func (s *openAILegacyResponsesStreamState) responseID() string {
+	return responseIDWithSuffix(s.ResponseID, "resp_fallback")
+}
+
+func (s *openAILegacyResponsesStreamState) modelName() string {
+	if strings.TrimSpace(s.Model) != "" {
+		return strings.TrimSpace(s.Model)
+	}
+	return strings.TrimSpace(s.FallbackModel)
+}
+
+func (s *openAILegacyResponsesStreamState) createdAt() int64 {
+	if s.Created > 0 {
+		return s.Created
+	}
+	return time.Now().Unix()
+}
+
+func (s *openAILegacyResponsesStreamState) outputItems() []any {
+	content := s.OutputText.String()
+	return []any{map[string]any{
+		"id":     responseIDWithSuffix(s.ResponseID+"_msg", "msg_1"),
+		"type":   "message",
+		"role":   "assistant",
+		"status": "completed",
+		"content": []any{map[string]any{
+			"type": "output_text",
+			"text": content,
+		}},
+	}}
+}
+
+func (s *openAILegacyResponsesStreamState) usageMap() map[string]any {
+	if len(s.Usage) == 0 {
+		return map[string]any{}
+	}
+	return s.Usage
+}
+
 func extractResponsesMessagesValue(input any) []map[string]any {
 	items, ok := input.([]any)
 	if !ok || len(items) == 0 {

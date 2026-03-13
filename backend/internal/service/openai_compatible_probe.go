@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
@@ -49,6 +50,8 @@ type OpenAICompatibleProbeCapabilities struct {
 
 type OpenAICompatibleProbeResult struct {
 	NormalizedBaseURL string                            `json:"normalized_base_url"`
+	ProbeModel        string                            `json:"probe_model,omitempty"`
+	DiscoveredModels  []string                          `json:"discovered_models,omitempty"`
 	Status            string                            `json:"status"`
 	RecommendedMode   string                            `json:"recommended_mode"`
 	Checks            []OpenAICompatibleProbeCheck      `json:"checks"`
@@ -66,19 +69,25 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 		return nil, fmt.Errorf("api_key is required")
 	}
 
-	responsesURL := buildOpenAIResponsesURL(baseURL)
-	chatURL := buildOpenAIChatCompletionsURL(baseURL)
+	responsesURLs := buildOpenAIProbeEndpointCandidates(baseURL, "responses")
+	chatURLs := buildOpenAIProbeEndpointCandidates(baseURL, "chat/completions")
 
 	checks := make([]OpenAICompatibleProbeCheck, 0, 3)
 	capabilities := OpenAICompatibleProbeCapabilities{}
 
+	discoveredModels := s.discoverOpenAICompatibleProbeModels(ctx, baseURL, apiKey, input.ProxyURL, input.UserAgent)
+	probeModel := openai.DefaultTestModel
+	if len(discoveredModels) > 0 {
+		probeModel = discoveredModels[0]
+	}
+
 	responsesCheck := s.probeOpenAICompatibleJSON(ctx, openAIProbeRequest{
-		URL:       responsesURL,
+		URLs:      responsesURLs,
 		APIKey:    apiKey,
 		ProxyURL:  input.ProxyURL,
 		UserAgent: input.UserAgent,
 		Body: map[string]any{
-			"model":             openai.DefaultTestModel,
+			"model":             probeModel,
 			"input":             []map[string]any{{"role": "user", "content": []map[string]any{{"type": "input_text", "text": "ping"}}}},
 			"max_output_tokens": 8,
 		},
@@ -89,12 +98,12 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 	capabilities.Responses = responsesCheck.Status == "success" || responsesCheck.Status == "partial"
 
 	responsesStreamCheck := s.probeOpenAICompatibleStream(ctx, openAIProbeRequest{
-		URL:       responsesURL,
+		URLs:      responsesURLs,
 		APIKey:    apiKey,
 		ProxyURL:  input.ProxyURL,
 		UserAgent: input.UserAgent,
 		Body: map[string]any{
-			"model":             openai.DefaultTestModel,
+			"model":             probeModel,
 			"input":             []map[string]any{{"role": "user", "content": []map[string]any{{"type": "input_text", "text": "ping"}}}},
 			"max_output_tokens": 8,
 			"stream":            true,
@@ -106,12 +115,12 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 	capabilities.ResponsesStream = responsesStreamCheck.Status == "success"
 
 	chatCheck := s.probeOpenAICompatibleJSON(ctx, openAIProbeRequest{
-		URL:       chatURL,
+		URLs:      chatURLs,
 		APIKey:    apiKey,
 		ProxyURL:  input.ProxyURL,
 		UserAgent: input.UserAgent,
 		Body: map[string]any{
-			"model":      openai.DefaultTestModel,
+			"model":      probeModel,
 			"messages":   []map[string]any{{"role": "user", "content": "ping"}},
 			"max_tokens": 8,
 		},
@@ -147,10 +156,15 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 			"responses_stream": capabilities.ResponsesStream,
 			"chat_completions": capabilities.ChatCompletions,
 		}
+		if len(discoveredModels) > 0 {
+			suggestedExtra["openai_compat_models"] = cloneStringSlice(discoveredModels)
+		}
 	}
 
 	return &OpenAICompatibleProbeResult{
 		NormalizedBaseURL: baseURL,
+		ProbeModel:        probeModel,
+		DiscoveredModels:  cloneStringSlice(discoveredModels),
 		Status:            status,
 		RecommendedMode:   recommendedMode,
 		Checks:            checks,
@@ -159,8 +173,13 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 	}, nil
 }
 
+type openAICompatibleModelInfo struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
 type openAIProbeRequest struct {
-	URL        string
+	URLs       []string
 	APIKey     string
 	ProxyURL   string
 	UserAgent  string
@@ -170,41 +189,71 @@ type openAIProbeRequest struct {
 }
 
 func (s *AccountTestService) probeOpenAICompatibleJSON(ctx context.Context, probe openAIProbeRequest) OpenAICompatibleProbeCheck {
+	if len(probe.URLs) == 0 {
+		return OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: "no probe URLs configured"}
+	}
 	bodyBytes, _ := json.Marshal(probe.Body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, probe.URL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: probe.URL}
+	var lastCheck OpenAICompatibleProbeCheck
+	for _, targetURL := range probe.URLs {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
+		if err != nil {
+			lastCheck = OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: targetURL}
+			continue
+		}
+		applyOpenAIProbeHeaders(req, probe.APIKey, probe.UserAgent)
+		resp, err := s.httpUpstream.Do(req, probe.ProxyURL, 0, 1)
+		if err != nil {
+			lastCheck = OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: targetURL}
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		_ = resp.Body.Close()
+		check := classifyOpenAICompatibleJSONCheck(probe, targetURL, resp, body)
+		if check.Status != "unsupported" {
+			return check
+		}
+		lastCheck = check
 	}
-	applyOpenAIProbeHeaders(req, probe.APIKey, probe.UserAgent)
-	resp, err := s.httpUpstream.Do(req, probe.ProxyURL, 0, 1)
-	if err != nil {
-		return OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: probe.URL}
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	return classifyOpenAICompatibleJSONCheck(probe, resp, body)
+	return lastCheck
 }
 
 func (s *AccountTestService) probeOpenAICompatibleStream(ctx context.Context, probe openAIProbeRequest) OpenAICompatibleProbeCheck {
+	if len(probe.URLs) == 0 {
+		return OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: "no probe URLs configured"}
+	}
 	bodyBytes, _ := json.Marshal(probe.Body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, probe.URL, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: probe.URL}
-	}
-	applyOpenAIProbeHeaders(req, probe.APIKey, probe.UserAgent)
-	req.Header.Set("Accept", "text/event-stream")
-	resp, err := s.httpUpstream.Do(req, probe.ProxyURL, 0, 1)
-	if err != nil {
-		return OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: probe.URL}
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	var lastCheck OpenAICompatibleProbeCheck
+	for _, targetURL := range probe.URLs {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
+		if err != nil {
+			lastCheck = OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: targetURL}
+			continue
+		}
+		applyOpenAIProbeHeaders(req, probe.APIKey, probe.UserAgent)
+		req.Header.Set("Accept", "text/event-stream")
+		resp, err := s.httpUpstream.Do(req, probe.ProxyURL, 0, 1)
+		if err != nil {
+			lastCheck = OpenAICompatibleProbeCheck{Key: probe.CheckKey, Label: probe.CheckLabel, Status: "failed", Message: err.Error(), EndpointURL: targetURL}
+			continue
+		}
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		_ = resp.Body.Close()
 
+		check := classifyOpenAICompatibleStreamCheck(probe, targetURL, resp, body)
+		if check.Status != "unsupported" {
+			return check
+		}
+		lastCheck = check
+	}
+	return lastCheck
+}
+
+func classifyOpenAICompatibleStreamCheck(probe openAIProbeRequest, targetURL string, resp *http.Response, body []byte) OpenAICompatibleProbeCheck {
 	check := OpenAICompatibleProbeCheck{
 		Key:         probe.CheckKey,
 		Label:       probe.CheckLabel,
 		HTTPStatus:  resp.StatusCode,
-		EndpointURL: probe.URL,
+		EndpointURL: targetURL,
 	}
 	if resp.StatusCode == http.StatusOK {
 		contentType := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type")))
@@ -242,12 +291,12 @@ func (s *AccountTestService) probeOpenAICompatibleStream(ctx context.Context, pr
 	return check
 }
 
-func classifyOpenAICompatibleJSONCheck(probe openAIProbeRequest, resp *http.Response, body []byte) OpenAICompatibleProbeCheck {
+func classifyOpenAICompatibleJSONCheck(probe openAIProbeRequest, targetURL string, resp *http.Response, body []byte) OpenAICompatibleProbeCheck {
 	check := OpenAICompatibleProbeCheck{
 		Key:         probe.CheckKey,
 		Label:       probe.CheckLabel,
 		HTTPStatus:  resp.StatusCode,
-		EndpointURL: probe.URL,
+		EndpointURL: targetURL,
 	}
 	if resp.StatusCode == http.StatusOK {
 		check.Status = "success"
@@ -276,6 +325,114 @@ func classifyOpenAICompatibleJSONCheck(probe openAIProbeRequest, resp *http.Resp
 		check.Message = fmt.Sprintf("HTTP %d", resp.StatusCode)
 	}
 	return check
+}
+
+func buildOpenAIProbeEndpointCandidates(base, endpoint string) []string {
+	normalizedBase := strings.TrimRight(strings.TrimSpace(base), "/")
+	endpoint = strings.TrimLeft(strings.TrimSpace(endpoint), "/")
+	if normalizedBase == "" || endpoint == "" {
+		return nil
+	}
+
+	candidates := make([]string, 0, 3)
+	seen := make(map[string]struct{}, 3)
+	appendCandidate := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		candidates = append(candidates, value)
+	}
+
+	appendCandidate(normalizedBase + "/" + endpoint)
+	if !strings.HasSuffix(normalizedBase, "/v1") && !strings.HasSuffix(normalizedBase, "/"+endpoint) {
+		appendCandidate(normalizedBase + "/v1/" + endpoint)
+	}
+	return candidates
+}
+
+func (s *AccountTestService) discoverOpenAICompatibleProbeModels(ctx context.Context, baseURL, apiKey, proxyURL, userAgent string) []string {
+	modelURLs := buildOpenAIProbeEndpointCandidates(baseURL, "models")
+	for _, targetURL := range modelURLs {
+		modelIDs := s.fetchOpenAICompatibleModels(ctx, targetURL, apiKey, proxyURL, userAgent)
+		if len(modelIDs) == 0 {
+			continue
+		}
+		return modelIDs
+	}
+	return nil
+}
+
+func (s *AccountTestService) DiscoverOpenAICompatibleModels(ctx context.Context, baseURL, apiKey, proxyURL, userAgent string) []string {
+	validatedBaseURL, err := s.validateUpstreamBaseURL(strings.TrimSpace(baseURL))
+	if err != nil {
+		return nil
+	}
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return nil
+	}
+	return s.discoverOpenAICompatibleProbeModels(ctx, validatedBaseURL, apiKey, proxyURL, userAgent)
+}
+
+func (s *AccountTestService) fetchOpenAICompatibleModels(ctx context.Context, targetURL, apiKey, proxyURL, userAgent string) []string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		return nil
+	}
+	applyOpenAIProbeHeaders(req, apiKey, userAgent)
+	resp, err := s.httpUpstream.Do(req, proxyURL, 0, 1)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512<<10))
+	if err != nil || !gjson.ValidBytes(body) {
+		return nil
+	}
+	models := gjson.GetBytes(body, "data")
+	if !models.Exists() || !models.IsArray() {
+		return nil
+	}
+
+	preferred := make([]string, 0, len(models.Array()))
+	fallback := make([]string, 0, len(models.Array()))
+	for _, item := range models.Array() {
+		modelID := strings.TrimSpace(item.Get("id").String())
+		if modelID == "" {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(item.Get("status").String()))
+		if status == "shutdown" || status == "retiring" || status == "deprecated" {
+			continue
+		}
+		if isPreferredOpenAICompatibleProbeModel(modelID) {
+			preferred = append(preferred, modelID)
+			continue
+		}
+		fallback = append(fallback, modelID)
+	}
+	sort.Strings(preferred)
+	sort.Strings(fallback)
+	return append(preferred, fallback...)
+}
+
+func isPreferredOpenAICompatibleProbeModel(modelID string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(modelID))
+	preferredPrefixes := []string{"kimi-", "glm-", "deepseek-", "minimax-"}
+	for _, prefix := range preferredPrefixes {
+		if strings.HasPrefix(normalized, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func applyOpenAIProbeHeaders(req *http.Request, apiKey, userAgent string) {

@@ -18,6 +18,8 @@ const openaiModels = [
   'gpt-5-codex', 'gpt-5.3-codex-spark', 'gpt-5-pro', 'gpt-5-pro-2025-10-06',
   'gpt-5-mini', 'gpt-5-mini-2025-08-07',
   'gpt-5-nano', 'gpt-5-nano-2025-08-07',
+  // GPT-5.4 系列
+  'gpt-5.4', 'gpt-5.4-codex',
   // GPT-5.1 系列
   'gpt-5.1', 'gpt-5.1-2025-11-13', 'gpt-5.1-chat-latest',
   'gpt-5.1-codex', 'gpt-5.1-codex-max', 'gpt-5.1-codex-mini',
@@ -274,6 +276,7 @@ const openaiPresetMappings = [
   { label: 'o1', from: 'o1', to: 'o1', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400' },
   { label: 'o3', from: 'o3', to: 'o3', color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400' },
   { label: 'GPT-5', from: 'gpt-5', to: 'gpt-5', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' },
+  { label: 'GPT-5.4', from: 'gpt-5.4', to: 'gpt-5.4', color: 'bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-400' },
   { label: 'GPT-5.3 Codex Spark', from: 'gpt-5.3-codex-spark', to: 'gpt-5.3-codex-spark', color: 'bg-teal-100 text-teal-700 hover:bg-teal-200 dark:bg-teal-900/30 dark:text-teal-400' },
   { label: 'GPT-5.1', from: 'gpt-5.1', to: 'gpt-5.1', color: 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400' },
   { label: 'GPT-5.2', from: 'gpt-5.2', to: 'gpt-5.2', color: 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400' },

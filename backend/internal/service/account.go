@@ -67,6 +67,8 @@ type Account struct {
 	modelMappingCacheRawPtr         uintptr
 	modelMappingCacheRawLen         int
 	modelMappingCacheRawSig         uint64
+	modelMappingCacheExtraPtr       uintptr
+	modelMappingCacheExtraSig       uint64
 }
 
 type TempUnschedulableRule struct {
@@ -388,16 +390,20 @@ func (a *Account) GetModelMapping() map[string]string {
 	rawMapping, _ := a.Credentials["model_mapping"].(map[string]any)
 	rawPtr := mapPtr(rawMapping)
 	rawLen := len(rawMapping)
+	extraPtr := mapPtr(a.Extra)
 	rawSig := uint64(0)
+	extraSig := uint64(0)
 	rawSigReady := false
 
 	if a.modelMappingCacheReady &&
 		a.modelMappingCacheCredentialsPtr == credentialsPtr &&
 		a.modelMappingCacheRawPtr == rawPtr &&
-		a.modelMappingCacheRawLen == rawLen {
+		a.modelMappingCacheRawLen == rawLen &&
+		a.modelMappingCacheExtraPtr == extraPtr {
 		rawSig = modelMappingSignature(rawMapping)
+		extraSig = modelMappingExtraSignature(a.Extra)
 		rawSigReady = true
-		if a.modelMappingCacheRawSig == rawSig {
+		if a.modelMappingCacheRawSig == rawSig && a.modelMappingCacheExtraSig == extraSig {
 			return a.modelMappingCache
 		}
 	}
@@ -405,6 +411,7 @@ func (a *Account) GetModelMapping() map[string]string {
 	mapping := a.resolveModelMapping(rawMapping)
 	if !rawSigReady {
 		rawSig = modelMappingSignature(rawMapping)
+		extraSig = modelMappingExtraSignature(a.Extra)
 	}
 
 	a.modelMappingCache = mapping
@@ -413,6 +420,8 @@ func (a *Account) GetModelMapping() map[string]string {
 	a.modelMappingCacheRawPtr = rawPtr
 	a.modelMappingCacheRawLen = rawLen
 	a.modelMappingCacheRawSig = rawSig
+	a.modelMappingCacheExtraPtr = extraPtr
+	a.modelMappingCacheExtraSig = extraSig
 	return mapping
 }
 
@@ -425,6 +434,9 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 		return nil
 	}
 	if len(rawMapping) == 0 {
+		if compatMapping := a.resolveOpenAICompatModels(); len(compatMapping) > 0 {
+			return compatMapping
+		}
 		// Antigravity 平台使用默认映射
 		if a.Platform == domain.PlatformAntigravity {
 			return domain.DefaultAntigravityModelMapping
@@ -454,6 +466,73 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 		return domain.DefaultAntigravityModelMapping
 	}
 	return nil
+}
+
+func (a *Account) resolveOpenAICompatModels() map[string]string {
+	if a == nil || !a.IsOpenAI() || len(a.Extra) == 0 {
+		return nil
+	}
+	rawModels, ok := a.Extra["openai_compat_models"]
+	if !ok {
+		return nil
+	}
+	items, ok := rawModels.([]any)
+	if !ok {
+		if stringItems, ok := rawModels.([]string); ok {
+			mapping := make(map[string]string, len(stringItems))
+			for _, model := range stringItems {
+				model = strings.TrimSpace(model)
+				if model != "" {
+					mapping[model] = model
+				}
+			}
+			if len(mapping) > 0 {
+				return mapping
+			}
+		}
+		return nil
+	}
+	mapping := make(map[string]string, len(items))
+	for _, item := range items {
+		model, ok := item.(string)
+		if !ok {
+			continue
+		}
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		mapping[model] = model
+	}
+	if len(mapping) == 0 {
+		return nil
+	}
+	return mapping
+}
+
+func modelMappingExtraSignature(extra map[string]any) uint64 {
+	if len(extra) == 0 {
+		return 0
+	}
+	rawModels, ok := extra["openai_compat_models"]
+	if !ok {
+		return 0
+	}
+	h := fnv.New64a()
+	switch values := rawModels.(type) {
+	case []string:
+		for _, model := range values {
+			_, _ = h.Write([]byte(strings.TrimSpace(model)))
+			_, _ = h.Write([]byte{0})
+		}
+	case []any:
+		for _, raw := range values {
+			model, _ := raw.(string)
+			_, _ = h.Write([]byte(strings.TrimSpace(model)))
+			_, _ = h.Write([]byte{0})
+		}
+	}
+	return h.Sum64()
 }
 
 func mapPtr(m map[string]any) uintptr {

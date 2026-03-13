@@ -446,6 +446,8 @@ func normalizeOpenAICompatibleAccount(raw map[string]any) (DataAccount, error) {
 	}
 	if modelMapping := normalizeStringMap(getMapAlias(raw, "model_mapping", "modelMap")); len(modelMapping) > 0 {
 		credentials["model_mapping"] = modelMapping
+	} else if modelList := normalizeStringSlice(getSliceAlias(raw, "models")); len(modelList) > 0 {
+		credentials["model_mapping"] = buildIdentityModelMapping(modelList)
 	}
 
 	extra := cloneMapAny(getMapAlias(raw, "extra"))
@@ -538,6 +540,20 @@ func getMapAlias(values map[string]any, keys ...string) map[string]any {
 		if raw, ok := values[key]; ok && raw != nil {
 			if mapped, ok := raw.(map[string]any); ok {
 				return mapped
+			}
+		}
+	}
+	return nil
+}
+
+func getSliceAlias(values map[string]any, keys ...string) []any {
+	for _, key := range keys {
+		if values == nil {
+			return nil
+		}
+		if raw, ok := values[key]; ok && raw != nil {
+			if items, ok := raw.([]any); ok {
+				return items
 			}
 		}
 	}
@@ -699,6 +715,46 @@ func normalizeStringMap(src map[string]any) map[string]string {
 		return nil
 	}
 	return out
+}
+
+func normalizeStringSlice(src []any) []string {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(src))
+	for _, value := range src {
+		strValue, ok := value.(string)
+		if !ok {
+			continue
+		}
+		strValue = strings.TrimSpace(strValue)
+		if strValue == "" {
+			continue
+		}
+		out = append(out, strValue)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func buildIdentityModelMapping(models []string) map[string]string {
+	if len(models) == 0 {
+		return nil
+	}
+	mapping := make(map[string]string, len(models))
+	for _, model := range models {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		mapping[model] = model
+	}
+	if len(mapping) == 0 {
+		return nil
+	}
+	return mapping
 }
 
 func (h *AccountHandler) listAllProxies(ctx context.Context) ([]service.Proxy, error) {

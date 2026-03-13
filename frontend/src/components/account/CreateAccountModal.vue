@@ -3364,6 +3364,16 @@ const handleCheckOpenAICompatible = async () => {
   }
 }
 
+const buildIdentityModelMapping = (models: string[]): Record<string, string> | undefined => {
+  const mapping: Record<string, string> = {}
+  for (const model of models) {
+    const normalized = model.trim()
+    if (!normalized) continue
+    mapping[normalized] = normalized
+  }
+  return Object.keys(mapping).length > 0 ? mapping : undefined
+}
+
 const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknown> | undefined => {
   if (form.platform !== 'openai') {
     return base
@@ -3565,6 +3575,15 @@ const handleSubmit = async () => {
     const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
     if (modelMapping) {
       credentials.model_mapping = modelMapping
+    } else if (
+      form.platform === 'openai' &&
+      accountCategory.value === 'apikey' &&
+      openAICompatCheckResult.value?.discovered_models?.length
+    ) {
+      const identityMapping = buildIdentityModelMapping(openAICompatCheckResult.value.discovered_models)
+      if (identityMapping) {
+        credentials.model_mapping = identityMapping
+      }
     }
   }
 
