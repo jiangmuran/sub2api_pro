@@ -462,6 +462,17 @@ export interface UpdateApiKeyRequest {
   reset_rate_limit_usage?: boolean
 }
 
+export interface ModelPricingPreviewItem {
+  model: string
+  input_price_per_1m: number
+  output_price_per_1m: number
+  pricing_available: boolean
+}
+
+export interface ModelPricingPreviewResponse {
+  models: ModelPricingPreviewItem[]
+}
+
 export interface CreateGroupRequest {
   name: string
   description?: string | null
@@ -855,6 +866,7 @@ export interface OpenAICompatibleCheckCapabilities {
   responses: boolean
   responses_stream: boolean
   chat_completions: boolean
+  completions: boolean
 }
 
 export interface OpenAICompatibleCheckResult {
@@ -866,6 +878,7 @@ export interface OpenAICompatibleCheckResult {
     | 'responses_native'
     | 'responses_passthrough'
     | 'chat_completions_fallback'
+    | 'completions_fallback'
     | 'unsupported'
   checks: OpenAICompatibleCheckItem[]
   capabilities: OpenAICompatibleCheckCapabilities
@@ -880,6 +893,7 @@ export interface OpenAICompatiblePreviewModel {
   account_input_price_per_1m: number
   account_output_price_per_1m: number
   pricing_available: boolean
+  pricing_source?: 'local' | 'builtin' | 'openrouter' | 'account'
 }
 
 export interface OpenAICompatiblePreviewModelsRequest {
@@ -888,6 +902,7 @@ export interface OpenAICompatiblePreviewModelsRequest {
   proxy_id?: number | null
   user_agent?: string
   rate_multiplier?: number | null
+  models?: string[]
 }
 
 export interface OpenAICompatiblePreviewModelsResponse {

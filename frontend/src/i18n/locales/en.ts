@@ -273,6 +273,7 @@ export default {
     dashboard: 'Dashboard',
     announcements: 'Announcements',
     apiKeys: 'API Keys',
+    modelTest: 'Test Models',
     usage: 'Usage',
     redeem: 'Redeem',
     distributor: 'Distributor',
@@ -281,6 +282,7 @@ export default {
     groups: 'Groups',
     subscriptions: 'Subscriptions',
     accounts: 'Accounts',
+    pricingManagement: 'Pricing',
     proxies: 'Proxies',
     distributors: 'Distributors',
     redeemCodes: 'Redeem Codes',
@@ -299,6 +301,67 @@ export default {
     buySubscription: 'Recharge / Subscription',
     docs: 'Docs',
     sora: 'Sora Studio'
+  },
+
+  modelTest: {
+    badge: 'User-side Model Lab',
+    title: 'Test Models',
+    description: 'Use your own Sub2API key to fetch live models, inspect the real user-side pricing, and run multi-turn chat tests.',
+    bootstrapFailed: 'Failed to load model test page data',
+    summary: {
+      keyCount: 'Available Keys',
+      modelCount: 'Live Models',
+      pricedCount: 'Priced Models'
+    },
+    keyPanel: {
+      title: 'Test Key',
+      description: 'Pick an existing user key or generate a fresh test key for quick validation.',
+      existingKeys: 'Existing API Keys',
+      existingKeysPlaceholder: 'Select an existing key',
+      directInput: 'Direct Key Input',
+      directInputPlaceholder: 'sk-... or your own user API key',
+      directInputRequired: 'Please enter a user API key first',
+      verify: 'Verify',
+      generateTitle: 'Generate a Test Key',
+      generateHint: 'Choose a group and create a new user key for immediate model and pricing validation.',
+      groupLabel: 'Group',
+      groupPlaceholder: 'Choose a group',
+      groupRequired: 'Please choose a group first',
+      generateButton: 'Generate and Fill',
+      generatedAndCopied: 'Generated, filled, and copied the test key',
+      generateFailed: 'Failed to generate the test key'
+    },
+    models: {
+      title: 'Live Models',
+      description: 'This list is fetched through the current user key, so it reflects real user access.',
+      fetch: 'Fetch Models',
+      empty: 'Enter a valid user API key first, then fetch the live model list.',
+      fetchFailed: 'Failed to fetch model list',
+      nonJsonResponse: 'The endpoint returned an HTML page instead of JSON. Make sure you are using a valid user API key on the correct /v1 path.'
+    },
+    pricing: {
+      title: 'Actual Pricing',
+      description: 'Shows the real user-side input and output pricing after the current group multiplier is applied (USD / 1M tokens).',
+      effectiveRate: 'Current rate {rate}x',
+      standardInput: 'Std Input',
+      standardOutput: 'Std Output',
+      actualInput: 'User Input',
+      actualOutput: 'User Output',
+      empty: 'Pricing preview appears here after models are loaded.'
+    },
+    chat: {
+      title: 'Multi-turn Chat',
+      description: 'This uses the real user gateway path instead of the admin upstream preview path.',
+      selectModel: 'Select test model',
+      clear: 'Clear Chat',
+      empty: 'Load models and pick one before starting a multi-turn conversation.',
+      placeholder: 'Type a message. Press Enter to send, Shift+Enter for a newline.',
+      hint: 'This is a real gateway call made with the current user key.',
+      sending: 'Waiting for model reply...',
+      send: 'Send',
+      failed: 'Multi-turn chat failed',
+      emptyReply: 'The model returned an empty reply'
+    }
   },
 
   // Auth
@@ -870,6 +933,26 @@ export default {
 
   // Admin
   admin: {
+    pricingManagement: {
+      badge: 'Model Pricing Desk',
+      title: 'Pricing Management',
+      description: 'Review missing model prices, preview pricing sources, fill manual values, and save model pricing in one focused admin workflow.',
+      accountSelector: 'Select Account',
+      searchPlaceholder: 'Search account name or base URL',
+      noAccounts: 'No manageable OpenAI API key accounts yet',
+      summaryTitle: 'Summary',
+      totalModels: 'Total models',
+      missingModels: 'Missing prices',
+      manualCount: 'Manual overrides',
+      showMissingOnly: 'Show missing prices only',
+      tableTitle: 'Model Pricing Table',
+      tableDesc: 'Supports automatic preview, built-in presets, reuse from other accounts, and manual inputs.',
+      noModels: 'Choose an account to load the model pricing table.',
+      savePricing: 'Save Pricing',
+      saveSuccess: 'Model pricing saved',
+      saveFailed: 'Failed to save model pricing',
+      loadFailed: 'Failed to load pricing management data'
+    },
     // Dashboard
     dashboard: {
       title: 'Admin Dashboard',
@@ -1824,8 +1907,8 @@ export default {
         oauthPassthroughDesc:
           'When enabled, this OpenAI account uses automatic passthrough: the gateway forwards request/response as-is and only swaps auth, while keeping billing/concurrency/audit and necessary safety filtering.',
         compatCheckTitle: 'Compatibility Check',
-        compatCheckDesc:
-          'Probe Responses, streaming, and Chat Completions first, then apply a safer recommendation for flaky upstreams.',
+		compatCheckDesc:
+		  'Probe Responses, streaming, Chat Completions, and Completions, then apply the safest compatibility recommendation.',
         compatCheckAction: 'Run Check',
         compatChecking: 'Checking...',
         compatCheckDone: 'Compatibility check completed',
@@ -1835,10 +1918,11 @@ export default {
         compatStatusCompatible: 'Fully compatible',
         compatStatusPartial: 'Mostly compatible',
         compatStatusLegacyOnly: 'Legacy only',
-        compatStatusIncompatible: 'Not recommended',
+		compatStatusIncompatible: 'Not recommended',
         compatModeResponsesNative: 'Standard mode (Responses)',
         compatModeResponsesPassthrough: 'Compatibility mode (Responses passthrough)',
         compatModeChatFallback: 'Legacy mode (Chat fallback)',
+        compatModeCompletionsFallback: 'Legacy mode (Completions fallback)',
         compatModeUnsupported: 'Unsupported',
         compatCheckSuccess: 'Pass',
         compatCheckPartial: 'Partial',
@@ -1878,12 +1962,22 @@ export default {
         pricedCount: 'Priced models',
         modelSummaryHint: 'Click a model to jump into chat preview. Models without pricing are shown as --.',
         pricingTitle: 'Pricing Preview',
-        pricingDesc: 'Shows standard pricing and the current account-multiplied estimate (USD / 1M tokens).',
+        pricingDesc: 'Shows standard pricing and the current account-multiplied estimate (USD / 1M tokens). If local pricing is missing, it falls back to the public OpenRouter model catalog for reference only.',
+        pricingHint: 'Note: third-party compatible model prices may come from the public OpenRouter catalog. Double-check your own selling strategy before saving the account.',
         standardInputPrice: 'Std Input',
         standardOutputPrice: 'Std Output',
         accountInputPrice: 'Adjusted Input',
         accountOutputPrice: 'Adjusted Output',
         noPricingRows: 'No pricing rows available yet',
+        unavailablePricingHint: 'Models like doubao-* may still show -- when neither local pricing nor the public OpenRouter catalog has a usable price.',
+        manualPricingHint: 'If automatic matching still cannot find a price, you can enter manual input and output prices directly in the table. The adjusted preview updates instantly using the current account multiplier.',
+        manualPricingPlaceholder: 'Manual',
+        pricingSourceLocal: 'Source: local dynamic pricing',
+        pricingSourceBuiltin: 'Source: built-in Doubao preset',
+        pricingSourceOpenRouter: 'Source: OpenRouter public catalog',
+        pricingSourceAccount: 'Source: pricing saved on another account',
+        pricingSourceManual: 'Source: manually entered here',
+        pricingSourceUnknown: 'Source: not identified yet',
         selectChatModel: 'Select a chat model',
         clearChat: 'Clear Chat',
         chatEmpty: 'Pick a live model and start a multi-turn preview conversation here.',

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -23,6 +24,7 @@ const (
 	OpenAICompatibleModeResponsesNative         = "responses_native"
 	OpenAICompatibleModeResponsesPassthrough    = "responses_passthrough"
 	OpenAICompatibleModeChatCompletionsFallback = "chat_completions_fallback"
+	OpenAICompatibleModeCompletionsFallback     = "completions_fallback"
 	OpenAICompatibleModeUnsupported             = "unsupported"
 )
 
@@ -46,6 +48,7 @@ type OpenAICompatibleProbeCapabilities struct {
 	Responses       bool `json:"responses"`
 	ResponsesStream bool `json:"responses_stream"`
 	ChatCompletions bool `json:"chat_completions"`
+	Completions     bool `json:"completions"`
 }
 
 type OpenAICompatibleProbeResult struct {
@@ -71,6 +74,7 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 
 	responsesURLs := buildOpenAIProbeEndpointCandidates(baseURL, "responses")
 	chatURLs := buildOpenAIProbeEndpointCandidates(baseURL, "chat/completions")
+	completionURLs := buildOpenAIProbeEndpointCandidates(baseURL, "completions")
 
 	checks := make([]OpenAICompatibleProbeCheck, 0, 3)
 	capabilities := OpenAICompatibleProbeCapabilities{}
@@ -130,6 +134,22 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 	checks = append(checks, chatCheck)
 	capabilities.ChatCompletions = chatCheck.Status == "success" || chatCheck.Status == "partial"
 
+	completionCheck := s.probeOpenAICompatibleJSON(ctx, openAIProbeRequest{
+		URLs:      completionURLs,
+		APIKey:    apiKey,
+		ProxyURL:  input.ProxyURL,
+		UserAgent: input.UserAgent,
+		Body: map[string]any{
+			"model":      probeModel,
+			"prompt":     "ping",
+			"max_tokens": 8,
+		},
+		CheckKey:   "completions",
+		CheckLabel: "Completions",
+	})
+	checks = append(checks, completionCheck)
+	capabilities.Completions = completionCheck.Status == "success" || completionCheck.Status == "partial"
+
 	status := OpenAICompatibleProbeStatusIncompatible
 	recommendedMode := OpenAICompatibleModeUnsupported
 	suggestedExtra := map[string]any{}
@@ -149,12 +169,18 @@ func (s *AccountTestService) ProbeOpenAICompatible(ctx context.Context, input Op
 		recommendedMode = OpenAICompatibleModeChatCompletionsFallback
 		suggestedExtra["openai_compat_mode"] = recommendedMode
 		suggestedExtra["openai_passthrough"] = true
+	case capabilities.Completions:
+		status = OpenAICompatibleProbeStatusLegacyOnly
+		recommendedMode = OpenAICompatibleModeCompletionsFallback
+		suggestedExtra["openai_compat_mode"] = recommendedMode
+		suggestedExtra["openai_passthrough"] = true
 	}
 	if len(suggestedExtra) > 0 {
 		suggestedExtra["openai_compat_capabilities"] = map[string]any{
 			"responses":        capabilities.Responses,
 			"responses_stream": capabilities.ResponsesStream,
 			"chat_completions": capabilities.ChatCompletions,
+			"completions":      capabilities.Completions,
 		}
 		if len(discoveredModels) > 0 {
 			suggestedExtra["openai_compat_models"] = cloneStringSlice(discoveredModels)
@@ -444,14 +470,33 @@ func applyOpenAIProbeHeaders(req *http.Request, apiKey, userAgent string) {
 }
 
 func buildOpenAIChatCompletionsURL(base string) string {
+	return buildOpenAIEndpointURL(base, "chat/completions")
+}
+
+func buildOpenAICompletionsURL(base string) string {
+	return buildOpenAIEndpointURL(base, "completions")
+}
+
+func buildOpenAIEndpointURL(base, endpoint string) string {
 	normalized := strings.TrimRight(strings.TrimSpace(base), "/")
-	if strings.HasSuffix(normalized, "/chat/completions") {
+	endpoint = strings.TrimLeft(strings.TrimSpace(endpoint), "/")
+	if normalized == "" || endpoint == "" {
+		return normalized
+	}
+	if strings.HasSuffix(normalized, "/"+endpoint) {
 		return normalized
 	}
 	if strings.HasSuffix(normalized, "/v1") {
-		return normalized + "/chat/completions"
+		return normalized + "/" + endpoint
 	}
-	return normalized + "/v1/chat/completions"
+	parsed, err := url.Parse(normalized)
+	if err == nil {
+		path := strings.TrimSpace(parsed.Path)
+		if path != "" && path != "/" {
+			return normalized + "/" + endpoint
+		}
+	}
+	return normalized + "/v1/" + endpoint
 }
 
 func endpointReachableDespiteModelError(statusCode int, body []byte) bool {

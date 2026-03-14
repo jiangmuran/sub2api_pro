@@ -423,6 +423,14 @@ func TestConvertOpenAIResponsesRequestToLegacy_Chat(t *testing.T) {
 	require.False(t, gjson.GetBytes(converted, "store").Exists())
 }
 
+func TestConvertOpenAIResponsesRequestToLegacy_StreamEnablesUsage(t *testing.T) {
+	body := []byte(`{"model":"kimi-k2.5","input":[{"role":"user","content":[{"type":"input_text","text":"hello"}]}],"stream":true}`)
+	converted, err := ConvertOpenAIResponsesRequestToLegacy(body, OpenAILegacyProtocolChat)
+	require.NoError(t, err)
+	require.True(t, gjson.GetBytes(converted, "stream").Bool())
+	require.True(t, gjson.GetBytes(converted, "stream_options.include_usage").Bool())
+}
+
 func TestConvertOpenAILegacyResponseToResponses_Chat(t *testing.T) {
 	body := []byte(`{"id":"chatcmpl_1","model":"gpt-4.1","choices":[{"message":{"role":"assistant","content":"pong"}}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`)
 	converted, err := ConvertOpenAILegacyResponseToResponses(body, OpenAILegacyProtocolChat, "gpt-4.1")
@@ -455,4 +463,36 @@ func TestOpenAILegacyResponsesStreamState_ConvertsFinishAndDone(t *testing.T) {
 	require.Equal(t, "response.completed", gjson.Get(third, "type").String())
 	require.Equal(t, "pong", gjson.Get(third, "response.output_text").String())
 	require.Equal(t, "kimi-k2.5", gjson.Get(third, "response.model").String())
+}
+
+func TestOpenAILegacyResponsesStreamState_IgnoresReasoningOnlyChunk(t *testing.T) {
+	state := &openAILegacyResponsesStreamState{FallbackModel: "doubao-seed-2.0-pro"}
+	converted, ok := state.Convert(`{"choices":[{"delta":{"content":"","reasoning_content":"\n","role":"assistant"},"index":0}],"created":1773460510,"id":"chunk_1","model":"doubao-seed-2.0-pro","object":"chat.completion.chunk","usage":null}`)
+	require.False(t, ok)
+	require.Equal(t, "", converted)
+}
+
+func TestOpenAILegacyResponsesStreamState_CompletionsConvertsTextAndUsage(t *testing.T) {
+	state := &openAILegacyResponsesStreamState{Protocol: OpenAILegacyProtocolCompletions, FallbackModel: "deepseek-v3.2"}
+
+	first, ok := state.Convert(`{"id":"cmpl_1","model":"deepseek-v3.2","created":123,"choices":[{"text":"pong","index":0}],"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}`)
+	require.True(t, ok)
+	require.Equal(t, "response.output_text.delta", gjson.Get(first, "type").String())
+	require.Equal(t, "pong", gjson.Get(first, "delta").String())
+
+	third, ok := state.Convert(`[DONE]`)
+	require.True(t, ok)
+	require.Equal(t, "response.completed", gjson.Get(third, "type").String())
+	require.Equal(t, "pong", gjson.Get(third, "response.output_text").String())
+	require.Equal(t, int64(5), gjson.Get(third, "response.usage.input_tokens").Int())
+	require.Equal(t, int64(7), gjson.Get(third, "response.usage.output_tokens").Int())
+}
+
+func TestConvertOpenAILegacyResponseToResponses_CompletionsInputOutputUsage(t *testing.T) {
+	body := []byte(`{"id":"cmpl_2","model":"glm-4.7","choices":[{"text":"ok"}],"usage":{"input_tokens":11,"output_tokens":13,"total_tokens":24}}`)
+	converted, err := ConvertOpenAILegacyResponseToResponses(body, OpenAILegacyProtocolCompletions, "glm-4.7")
+	require.NoError(t, err)
+	require.Equal(t, "ok", gjson.GetBytes(converted, "output_text").String())
+	require.Equal(t, int64(11), gjson.GetBytes(converted, "usage.input_tokens").Int())
+	require.Equal(t, int64(13), gjson.GetBytes(converted, "usage.output_tokens").Int())
 }

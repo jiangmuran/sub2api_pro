@@ -252,6 +252,12 @@ func TestNormalizeCodexModel_Gpt54(t *testing.T) {
 	}
 }
 
+func TestNormalizeCodexModel_UnknownModelReturnsEmpty(t *testing.T) {
+	require.Equal(t, "", normalizeCodexModel("kimi-k2.5"))
+	require.Equal(t, "", normalizeCodexModel("glm-4.7"))
+	require.Equal(t, "", normalizeCodexModel(""))
+}
+
 func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *testing.T) {
 	// Codex CLI 场景：已有 instructions 时不修改
 

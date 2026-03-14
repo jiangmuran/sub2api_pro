@@ -3,11 +3,17 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"log"
+	"net/http"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/tidwall/gjson"
 )
 
 // APIKeyRateLimitCacheData holds rate limit usage data cached in Redis.
@@ -77,6 +83,9 @@ type BillingService struct {
 	cfg            *config.Config
 	pricingService *PricingService
 	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
+	openRouterMu   sync.RWMutex
+	openRouterData map[string]*ModelPricing
+	openRouterAt   time.Time
 }
 
 // NewBillingService 创建计费服务实例
@@ -85,6 +94,7 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 		cfg:            cfg,
 		pricingService: pricingService,
 		fallbackPrices: make(map[string]*ModelPricing),
+		openRouterData: make(map[string]*ModelPricing),
 	}
 
 	// 初始化硬编码回退价格（当动态价格不可用时使用）
@@ -161,6 +171,14 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerToken:     0.2e-6, // $0.20 per MTok
 		SupportsCacheBreakdown:     false,
 	}
+
+	// Doubao coding plan presets
+	s.fallbackPrices["doubao-seed-2.0-pro"] = &ModelPricing{InputPricePerToken: 3.2e-6, OutputPricePerToken: 16e-6}
+	s.fallbackPrices["doubao-seed-2.0-lite"] = &ModelPricing{InputPricePerToken: 0.6e-6, OutputPricePerToken: 3.6e-6}
+	s.fallbackPrices["doubao-seed-2.0-mini"] = &ModelPricing{InputPricePerToken: 0.2e-6, OutputPricePerToken: 2e-6}
+	s.fallbackPrices["doubao-seed-2.0-code"] = &ModelPricing{InputPricePerToken: 3.2e-6, OutputPricePerToken: 16e-6}
+	s.fallbackPrices["doubao-seed-1.8"] = &ModelPricing{InputPricePerToken: 0.8e-6, OutputPricePerToken: 2e-6}
+	s.fallbackPrices["doubao-seed-code"] = &ModelPricing{InputPricePerToken: 1.2e-6, OutputPricePerToken: 8e-6}
 }
 
 // getFallbackPricing 根据模型系列获取回退价格
@@ -192,9 +210,11 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	if strings.Contains(modelLower, "gemini-3.1-pro") || strings.Contains(modelLower, "gemini-3-1-pro") {
 		return s.fallbackPrices["gemini-3.1-pro"]
 	}
+	if pricing, ok := s.fallbackPrices[modelLower]; ok {
+		return pricing
+	}
 
-	// 默认使用Sonnet价格
-	return s.fallbackPrices["claude-sonnet-4"]
+	return nil
 }
 
 // GetModelPricing 获取模型价格配置
@@ -231,31 +251,163 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		return fallback, nil
 	}
 
+	if pricing, ok := s.lookupOpenRouterPricing(model); ok {
+		log.Printf("[Billing] Using OpenRouter pricing for model: %s", model)
+		return pricing, nil
+	}
+
 	return nil, fmt.Errorf("pricing not found for model: %s", model)
 }
 
 // GetPreviewModelPricing returns pricing only when a direct dynamic price exists.
 // It avoids fallback family pricing so preview UIs do not show misleading prices.
 func (s *BillingService) GetPreviewModelPricing(model string) *ModelPricing {
-	if s == nil || s.pricingService == nil {
+	if s == nil {
 		return nil
 	}
-	pricing := s.pricingService.GetModelPricing(strings.ToLower(strings.TrimSpace(model)))
-	if pricing == nil {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if s.pricingService != nil {
+		pricing := s.pricingService.GetModelPricing(model)
+		if pricing != nil {
+			price5m := pricing.CacheCreationInputTokenCost
+			price1h := pricing.CacheCreationInputTokenCostAbove1hr
+			enableBreakdown := price1h > 0 && price1h > price5m
+			return &ModelPricing{
+				InputPricePerToken:         pricing.InputCostPerToken,
+				OutputPricePerToken:        pricing.OutputCostPerToken,
+				CacheCreationPricePerToken: pricing.CacheCreationInputTokenCost,
+				CacheReadPricePerToken:     pricing.CacheReadInputTokenCost,
+				CacheCreation5mPrice:       price5m,
+				CacheCreation1hPrice:       price1h,
+				SupportsCacheBreakdown:     enableBreakdown,
+			}
+		}
+	}
+	if pricing, ok := s.lookupOpenRouterPricing(model); ok {
+		return pricing
+	}
+	return s.getFallbackPricing(model)
+}
+
+func (s *BillingService) lookupOpenRouterPricing(model string) (*ModelPricing, bool) {
+	cache := s.getOpenRouterPricingCache()
+	for _, candidate := range buildBillingOpenRouterPricingCandidates(model) {
+		if pricing, ok := cache[candidate]; ok {
+			return pricing, true
+		}
+	}
+	return nil, false
+}
+
+func (s *BillingService) getOpenRouterPricingCache() map[string]*ModelPricing {
+	s.openRouterMu.RLock()
+	if time.Since(s.openRouterAt) < 10*time.Minute && len(s.openRouterData) > 0 {
+		cache := make(map[string]*ModelPricing, len(s.openRouterData))
+		for key, value := range s.openRouterData {
+			cache[key] = value
+		}
+		s.openRouterMu.RUnlock()
+		return cache
+	}
+	s.openRouterMu.RUnlock()
+
+	s.openRouterMu.Lock()
+	defer s.openRouterMu.Unlock()
+	if time.Since(s.openRouterAt) < 10*time.Minute && len(s.openRouterData) > 0 {
+		cache := make(map[string]*ModelPricing, len(s.openRouterData))
+		for key, value := range s.openRouterData {
+			cache[key] = value
+		}
+		return cache
+	}
+	cache := fetchOpenRouterPricingCache()
+	if len(cache) > 0 {
+		s.openRouterData = cache
+		s.openRouterAt = time.Now()
+	}
+	out := make(map[string]*ModelPricing, len(s.openRouterData))
+	for key, value := range s.openRouterData {
+		out[key] = value
+	}
+	return out
+}
+
+func fetchOpenRouterPricingCache() map[string]*ModelPricing {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://openrouter.ai/api/v1/models", nil)
+	if err != nil {
 		return nil
 	}
-	price5m := pricing.CacheCreationInputTokenCost
-	price1h := pricing.CacheCreationInputTokenCostAbove1hr
-	enableBreakdown := price1h > 0 && price1h > price5m
-	return &ModelPricing{
-		InputPricePerToken:         pricing.InputCostPerToken,
-		OutputPricePerToken:        pricing.OutputCostPerToken,
-		CacheCreationPricePerToken: pricing.CacheCreationInputTokenCost,
-		CacheReadPricePerToken:     pricing.CacheReadInputTokenCost,
-		CacheCreation5mPrice:       price5m,
-		CacheCreation1hPrice:       price1h,
-		SupportsCacheBreakdown:     enableBreakdown,
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
 	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil || !gjson.ValidBytes(body) {
+		return nil
+	}
+	items := gjson.GetBytes(body, "data")
+	if !items.Exists() || !items.IsArray() {
+		return nil
+	}
+	cache := make(map[string]*ModelPricing, len(items.Array())*3)
+	for _, item := range items.Array() {
+		modelID := strings.TrimSpace(item.Get("id").String())
+		if modelID == "" {
+			continue
+		}
+		prompt, err1 := strconv.ParseFloat(strings.TrimSpace(item.Get("pricing.prompt").String()), 64)
+		completion, err2 := strconv.ParseFloat(strings.TrimSpace(item.Get("pricing.completion").String()), 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		pricing := &ModelPricing{InputPricePerToken: prompt, OutputPricePerToken: completion}
+		for _, candidate := range buildBillingOpenRouterPricingCandidates(modelID) {
+			cache[candidate] = pricing
+		}
+	}
+	return cache
+}
+
+func buildBillingOpenRouterPricingCandidates(model string) []string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return nil
+	}
+	candidates := []string{model, strings.ToLower(model)}
+	aliasMap := map[string][]string{
+		"chatgpt-4o-latest": {"gpt-4o", "openai/gpt-4o", "openai/chatgpt-4o-latest"},
+		"chatgpt-4o":        {"gpt-4o", "openai/gpt-4o"},
+		"deepseek-v3.2":     {"deepseek/deepseek-v3.2", "deepseek/deepseek-v3.2-exp", "deepseek/deepseek-chat-v3.2-exp"},
+		"glm-4.7":           {"z-ai/glm-4.7", "z-ai/glm-4.7-flash", "z-ai/glm-4.5", "z-ai/glm-4.5-air"},
+		"kimi-k2.5":         {"moonshotai/kimi-k2.5", "moonshotai/kimi-k2"},
+		"minimax-m2.5":      {"minimax/minimax-m2.5"},
+	}
+	if aliases, ok := aliasMap[strings.ToLower(model)]; ok {
+		candidates = append(candidates, aliases...)
+	}
+	if slash := strings.LastIndex(model, "/"); slash >= 0 && slash+1 < len(model) {
+		suffix := model[slash+1:]
+		candidates = append(candidates, suffix, strings.ToLower(suffix))
+	}
+	seen := make(map[string]struct{}, len(candidates))
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		out = append(out, candidate)
+	}
+	return out
 }
 
 // CalculateCost 计算使用费用

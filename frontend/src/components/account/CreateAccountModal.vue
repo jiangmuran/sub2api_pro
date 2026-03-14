@@ -1006,6 +1006,7 @@
               :proxy-id="form.proxy_id"
               :rate-multiplier="form.rate_multiplier"
               @apply-models="handleApplyOnlineModels"
+              @manual-pricing-change="handleManualPricingChange"
             />
           </div>
         </div>
@@ -2543,6 +2544,7 @@ const apiKeyValue = ref('')
 const openAICompatChecking = ref(false)
 const openAICompatCheckResult = ref<OpenAICompatibleCheckResult | null>(null)
 const suspendOpenAICompatReset = ref(false)
+const openAIManualModelPricing = ref<Record<string, { input_price_per_1m: number; output_price_per_1m: number }>>({})
 const modelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
@@ -2670,6 +2672,8 @@ const compatModeLabel = (mode: OpenAICompatibleCheckResult['recommended_mode']) 
       return t('admin.accounts.openai.compatModeResponsesPassthrough')
     case 'chat_completions_fallback':
       return t('admin.accounts.openai.compatModeChatFallback')
+    case 'completions_fallback':
+      return t('admin.accounts.openai.compatModeCompletionsFallback')
     default:
       return t('admin.accounts.openai.compatModeUnsupported')
   }
@@ -3288,6 +3292,7 @@ const resetForm = () => {
   openaiPassthroughEnabled.value = false
   openAICompatChecking.value = false
   openAICompatCheckResult.value = null
+  openAIManualModelPricing.value = {}
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
@@ -3383,6 +3388,10 @@ const handleApplyOnlineModels = (models: string[]) => {
   appStore.showSuccess(t('admin.accounts.openai.onlineModelsApplied'))
 }
 
+const handleManualPricingChange = (pricing: Record<string, { input_price_per_1m: number; output_price_per_1m: number }>) => {
+  openAIManualModelPricing.value = pricing
+}
+
 const buildIdentityModelMapping = (models: string[]): Record<string, string> | undefined => {
   const mapping: Record<string, string> = {}
   for (const model of models) {
@@ -3424,6 +3433,10 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     if (openAICompatCheckResult.value.suggested_extra.openai_compat_capabilities) {
       extra.openai_compat_capabilities = openAICompatCheckResult.value.suggested_extra.openai_compat_capabilities
     }
+  }
+
+  if (Object.keys(openAIManualModelPricing.value).length > 0) {
+    extra.openai_manual_model_pricing = openAIManualModelPricing.value
   }
 
   return Object.keys(extra).length > 0 ? extra : undefined

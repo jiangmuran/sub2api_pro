@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	openaipkg "github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 type Account struct {
@@ -591,8 +592,21 @@ func ensureAntigravityDefaultPassthroughs(mapping map[string]string, models []st
 // IsModelSupported 检查模型是否在 model_mapping 中（支持通配符）
 // 如果未配置 mapping，返回 true（允许所有模型）
 func (a *Account) IsModelSupported(requestedModel string) bool {
+	requestedModel = strings.TrimSpace(requestedModel)
+	if requestedModel == "" {
+		return true
+	}
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
+		if a.IsOpenAIOAuth() {
+			if isKnownOpenAIModelID(requestedModel) {
+				return true
+			}
+			if shouldTryOpenAIModelNormalization(requestedModel) {
+				return isKnownOpenAIModelID(normalizeCodexModel(requestedModel))
+			}
+			return false
+		}
 		return true // 无映射 = 允许所有
 	}
 	// 精确匹配
@@ -602,6 +616,52 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	// 通配符匹配
 	for pattern := range mapping {
 		if matchWildcard(pattern, requestedModel) {
+			return true
+		}
+	}
+	return false
+}
+
+func isKnownOpenAIModelID(model string) bool {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return false
+	}
+	for _, item := range openaipkg.DefaultModels {
+		if item.ID == model {
+			return true
+		}
+	}
+	officialPrefixes := []string{
+		"gpt-",
+		"chatgpt-",
+		"o1",
+		"o3",
+		"o4",
+		"o5",
+		"omni-",
+		"codex",
+		"text-embedding-",
+		"text-moderation-",
+		"whisper-",
+		"tts-",
+	}
+	for _, prefix := range officialPrefixes {
+		if strings.HasPrefix(model, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldTryOpenAIModelNormalization(model string) bool {
+	lower := strings.ToLower(strings.TrimSpace(model))
+	if lower == "" {
+		return false
+	}
+	keywords := []string{"gpt", "chatgpt", "codex", "o1", "o3", "o4", "o5", "omni", "whisper", "tts", "embedding", "moderation"}
+	for _, keyword := range keywords {
+		if strings.Contains(lower, keyword) {
 			return true
 		}
 	}
@@ -930,6 +990,28 @@ func (a *Account) GetOpenAICompatMode() string {
 
 func (a *Account) IsOpenAICompatChatFallback() bool {
 	return a.GetOpenAICompatMode() == OpenAICompatibleModeChatCompletionsFallback
+}
+
+func (a *Account) IsOpenAICompatCompletionsFallback() bool {
+	return a.GetOpenAICompatMode() == OpenAICompatibleModeCompletionsFallback
+}
+
+func (a *Account) IsOpenAICompatLegacyFallback() bool {
+	return a.IsOpenAICompatChatFallback() || a.IsOpenAICompatCompletionsFallback()
+}
+
+func (a *Account) OpenAICompatLegacyProtocol() string {
+	if a == nil {
+		return ""
+	}
+	switch a.GetOpenAICompatMode() {
+	case OpenAICompatibleModeChatCompletionsFallback:
+		return OpenAILegacyProtocolChat
+	case OpenAICompatibleModeCompletionsFallback:
+		return OpenAILegacyProtocolCompletions
+	default:
+		return ""
+	}
 }
 
 func (a *Account) ShouldNormalizeOpenAIModel(isCodexCLI bool) bool {

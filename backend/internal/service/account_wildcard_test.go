@@ -143,6 +143,34 @@ func TestAccountIsModelSupported(t *testing.T) {
 			requestedModel: "any-model",
 			expected:       true,
 		},
+		{
+			name:           "openai oauth without mapping blocks third party model",
+			credentials:    map[string]any{},
+			requestedModel: "kimi-k2.5",
+			expected:       false,
+		},
+		{
+			name:           "openai oauth without mapping allows future official model family",
+			credentials:    map[string]any{},
+			requestedModel: "gpt-5.6",
+			expected:       true,
+		},
+		{
+			name:           "openai oauth normalization does not treat third party keyword as official",
+			credentials:    map[string]any{},
+			requestedModel: "kimi-k2.5",
+			expected:       false,
+		},
+		{
+			name: "openai compat apikey with mapping supports third party model",
+			credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"kimi-k2.5": "kimi-k2.5",
+				},
+			},
+			requestedModel: "kimi-k2.5",
+			expected:       true,
+		},
 
 		// 精确匹配
 		{
@@ -192,7 +220,17 @@ func TestAccountIsModelSupported(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			account := &Account{
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeAPIKey,
 				Credentials: tt.credentials,
+			}
+			switch tt.name {
+			case "openai oauth without mapping blocks third party model", "openai oauth without mapping allows future official model family", "openai oauth normalization does not treat third party keyword as official":
+				account.Platform = PlatformOpenAI
+				account.Type = AccountTypeOAuth
+			case "openai compat apikey with mapping supports third party model":
+				account.Platform = PlatformOpenAI
+				account.Type = AccountTypeAPIKey
 			}
 			result := account.IsModelSupported(tt.requestedModel)
 			if result != tt.expected {

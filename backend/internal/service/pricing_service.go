@@ -552,6 +552,12 @@ func normalizeModelNameForPricing(model string) string {
 	}
 
 	model = strings.TrimLeft(model, "/")
+	switch model {
+	case "chatgpt-4o-latest":
+		return "gpt-4o"
+	case "chatgpt-4o":
+		return "gpt-4o"
+	}
 	return model
 }
 

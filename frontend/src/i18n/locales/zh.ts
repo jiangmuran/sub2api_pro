@@ -273,6 +273,7 @@ export default {
     dashboard: '仪表盘',
     announcements: '公告',
     apiKeys: 'API 密钥',
+    modelTest: '测试模型',
     usage: '使用记录',
     redeem: '兑换',
     distributor: '分销',
@@ -281,6 +282,7 @@ export default {
     groups: '分组管理',
     subscriptions: '订阅管理',
     accounts: '账号管理',
+    pricingManagement: '定价管理',
     proxies: 'IP管理',
     distributors: '分销管理',
     redeemCodes: '兑换码',
@@ -299,6 +301,67 @@ export default {
     buySubscription: '充值/订阅',
     docs: '文档',
     sora: 'Sora 创作'
+  },
+
+  modelTest: {
+    badge: '用户侧模型演练',
+    title: '测试模型',
+    description: '使用你自己的 Sub2API Key 在线获取模型、查看用户侧实际定价，并直接进行多轮对话测试。',
+    bootstrapFailed: '加载测试模型页面数据失败',
+    summary: {
+      keyCount: '可用 Key',
+      modelCount: '在线模型',
+      pricedCount: '有价模型'
+    },
+    keyPanel: {
+      title: '测试 Key',
+      description: '可选择已有用户 Key，也可以临时生成一个新的测试 Key。',
+      existingKeys: '已有 API Key',
+      existingKeysPlaceholder: '选择已有 Key',
+      directInput: '直接填入 Key',
+      directInputPlaceholder: 'sk-... 或你的用户 API Key',
+      directInputRequired: '请先填入用户 API Key',
+      verify: '验证',
+      generateTitle: '一键生成测试 Key',
+      generateHint: '选择一个分组后生成新的用户 Key，适合立刻从用户侧回测模型与定价。',
+      groupLabel: '绑定分组',
+      groupPlaceholder: '选择一个可用分组',
+      groupRequired: '请先选择分组',
+      generateButton: '生成并填入',
+      generatedAndCopied: '已生成、填入并复制测试 Key',
+      generateFailed: '生成测试 Key 失败'
+    },
+    models: {
+      title: '在线模型',
+      description: '直接通过当前用户 Key 请求网关模型列表，看到的就是用户真实可用模型。',
+      fetch: '获取模型',
+      empty: '先填入有效的用户 API Key，然后在线获取模型列表。',
+      fetchFailed: '获取模型列表失败',
+      nonJsonResponse: '接口返回了 HTML 页面而不是 JSON，请确认你使用的是有效用户 API Key，并已走正确的 /v1 路径。'
+    },
+    pricing: {
+      title: '实际定价',
+      description: '基于当前用户分组倍率，显示用户端看到的实际输入 / 输出价格（USD / 1M tokens）。',
+      effectiveRate: '当前倍率 {rate}x',
+      standardInput: '标准输入',
+      standardOutput: '标准输出',
+      actualInput: '用户输入',
+      actualOutput: '用户输出',
+      empty: '获取模型后，这里会显示对应的价格预览。'
+    },
+    chat: {
+      title: '多轮对话',
+      description: '直接通过当前用户 Key 调用网关，验证真实用户路径下的模型可用性。',
+      selectModel: '选择测试模型',
+      clear: '清空对话',
+      empty: '先获取模型并选择一个测试模型，再开始多轮对话。',
+      placeholder: '输入消息，按 Enter 发送，Shift+Enter 换行。',
+      hint: '这里走的是用户实际网关路径，不是管理员上游直连。',
+      sending: '模型回复中...',
+      send: '发送',
+      failed: '多轮对话失败',
+      emptyReply: '模型返回了空响应'
+    }
   },
 
   // Auth
@@ -876,6 +939,26 @@ export default {
 
   // Admin
   admin: {
+    pricingManagement: {
+      badge: '模型价格运营台',
+      title: '定价管理',
+      description: '集中查看缺失模型、预览价格来源、手动填充并保存模型价格，适合兼容接口和第三方模型的统一运营管理。',
+      accountSelector: '选择账号',
+      searchPlaceholder: '搜索账号名称或 Base URL',
+      noAccounts: '暂无可管理的 OpenAI API Key 账号',
+      summaryTitle: '概览',
+      totalModels: '模型总数',
+      missingModels: '缺失价格',
+      manualCount: '手动录入',
+      showMissingOnly: '只看缺失价格模型',
+      tableTitle: '模型价格表',
+      tableDesc: '支持自动预览、内置预设、复用其他账号已保存价格，并允许手动录入。',
+      noModels: '选择一个账号后，这里会显示模型价格表。',
+      savePricing: '保存价格',
+      saveSuccess: '模型价格已保存',
+      saveFailed: '保存模型价格失败',
+      loadFailed: '加载定价管理数据失败'
+    },
     // Dashboard
     dashboard: {
       title: '管理控制台',
@@ -1971,7 +2054,7 @@ export default {
         oauthPassthroughDesc:
           '开启后，该 OpenAI 账号将自动透传请求与响应，仅替换认证并保留计费/并发/审计及必要安全过滤；如遇兼容性问题可随时关闭回滚。',
         compatCheckTitle: '兼容性检测',
-        compatCheckDesc: '先探测 Responses、流式和 Chat Completions，再自动套用更稳妥的兼容建议。',
+        compatCheckDesc: '先探测 Responses、流式、Chat Completions 与 Completions，再自动套用更稳妥的兼容建议。',
         compatCheckAction: '检测兼容性',
         compatChecking: '检测中...',
         compatCheckDone: '兼容性检测完成',
@@ -1985,6 +2068,7 @@ export default {
         compatModeResponsesNative: '标准模式（Responses）',
         compatModeResponsesPassthrough: '兼容模式（Responses 透传）',
         compatModeChatFallback: '旧接口模式（Chat Fallback）',
+        compatModeCompletionsFallback: '旧接口模式（Completions Fallback）',
         compatModeUnsupported: '暂不支持',
         compatCheckSuccess: '通过',
         compatCheckPartial: '部分通过',
@@ -2023,12 +2107,22 @@ export default {
         pricedCount: '有价模型',
         modelSummaryHint: '点击模型可直接切到对话预览；定价缺失的模型会显示为 --。',
         pricingTitle: '实际定价预览',
-        pricingDesc: '展示标准价格与按当前账号倍率估算后的价格（单位：USD / 1M tokens）。',
+        pricingDesc: '展示标准价格与按当前账号倍率估算后的价格（单位：USD / 1M tokens）。若本地价格缺失，会回退到 OpenRouter 公共模型目录，仅作配置参考。',
+        pricingHint: '提示：第三方兼容模型的价格可能来自 OpenRouter 公共目录，建议保存账号前再核对一次你的实际售卖策略。',
         standardInputPrice: '标准输入',
         standardOutputPrice: '标准输出',
         accountInputPrice: '倍率后输入',
         accountOutputPrice: '倍率后输出',
         noPricingRows: '暂无可展示的价格数据',
+        unavailablePricingHint: '像 doubao-* 这类模型如果本地和 OpenRouter 公共目录都没有价格，就会显示为 --，需要你手动确认成本。',
+        manualPricingHint: '如果自动匹配不到价格，可以直接在表格里手动输入输入价和输出价，右侧会即时按当前账号倍率预估展示。',
+        manualPricingPlaceholder: '手动输入',
+        pricingSourceLocal: '来源：本地动态价格库',
+        pricingSourceBuiltin: '来源：内置豆包预设',
+        pricingSourceOpenRouter: '来源：OpenRouter 公共目录',
+        pricingSourceAccount: '来源：其他账号已保存价格',
+        pricingSourceManual: '来源：当前手动录入',
+        pricingSourceUnknown: '来源：暂未识别',
         selectChatModel: '选择对话模型',
         clearChat: '清空对话',
         chatEmpty: '选一个在线模型，然后直接在这里进行多轮对话测试。',

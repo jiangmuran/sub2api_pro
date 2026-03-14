@@ -142,7 +142,7 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTran
 
 func normalizeCodexModel(model string) string {
 	if model == "" {
-		return "gpt-5.1"
+		return ""
 	}
 
 	modelID := model
@@ -198,7 +198,7 @@ func normalizeCodexModel(model string) string {
 		return "gpt-5.1"
 	}
 
-	return "gpt-5.1"
+	return ""
 }
 
 func getNormalizedCodexModel(modelID string) string {

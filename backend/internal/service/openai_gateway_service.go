@@ -1476,7 +1476,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
 	}
-	passthroughEnabled := account.IsOpenAIPassthroughEnabled() && !account.IsOpenAICompatChatFallback()
+	passthroughEnabled := account.IsOpenAIPassthroughEnabled() && !account.IsOpenAICompatLegacyFallback()
 	if passthroughEnabled {
 		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
 		reasoningEffort := extractOpenAIReasoningEffortFromBody(body, reqModel)
@@ -1731,10 +1731,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
-	if account.IsOpenAICompatChatFallback() {
-		legacyBody, convertErr := ConvertOpenAIResponsesRequestToLegacy(body, OpenAILegacyProtocolChat)
+	if legacyProtocol := account.OpenAICompatLegacyProtocol(); legacyProtocol != "" {
+		legacyBody, convertErr := ConvertOpenAIResponsesRequestToLegacy(body, legacyProtocol)
 		if convertErr != nil {
-			return nil, fmt.Errorf("convert responses request to chat fallback: %w", convertErr)
+			return nil, fmt.Errorf("convert responses request to legacy fallback: %w", convertErr)
 		}
 		body = legacyBody
 	}
@@ -1970,7 +1970,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				return retryResult, retryErr
 			}
 		}
-		if retryResult, retryErr, retried := s.retryOpenAICompatibleChatFallbackOnce(ctx, c, account, body, resp.StatusCode, respBody); retried {
+		if retryResult, retryErr, retried := s.retryOpenAICompatibleLegacyFallbackOnce(ctx, c, account, body, resp.StatusCode, respBody); retried {
 			return retryResult, retryErr
 		}
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
@@ -2674,6 +2674,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		if baseURL == "" {
 			if account.IsOpenAICompatChatFallback() {
 				targetURL = buildOpenAIChatCompletionsURL("https://api.openai.com")
+			} else if account.IsOpenAICompatCompletionsFallback() {
+				targetURL = buildOpenAICompletionsURL("https://api.openai.com")
 			} else {
 				targetURL = openaiPlatformAPIURL
 			}
@@ -2684,6 +2686,8 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 			}
 			if account.IsOpenAICompatChatFallback() {
 				targetURL = buildOpenAIChatCompletionsURL(validatedURL)
+			} else if account.IsOpenAICompatCompletionsFallback() {
+				targetURL = buildOpenAICompletionsURL(validatedURL)
 			} else {
 				targetURL = buildOpenAIResponsesURL(validatedURL)
 			}
@@ -3039,9 +3043,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	legacyProtocol := GetOpenAILegacyProtocol(c)
 	needModelReplace := legacyProtocol == "" && originalModel != mappedModel
 	var legacyToResponsesBridge *openAILegacyResponsesStreamState
-	if account.IsOpenAICompatChatFallback() {
+	if legacyProtocol := account.OpenAICompatLegacyProtocol(); legacyProtocol != "" {
 		legacyToResponsesBridge = &openAILegacyResponsesStreamState{
-			Protocol:      OpenAILegacyProtocolChat,
+			Protocol:      legacyProtocol,
 			FallbackModel: mappedModel,
 		}
 	}
@@ -3093,6 +3097,8 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 					data = converted
 					line = "data: " + converted
 				} else if strings.TrimSpace(data) == "[DONE]" {
+					return
+				} else {
 					return
 				}
 			}
@@ -3406,10 +3412,10 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		}
 	}
 
-	if account.IsOpenAICompatChatFallback() {
-		convertedBody, convertErr := ConvertOpenAILegacyResponseToResponses(body, OpenAILegacyProtocolChat, mappedModel)
+	if legacyProtocol := account.OpenAICompatLegacyProtocol(); legacyProtocol != "" {
+		convertedBody, convertErr := ConvertOpenAILegacyResponseToResponses(body, legacyProtocol, mappedModel)
 		if convertErr != nil {
-			return nil, fmt.Errorf("convert chat fallback response: %w", convertErr)
+			return nil, fmt.Errorf("convert legacy fallback response: %w", convertErr)
 		}
 		body = convertedBody
 	}
@@ -3625,14 +3631,7 @@ func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, erro
 // - base 已是 /responses：原样返回
 // - 其他情况：追加 /v1/responses
 func buildOpenAIResponsesURL(base string) string {
-	normalized := strings.TrimRight(strings.TrimSpace(base), "/")
-	if strings.HasSuffix(normalized, "/responses") {
-		return normalized
-	}
-	if strings.HasSuffix(normalized, "/v1") {
-		return normalized + "/responses"
-	}
-	return normalized + "/v1/responses"
+	return buildOpenAIEndpointURL(base, "responses")
 }
 
 func (s *OpenAIGatewayService) replaceModelInResponseBody(body []byte, fromModel, toModel string) []byte {
@@ -4201,9 +4200,9 @@ func dropOpenAIItemReferences(body []byte) ([]byte, bool, error) {
 
 const openAIOAuthInvalidBearerRetryKey = "openai_oauth_invalid_bearer_retry"
 
-const openAICompatibleChatFallbackRetryKey = "openai_compatible_chat_fallback_retry"
+const openAICompatibleLegacyFallbackRetryKey = "openai_compatible_legacy_fallback_retry"
 
-func (s *OpenAIGatewayService) retryOpenAICompatibleChatFallbackOnce(
+func (s *OpenAIGatewayService) retryOpenAICompatibleLegacyFallbackOnce(
 	ctx context.Context,
 	c *gin.Context,
 	account *Account,
@@ -4214,7 +4213,7 @@ func (s *OpenAIGatewayService) retryOpenAICompatibleChatFallbackOnce(
 	if account == nil || c == nil {
 		return nil, nil, false
 	}
-	if account.IsOpenAICompatChatFallback() || !account.IsOpenAIApiKey() {
+	if !account.IsOpenAIApiKey() {
 		return nil, nil, false
 	}
 	if strings.TrimSpace(account.GetOpenAIBaseURL()) == "" || account.GetOpenAIBaseURL() == "https://api.openai.com" {
@@ -4223,7 +4222,7 @@ func (s *OpenAIGatewayService) retryOpenAICompatibleChatFallbackOnce(
 	if statusCode != http.StatusNotFound && statusCode != http.StatusMethodNotAllowed && statusCode != http.StatusNotImplemented {
 		return nil, nil, false
 	}
-	if v, ok := c.Get(openAICompatibleChatFallbackRetryKey); ok {
+	if v, ok := c.Get(openAICompatibleLegacyFallbackRetryKey); ok {
 		if done, ok := v.(bool); ok && done {
 			return nil, nil, false
 		}
@@ -4232,10 +4231,21 @@ func (s *OpenAIGatewayService) retryOpenAICompatibleChatFallbackOnce(
 		return nil, nil, false
 	}
 
-	c.Set(openAICompatibleChatFallbackRetryKey, true)
-	retryAccount := cloneAccountWithCompatMode(account, OpenAICompatibleModeChatCompletionsFallback)
-	logger.LegacyPrintf("service.openai_gateway", "[OpenAI Compat] Falling back to chat/completions after unsupported responses endpoint: account=%d name=%s status=%d",
-		account.ID, account.Name, statusCode)
+	c.Set(openAICompatibleLegacyFallbackRetryKey, true)
+	retryMode := OpenAICompatibleModeChatCompletionsFallback
+	switch account.GetOpenAICompatMode() {
+	case OpenAICompatibleModeChatCompletionsFallback:
+		retryMode = OpenAICompatibleModeCompletionsFallback
+	case OpenAICompatibleModeCompletionsFallback:
+		retryMode = OpenAICompatibleModeChatCompletionsFallback
+	default:
+		if strings.Contains(strings.ToLower(account.GetOpenAIBaseURL()), "/completions") {
+			retryMode = OpenAICompatibleModeCompletionsFallback
+		}
+	}
+	retryAccount := cloneAccountWithCompatMode(account, retryMode)
+	logger.LegacyPrintf("service.openai_gateway", "[OpenAI Compat] Retrying with %s after unsupported endpoint: account=%d name=%s status=%d",
+		retryMode, account.ID, account.Name, statusCode)
 	result, err := s.Forward(ctx, c, retryAccount, requestBody)
 	return result, err, true
 }

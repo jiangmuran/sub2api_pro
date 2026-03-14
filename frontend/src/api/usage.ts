@@ -10,7 +10,8 @@ import type {
   UsageStatsResponse,
   PaginatedResponse,
   TrendDataPoint,
-  ModelStat
+  ModelStat,
+  ModelPricingPreviewResponse
 } from '@/types'
 
 // ==================== Dashboard Types ====================
@@ -257,6 +258,11 @@ export async function getDashboardApiKeysUsage(
   return data
 }
 
+export async function getModelPricingPreview(models: string[]): Promise<ModelPricingPreviewResponse> {
+  const { data } = await apiClient.post<ModelPricingPreviewResponse>('/usage/model-pricing', { models })
+  return data
+}
+
 export const usageAPI = {
   list,
   query,
@@ -268,7 +274,8 @@ export const usageAPI = {
   getDashboardStats,
   getDashboardTrend,
   getDashboardModels,
-  getDashboardApiKeysUsage
+  getDashboardApiKeysUsage,
+  getModelPricingPreview
 }
 
 export default usageAPI

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -57,15 +58,18 @@ type TestEvent struct {
 
 // AccountTestService handles account testing operations
 type AccountTestService struct {
-	accountRepo               AccountRepository
-	geminiTokenProvider       *GeminiTokenProvider
-	antigravityGatewayService *AntigravityGatewayService
-	httpUpstream              HTTPUpstream
-	billingService            *BillingService
-	cfg                       *config.Config
-	soraTestGuardMu           sync.Mutex
-	soraTestLastRun           map[int64]time.Time
-	soraTestCooldown          time.Duration
+	accountRepo                AccountRepository
+	geminiTokenProvider        *GeminiTokenProvider
+	antigravityGatewayService  *AntigravityGatewayService
+	httpUpstream               HTTPUpstream
+	billingService             *BillingService
+	cfg                        *config.Config
+	soraTestGuardMu            sync.Mutex
+	soraTestLastRun            map[int64]time.Time
+	soraTestCooldown           time.Duration
+	openRouterPricingMu        sync.RWMutex
+	openRouterPricingCache     map[string]openRouterModelPricing
+	openRouterPricingFetchedAt time.Time
 }
 
 const defaultSoraTestCooldown = 10 * time.Second
@@ -88,6 +92,7 @@ func NewAccountTestService(
 		cfg:                       cfg,
 		soraTestLastRun:           make(map[int64]time.Time),
 		soraTestCooldown:          defaultSoraTestCooldown,
+		openRouterPricingCache:    make(map[string]openRouterModelPricing),
 	}
 }
 
@@ -99,6 +104,7 @@ type OpenAICompatiblePreviewModel struct {
 	AccountInputPricePer1M  float64 `json:"account_input_price_per_1m"`
 	AccountOutputPricePer1M float64 `json:"account_output_price_per_1m"`
 	PricingAvailable        bool    `json:"pricing_available"`
+	PricingSource           string  `json:"pricing_source,omitempty"`
 }
 
 type OpenAICompatibleChatPreviewInput struct {
@@ -116,8 +122,28 @@ type OpenAICompatibleChatPreviewResult struct {
 	RawBody string `json:"raw_body,omitempty"`
 }
 
-func (s *AccountTestService) PreviewOpenAICompatibleModels(ctx context.Context, input OpenAICompatibleProbeInput, rateMultiplier float64) ([]OpenAICompatiblePreviewModel, error) {
-	models := s.DiscoverOpenAICompatibleModels(ctx, input.BaseURL, input.APIKey, input.ProxyURL, input.UserAgent)
+type openRouterModelPricing struct {
+	InputPerToken  float64
+	OutputPerToken float64
+}
+
+type accountStoredModelPricing struct {
+	InputPricePer1M  float64 `json:"input_price_per_1m"`
+	OutputPricePer1M float64 `json:"output_price_per_1m"`
+}
+
+var builtInCompatibleModelPricing = map[string]openRouterModelPricing{
+	"doubao-seed-2.0-pro":  {InputPerToken: 3.2 / 1_000_000, OutputPerToken: 16.0 / 1_000_000},
+	"doubao-seed-2.0-lite": {InputPerToken: 0.6 / 1_000_000, OutputPerToken: 3.6 / 1_000_000},
+	"doubao-seed-2.0-mini": {InputPerToken: 0.2 / 1_000_000, OutputPerToken: 2.0 / 1_000_000},
+	"doubao-seed-2.0-code": {InputPerToken: 3.2 / 1_000_000, OutputPerToken: 16.0 / 1_000_000},
+	"doubao-seed-1.8":      {InputPerToken: 0.8 / 1_000_000, OutputPerToken: 2.0 / 1_000_000},
+	"doubao-seed-code":     {InputPerToken: 1.2 / 1_000_000, OutputPerToken: 8.0 / 1_000_000},
+}
+
+func (s *AccountTestService) PreviewOpenAICompatibleModels(ctx context.Context, input OpenAICompatibleProbeInput, rateMultiplier float64, extraModels []string) ([]OpenAICompatiblePreviewModel, error) {
+	discoveredModels := s.DiscoverOpenAICompatibleModels(ctx, input.BaseURL, input.APIKey, input.ProxyURL, input.UserAgent)
+	models := mergeModelLists(discoveredModels, extraModels)
 	if len(models) == 0 {
 		return nil, nil
 	}
@@ -134,11 +160,259 @@ func (s *AccountTestService) PreviewOpenAICompatibleModels(ctx context.Context, 
 				item.AccountInputPricePer1M = item.InputPricePer1M * rateMultiplier
 				item.AccountOutputPricePer1M = item.OutputPricePer1M * rateMultiplier
 				item.PricingAvailable = true
+				item.PricingSource = "local"
+			}
+		}
+		if !item.PricingAvailable {
+			if pricing, ok := lookupBuiltInCompatibleModelPricing(model); ok {
+				item.InputPricePer1M = pricing.InputPerToken * 1_000_000
+				item.OutputPricePer1M = pricing.OutputPerToken * 1_000_000
+				item.AccountInputPricePer1M = item.InputPricePer1M * rateMultiplier
+				item.AccountOutputPricePer1M = item.OutputPricePer1M * rateMultiplier
+				item.PricingAvailable = true
+				item.PricingSource = "builtin"
+			}
+		}
+		if !item.PricingAvailable {
+			if pricing, ok := s.lookupOpenRouterModelPricing(ctx, model); ok {
+				item.InputPricePer1M = pricing.InputPerToken * 1_000_000
+				item.OutputPricePer1M = pricing.OutputPerToken * 1_000_000
+				item.AccountInputPricePer1M = item.InputPricePer1M * rateMultiplier
+				item.AccountOutputPricePer1M = item.OutputPricePer1M * rateMultiplier
+				item.PricingAvailable = true
+				item.PricingSource = "openrouter"
+			}
+		}
+		if !item.PricingAvailable {
+			if pricing, ok := s.lookupAccountStoredModelPricing(ctx, model); ok {
+				item.InputPricePer1M = pricing.InputPricePer1M
+				item.OutputPricePer1M = pricing.OutputPricePer1M
+				item.AccountInputPricePer1M = item.InputPricePer1M * rateMultiplier
+				item.AccountOutputPricePer1M = item.OutputPricePer1M * rateMultiplier
+				item.PricingAvailable = true
+				item.PricingSource = "account"
 			}
 		}
 		result = append(result, item)
 	}
 	return result, nil
+}
+
+func mergeModelLists(primary, extra []string) []string {
+	seen := make(map[string]struct{}, len(primary)+len(extra))
+	out := make([]string, 0, len(primary)+len(extra))
+	appendModel := func(model string) {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			return
+		}
+		if _, ok := seen[model]; ok {
+			return
+		}
+		seen[model] = struct{}{}
+		out = append(out, model)
+	}
+	for _, model := range primary {
+		appendModel(model)
+	}
+	for _, model := range extra {
+		appendModel(model)
+	}
+	return out
+}
+
+func lookupBuiltInCompatibleModelPricing(model string) (openRouterModelPricing, bool) {
+	pricing, ok := builtInCompatibleModelPricing[strings.ToLower(strings.TrimSpace(model))]
+	return pricing, ok
+}
+
+func (s *AccountTestService) lookupAccountStoredModelPricing(ctx context.Context, model string) (accountStoredModelPricing, bool) {
+	if s.accountRepo == nil {
+		return accountStoredModelPricing{}, false
+	}
+	accounts, err := s.accountRepo.ListActive(ctx)
+	if err != nil {
+		return accountStoredModelPricing{}, false
+	}
+	model = strings.TrimSpace(model)
+	for _, account := range accounts {
+		if len(account.Extra) == 0 {
+			continue
+		}
+		rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+		if !ok {
+			continue
+		}
+		pricingMap, ok := rawPricing.(map[string]any)
+		if !ok {
+			continue
+		}
+		entry, ok := pricingMap[model]
+		if !ok {
+			entry, ok = pricingMap[strings.ToLower(model)]
+		}
+		if !ok {
+			continue
+		}
+		entryMap, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		inputPrice, _ := toFloat64(entryMap["input_price_per_1m"])
+		outputPrice, _ := toFloat64(entryMap["output_price_per_1m"])
+		if inputPrice <= 0 && outputPrice <= 0 {
+			continue
+		}
+		return accountStoredModelPricing{InputPricePer1M: inputPrice, OutputPricePer1M: outputPrice}, true
+	}
+	return accountStoredModelPricing{}, false
+}
+
+func toFloat64(value any) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case json.Number:
+		parsed, err := v.Float64()
+		return parsed, err == nil
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		return parsed, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func (s *AccountTestService) lookupOpenRouterModelPricing(ctx context.Context, model string) (openRouterModelPricing, bool) {
+	if strings.TrimSpace(model) == "" {
+		return openRouterModelPricing{}, false
+	}
+	cache := s.getOpenRouterPricingCache(ctx)
+	if len(cache) == 0 {
+		return openRouterModelPricing{}, false
+	}
+	model = strings.TrimSpace(model)
+	for _, candidate := range buildOpenRouterPricingCandidates(model) {
+		if pricing, ok := cache[candidate]; ok {
+			return pricing, true
+		}
+	}
+	return openRouterModelPricing{}, false
+}
+
+func buildOpenRouterPricingCandidates(model string) []string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return nil
+	}
+	candidates := []string{model, strings.ToLower(model)}
+	aliasMap := map[string][]string{
+		"chatgpt-4o-latest": {"gpt-4o", "openai/gpt-4o", "openai/chatgpt-4o-latest"},
+		"chatgpt-4o":        {"gpt-4o", "openai/gpt-4o"},
+		"deepseek-v3.2":     {"deepseek/deepseek-v3.2", "deepseek/deepseek-v3.2-exp"},
+		"glm-4.7":           {"z-ai/glm-4.7", "z-ai/glm-4.7-flash"},
+	}
+	if aliases, ok := aliasMap[strings.ToLower(model)]; ok {
+		candidates = append(candidates, aliases...)
+	}
+	seen := make(map[string]struct{}, len(candidates))
+	out := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		out = append(out, candidate)
+	}
+	return out
+}
+
+func (s *AccountTestService) getOpenRouterPricingCache(ctx context.Context) map[string]openRouterModelPricing {
+	s.openRouterPricingMu.RLock()
+	if time.Since(s.openRouterPricingFetchedAt) < 10*time.Minute && len(s.openRouterPricingCache) > 0 {
+		cache := make(map[string]openRouterModelPricing, len(s.openRouterPricingCache))
+		for key, value := range s.openRouterPricingCache {
+			cache[key] = value
+		}
+		s.openRouterPricingMu.RUnlock()
+		return cache
+	}
+	s.openRouterPricingMu.RUnlock()
+
+	s.openRouterPricingMu.Lock()
+	defer s.openRouterPricingMu.Unlock()
+	if time.Since(s.openRouterPricingFetchedAt) < 10*time.Minute && len(s.openRouterPricingCache) > 0 {
+		cache := make(map[string]openRouterModelPricing, len(s.openRouterPricingCache))
+		for key, value := range s.openRouterPricingCache {
+			cache[key] = value
+		}
+		return cache
+	}
+	cache := s.fetchOpenRouterPricingCache(ctx)
+	if len(cache) > 0 {
+		s.openRouterPricingCache = cache
+		s.openRouterPricingFetchedAt = time.Now()
+	}
+	out := make(map[string]openRouterModelPricing, len(s.openRouterPricingCache))
+	for key, value := range s.openRouterPricingCache {
+		out[key] = value
+	}
+	return out
+}
+
+func (s *AccountTestService) fetchOpenRouterPricingCache(ctx context.Context) map[string]openRouterModelPricing {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://openrouter.ai/api/v1/models", nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil || !gjson.ValidBytes(body) {
+		return nil
+	}
+	items := gjson.GetBytes(body, "data")
+	if !items.Exists() || !items.IsArray() {
+		return nil
+	}
+	cache := make(map[string]openRouterModelPricing, len(items.Array())*2)
+	for _, item := range items.Array() {
+		modelID := strings.TrimSpace(item.Get("id").String())
+		if modelID == "" {
+			continue
+		}
+		promptPrice, err1 := strconv.ParseFloat(strings.TrimSpace(item.Get("pricing.prompt").String()), 64)
+		completionPrice, err2 := strconv.ParseFloat(strings.TrimSpace(item.Get("pricing.completion").String()), 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		pricing := openRouterModelPricing{InputPerToken: promptPrice, OutputPerToken: completionPrice}
+		cache[modelID] = pricing
+		cache[strings.ToLower(modelID)] = pricing
+		if slash := strings.LastIndex(modelID, "/"); slash >= 0 && slash+1 < len(modelID) {
+			suffix := modelID[slash+1:]
+			cache[suffix] = pricing
+			cache[strings.ToLower(suffix)] = pricing
+		}
+	}
+	return cache
 }
 
 func (s *AccountTestService) PreviewOpenAICompatibleChat(ctx context.Context, input OpenAICompatibleChatPreviewInput) (*OpenAICompatibleChatPreviewResult, error) {
@@ -441,6 +715,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	var apiURL string
 	var isOAuth bool
 	var chatgptAccountID string
+	var legacyFallbackProtocol string
 
 	if account.IsOAuth() {
 		isOAuth = true
@@ -468,7 +743,16 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+		if legacyFallbackProtocol = account.OpenAICompatLegacyProtocol(); legacyFallbackProtocol != "" {
+			switch legacyFallbackProtocol {
+			case OpenAILegacyProtocolCompletions:
+				apiURL = buildOpenAICompletionsURL(normalizedBaseURL)
+			default:
+				apiURL = buildOpenAIChatCompletionsURL(normalizedBaseURL)
+			}
+		} else {
+			apiURL = buildOpenAIResponsesURL(normalizedBaseURL)
+		}
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -483,6 +767,13 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	// Create OpenAI Responses API payload
 	payload := createOpenAITestPayload(testModelID, isOAuth)
 	payloadBytes, _ := json.Marshal(payload)
+	if legacyFallbackProtocol != "" {
+		legacyPayload, err := ConvertOpenAIResponsesRequestToLegacy(payloadBytes, legacyFallbackProtocol)
+		if err != nil {
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to create fallback payload: %s", err.Error()))
+		}
+		payloadBytes = legacyPayload
+	}
 
 	// Send test_start event
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
@@ -519,10 +810,36 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if !isOAuth && legacyFallbackProtocol == "" && isLikelyUnsupportedEndpoint(resp.StatusCode, body) {
+			legacyPayload, err := ConvertOpenAIResponsesRequestToLegacy(payloadBytes, OpenAILegacyProtocolChat)
+			if err != nil {
+				return s.sendErrorAndEnd(c, fmt.Sprintf("Fallback payload conversion failed: %s", err.Error()))
+			}
+			fallbackURL := buildOpenAIChatCompletionsURL(account.GetOpenAIBaseURL())
+			fallbackReq, reqErr := http.NewRequestWithContext(ctx, "POST", fallbackURL, bytes.NewReader(legacyPayload))
+			if reqErr != nil {
+				return s.sendErrorAndEnd(c, "Failed to create fallback request")
+			}
+			fallbackReq.Header.Set("Content-Type", "application/json")
+			fallbackReq.Header.Set("Authorization", "Bearer "+authToken)
+			fallbackResp, fallbackErr := s.httpUpstream.DoWithTLS(fallbackReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+			if fallbackErr != nil {
+				return s.sendErrorAndEnd(c, fmt.Sprintf("Fallback request failed: %s", fallbackErr.Error()))
+			}
+			defer func() { _ = fallbackResp.Body.Close() }()
+			if fallbackResp.StatusCode != http.StatusOK {
+				fallbackBody, _ := io.ReadAll(fallbackResp.Body)
+				return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", fallbackResp.StatusCode, string(fallbackBody)))
+			}
+			return s.processOpenAILegacyStream(c, fallbackResp.Body)
+		}
 		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
 	}
 
 	// Process SSE stream
+	if legacyFallbackProtocol != "" {
+		return s.processOpenAILegacyStream(c, resp.Body)
+	}
 	return s.processOpenAIStream(c, resp.Body)
 }
 
@@ -1651,6 +1968,51 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 					errorMsg = msg
 				}
 			}
+			return s.sendErrorAndEnd(c, errorMsg)
+		}
+	}
+}
+
+func (s *AccountTestService) processOpenAILegacyStream(c *gin.Context, body io.Reader) error {
+	reader := bufio.NewReader(body)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+				return nil
+			}
+			return s.sendErrorAndEnd(c, fmt.Sprintf("Stream read error: %s", err.Error()))
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" || !sseDataPrefix.MatchString(line) {
+			continue
+		}
+
+		jsonStr := sseDataPrefix.ReplaceAllString(line, "")
+		if jsonStr == "[DONE]" {
+			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+			return nil
+		}
+
+		if !gjson.Valid(jsonStr) {
+			continue
+		}
+		if text := strings.TrimSpace(gjson.Get(jsonStr, "choices.0.delta.content").String()); text != "" {
+			s.sendEvent(c, TestEvent{Type: "content", Text: text})
+			continue
+		}
+		if text := strings.TrimSpace(gjson.Get(jsonStr, "choices.0.text").String()); text != "" {
+			s.sendEvent(c, TestEvent{Type: "content", Text: text})
+			continue
+		}
+		if finishReason := strings.TrimSpace(gjson.Get(jsonStr, "choices.0.finish_reason").String()); finishReason != "" {
+			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+			return nil
+		}
+		if errorMsg := normalizeOpenAICompatibleErrorMessage([]byte(jsonStr)); errorMsg != "" && gjson.Get(jsonStr, "error").Exists() {
 			return s.sendErrorAndEnd(c, errorMsg)
 		}
 	}

@@ -165,6 +165,13 @@ interface FileConfig {
   highlighted?: string
 }
 
+interface OpenRouterModelMeta {
+  id: string
+  name: string
+  contextLength: number
+  maxOutputTokens?: number
+}
+
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
@@ -174,6 +181,7 @@ const { copyToClipboard: clipboardCopy } = useClipboard()
 const copiedIndex = ref<number | null>(null)
 const activeTab = ref<string>('unix')
 const activeClientTab = ref<string>('claude')
+const openRouterModels = ref<OpenRouterModelMeta[]>([])
 
 // Reset tabs when platform changes
 const defaultClientTab = computed(() => {
@@ -198,6 +206,32 @@ watch(() => props.platform, () => {
 watch(activeClientTab, () => {
   activeTab.value = 'unix'
 })
+
+watch(
+  () => [props.show, props.platform, activeClientTab.value],
+  async ([show, platform]) => {
+    if (!show || platform !== 'openai') {
+      return
+    }
+    if (openRouterModels.value.length > 0) {
+      return
+    }
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/models', { headers: { Accept: 'application/json' } })
+      const data = await response.json()
+      const items = Array.isArray(data?.data) ? data.data : []
+      openRouterModels.value = items.map((item: any) => ({
+        id: item.id,
+        name: item.name || item.id,
+        contextLength: Number(item.context_length) || 0,
+        maxOutputTokens: Number(item.top_provider?.max_completion_tokens) || undefined
+      }))
+    } catch {
+      openRouterModels.value = []
+    }
+  },
+  { immediate: true }
+)
 
 // Icon components
 const AppleIcon = {
@@ -387,7 +421,7 @@ const currentFiles = computed((): FileConfig[] => {
       case 'anthropic':
         return [generateOpenCodeConfig('anthropic', apiBase, apiKey)]
       case 'openai':
-        return [generateOpenCodeConfig('openai', apiBase, apiKey)]
+        return [generateOpenCodeConfig('openai', apiBase, apiKey, undefined, openRouterModels.value)]
       case 'gemini':
         return [generateOpenCodeConfig('gemini', geminiBase, apiKey)]
       case 'antigravity':
@@ -396,16 +430,16 @@ const currentFiles = computed((): FileConfig[] => {
           generateOpenCodeConfig('antigravity-gemini', antigravityGeminiBase, apiKey, 'opencode.json (Gemini)')
         ]
       default:
-        return [generateOpenCodeConfig('openai', apiBase, apiKey)]
+        return [generateOpenCodeConfig('openai', apiBase, apiKey, undefined, openRouterModels.value)]
     }
   }
 
   switch (props.platform) {
     case 'openai':
       if (activeClientTab.value === 'codex-ws') {
-        return generateOpenAIWsFiles(baseUrl, apiKey)
+        return generateOpenAIWsFiles(baseUrl, apiKey, openRouterModels.value)
       }
-      return generateOpenAIFiles(baseUrl, apiKey)
+      return generateOpenAIFiles(baseUrl, apiKey, openRouterModels.value)
     case 'gemini':
       return [generateGeminiCliContent(baseUrl, apiKey)]
     case 'antigravity':
@@ -491,11 +525,12 @@ ${keyword('$env:')}${variable('GEMINI_MODEL')}${operator('=')}${string(`"${model
   return { path, content, highlighted }
 }
 
-function generateOpenAIFiles(baseUrl: string, apiKey: string): FileConfig[] {
+function generateOpenAIFiles(baseUrl: string, apiKey: string, modelMeta: OpenRouterModelMeta[] = []): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
 
   // config.toml content
+  const discoveredModelsComment = buildCodexDiscoveredModelsComment(modelMeta)
   const configContent = `model_provider = "sub2api"
 model = "gpt-5.3-codex"
 model_reasoning_effort = "high"
@@ -508,7 +543,7 @@ model_verbosity = "high"
 name = "sub2api"
 base_url = "${baseUrl}"
 wire_api = "responses"
-requires_openai_auth = true`
+requires_openai_auth = true${discoveredModelsComment}`
 
   // auth.json content
   const authContent = `{
@@ -528,11 +563,12 @@ requires_openai_auth = true`
   ]
 }
 
-function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {
+function generateOpenAIWsFiles(baseUrl: string, apiKey: string, modelMeta: OpenRouterModelMeta[] = []): FileConfig[] {
   const isWindows = activeTab.value === 'windows'
   const configDir = isWindows ? '%userprofile%\\.codex' : '~/.codex'
 
   // config.toml content with WebSocket v2
+  const discoveredModelsComment = buildCodexDiscoveredModelsComment(modelMeta)
   const configContent = `model_provider = "sub2api"
 model = "gpt-5.3-codex"
 model_reasoning_effort = "high"
@@ -549,7 +585,7 @@ supports_websockets = true
 requires_openai_auth = true
 
 [features]
-responses_websockets_v2 = true`
+responses_websockets_v2 = true${discoveredModelsComment}`
 
   // auth.json content
   const authContent = `{
@@ -569,7 +605,7 @@ responses_websockets_v2 = true`
   ]
 }
 
-function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: string, pathLabel?: string): FileConfig {
+function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: string, pathLabel?: string, modelMeta: OpenRouterModelMeta[] = []): FileConfig {
   const provider: Record<string, any> = {
     [platform]: {
       options: {
@@ -978,7 +1014,10 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
     provider[platform].name = 'Antigravity (Gemini)'
     provider[platform].models = antigravityGeminiModels
   } else if (platform === 'openai') {
-    provider[platform].models = openaiModels
+    provider[platform].models = {
+      ...openaiModels,
+      ...buildOpenCodeOpenRouterModels(modelMeta)
+    }
   }
 
   const agent =
@@ -1012,6 +1051,34 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
     content,
     hint: t('keys.useKeyModal.opencode.hint')
   }
+}
+
+function buildOpenCodeOpenRouterModels(modelMeta: OpenRouterModelMeta[]): Record<string, any> {
+  const models: Record<string, any> = {}
+  for (const item of modelMeta) {
+    if (!item.id || models[item.id]) continue
+    models[item.id] = {
+      name: item.name || item.id,
+      limit: {
+        context: item.contextLength || 128000,
+        output: item.maxOutputTokens || 65536
+      }
+    }
+  }
+  return models
+}
+
+function buildCodexDiscoveredModelsComment(modelMeta: OpenRouterModelMeta[]): string {
+  if (modelMeta.length === 0) {
+    return ''
+  }
+  const lines = modelMeta
+    .slice(0, 80)
+    .map((item) => `# ${item.id} | context=${item.contextLength || '-'} | output=${item.maxOutputTokens || '-'}`)
+  return `
+
+# Discovered OpenRouter models
+${lines.join('\n')}`
 }
 
 const copyContent = async (content: string, index: number) => {

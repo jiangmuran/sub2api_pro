@@ -121,6 +121,16 @@ func TestGetModelPricing_FallbackMatchesByFamily(t *testing.T) {
 	}
 }
 
+func TestCalculateCost_DoubaoBuiltinPricing(t *testing.T) {
+	svc := newTestBillingService()
+	tokens := UsageTokens{InputTokens: 1000, OutputTokens: 1000}
+	cost, err := svc.CalculateCost("doubao-seed-2.0-pro", tokens, 1.0)
+	require.NoError(t, err)
+	require.InDelta(t, 0.0032, cost.InputCost, 1e-10)
+	require.InDelta(t, 0.016, cost.OutputCost, 1e-10)
+	require.Greater(t, cost.ActualCost, 0.0)
+}
+
 func TestGetModelPricing_CaseInsensitive(t *testing.T) {
 	svc := newTestBillingService()
 

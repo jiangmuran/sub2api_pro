@@ -18,16 +18,69 @@ import (
 
 // UsageHandler handles usage-related requests
 type UsageHandler struct {
-	usageService  *service.UsageService
-	apiKeyService *service.APIKeyService
+	usageService   *service.UsageService
+	apiKeyService  *service.APIKeyService
+	billingService *service.BillingService
 }
 
 // NewUsageHandler creates a new UsageHandler
-func NewUsageHandler(usageService *service.UsageService, apiKeyService *service.APIKeyService) *UsageHandler {
+func NewUsageHandler(usageService *service.UsageService, apiKeyService *service.APIKeyService, billingService *service.BillingService) *UsageHandler {
 	return &UsageHandler{
-		usageService:  usageService,
-		apiKeyService: apiKeyService,
+		usageService:   usageService,
+		apiKeyService:  apiKeyService,
+		billingService: billingService,
 	}
+}
+
+type ModelPricingPreviewRequest struct {
+	Models []string `json:"models" binding:"required"`
+}
+
+type ModelPricingPreviewItem struct {
+	Model            string  `json:"model"`
+	InputPricePer1M  float64 `json:"input_price_per_1m"`
+	OutputPricePer1M float64 `json:"output_price_per_1m"`
+	PricingAvailable bool    `json:"pricing_available"`
+}
+
+// ModelPricingPreview returns standard model pricing preview for the user model test page.
+// POST /api/v1/usage/model-pricing
+func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
+	if _, ok := middleware2.GetAuthSubjectFromContext(c); !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	var req ModelPricingPreviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if len(req.Models) == 0 {
+		response.Success(c, gin.H{"models": []ModelPricingPreviewItem{}})
+		return
+	}
+	items := make([]ModelPricingPreviewItem, 0, len(req.Models))
+	seen := make(map[string]struct{}, len(req.Models))
+	for _, model := range req.Models {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		item := ModelPricingPreviewItem{Model: model}
+		if h.billingService != nil {
+			if pricing := h.billingService.GetPreviewModelPricing(model); pricing != nil {
+				item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000
+				item.OutputPricePer1M = pricing.OutputPricePerToken * 1_000_000
+				item.PricingAvailable = true
+			}
+		}
+		items = append(items, item)
+	}
+	response.Success(c, gin.H{"models": items})
 }
 
 // List handles listing usage records with pagination

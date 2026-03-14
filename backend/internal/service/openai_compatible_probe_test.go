@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 )
@@ -101,6 +102,45 @@ func TestProbeOpenAICompatibleChatFallback(t *testing.T) {
 	}
 }
 
+func TestProbeOpenAICompatibleCompletionsFallback(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/responses":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"message":"responses endpoint not found"}}`))
+		case "/v1/chat/completions":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":{"message":"chat completions endpoint not found"}}`))
+		case "/v1/completions":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":"cmpl_1","choices":[{"text":"pong"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := server.Client()
+
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, nil, &config.Config{})
+	result, err := svc.ProbeOpenAICompatible(context.Background(), OpenAICompatibleProbeInput{
+		BaseURL: server.URL,
+		APIKey:  "sk-test",
+	})
+	if err != nil {
+		t.Fatalf("ProbeOpenAICompatible error = %v", err)
+	}
+	if result.Status != OpenAICompatibleProbeStatusLegacyOnly {
+		t.Fatalf("status = %s, want %s", result.Status, OpenAICompatibleProbeStatusLegacyOnly)
+	}
+	if result.RecommendedMode != OpenAICompatibleModeCompletionsFallback {
+		t.Fatalf("recommended mode = %s", result.RecommendedMode)
+	}
+	if !result.Capabilities.Completions || result.Capabilities.ChatCompletions || result.Capabilities.Responses {
+		t.Fatalf("unexpected capabilities: %+v", result.Capabilities)
+	}
+}
+
 func TestProbeOpenAICompatibleCustomVersionedBasePath(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -166,7 +206,7 @@ func TestPreviewOpenAICompatibleModels(t *testing.T) {
 	models, err := svc.PreviewOpenAICompatibleModels(context.Background(), OpenAICompatibleProbeInput{
 		BaseURL: server.URL + "/api/coding/v3",
 		APIKey:  "sk-test",
-	}, 1.5)
+	}, 1.5, nil)
 	if err != nil {
 		t.Fatalf("PreviewOpenAICompatibleModels error = %v", err)
 	}
@@ -175,5 +215,42 @@ func TestPreviewOpenAICompatibleModels(t *testing.T) {
 	}
 	if models[0].ID != "glm-4.7" && models[0].ID != "kimi-k2.5" {
 		t.Fatalf("unexpected model list: %+v", models)
+	}
+}
+
+func TestAccountTestServiceLookupOpenRouterModelPricing(t *testing.T) {
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: http.DefaultClient}, nil, &config.Config{})
+	svc.openRouterPricingCache = map[string]openRouterModelPricing{
+		"kimi-k2.5":              {InputPerToken: 0.000001, OutputPerToken: 0.000002},
+		"deepseek/deepseek-v3.2": {InputPerToken: 0.000003, OutputPerToken: 0.000004},
+		"z-ai/glm-4.7":           {InputPerToken: 0.000005, OutputPerToken: 0.000006},
+	}
+	svc.openRouterPricingFetchedAt = time.Now()
+	pricing, ok := svc.lookupOpenRouterModelPricing(context.Background(), "kimi-k2.5")
+	if !ok {
+		t.Fatal("expected pricing hit")
+	}
+	if pricing.InputPerToken != 0.000001 || pricing.OutputPerToken != 0.000002 {
+		t.Fatalf("unexpected pricing: %+v", pricing)
+	}
+	pricing, ok = svc.lookupOpenRouterModelPricing(context.Background(), "deepseek-v3.2")
+	if !ok || pricing.InputPerToken != 0.000003 {
+		t.Fatalf("unexpected deepseek pricing: %+v ok=%v", pricing, ok)
+	}
+	pricing, ok = svc.lookupOpenRouterModelPricing(context.Background(), "glm-4.7")
+	if !ok || pricing.InputPerToken != 0.000005 {
+		t.Fatalf("unexpected glm pricing: %+v ok=%v", pricing, ok)
+	}
+}
+
+func TestBuildOpenAIEndpointURL_PreservesCustomVersionedPath(t *testing.T) {
+	if got := buildOpenAIEndpointURL("https://ark.cn-beijing.volces.com/api/coding/v3", "chat/completions"); got != "https://ark.cn-beijing.volces.com/api/coding/v3/chat/completions" {
+		t.Fatalf("chat endpoint = %s", got)
+	}
+	if got := buildOpenAIEndpointURL("https://ark.cn-beijing.volces.com/api/coding/v3", "responses"); got != "https://ark.cn-beijing.volces.com/api/coding/v3/responses" {
+		t.Fatalf("responses endpoint = %s", got)
+	}
+	if got := buildOpenAIEndpointURL("https://api.openai.com", "responses"); got != "https://api.openai.com/v1/responses" {
+		t.Fatalf("default endpoint = %s", got)
 	}
 }

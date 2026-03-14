@@ -646,6 +646,7 @@ type PreviewOpenAICompatibleModelsRequest struct {
 	ProxyID        *int64   `json:"proxy_id"`
 	UserAgent      string   `json:"user_agent"`
 	RateMultiplier *float64 `json:"rate_multiplier"`
+	Models         []string `json:"models"`
 }
 
 type PreviewOpenAICompatibleChatRequest struct {
@@ -791,7 +792,7 @@ func (h *AccountHandler) PreviewOpenAICompatibleModels(c *gin.Context) {
 		APIKey:    req.APIKey,
 		ProxyURL:  proxyURL,
 		UserAgent: req.UserAgent,
-	}, rateMultiplier)
+	}, rateMultiplier, req.Models)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return

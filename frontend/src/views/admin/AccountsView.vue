@@ -111,6 +111,9 @@
               <button @click="showImportData = true" class="btn btn-secondary">
                 {{ t('admin.accounts.dataImport') }}
               </button>
+              <router-link to="/admin/pricing" class="btn btn-secondary">
+                {{ t('nav.pricingManagement') }}
+              </router-link>
               <button @click="openExportDataDialog" class="btn btn-secondary">
                 {{ selIds.length ? t('admin.accounts.dataExportSelected') : t('admin.accounts.dataExport') }}
               </button>

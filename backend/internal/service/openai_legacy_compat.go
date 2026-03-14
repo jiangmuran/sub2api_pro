@@ -196,6 +196,10 @@ func ConvertOpenAIResponsesRequestToLegacy(body []byte, protocol string) ([]byte
 		legacy["max_tokens"] = value
 	}
 
+	if stream, ok := payload["stream"].(bool); ok && stream {
+		legacy["stream_options"] = map[string]any{"include_usage": true}
+	}
+
 	if protocol == OpenAILegacyProtocolCompletions {
 		legacy["prompt"] = extractResponsesPromptValue(payload["input"])
 		return json.Marshal(legacy)
@@ -643,13 +647,7 @@ func ConvertOpenAILegacyResponseToResponses(body []byte, protocol string, fallba
 		toolCalls = extractLegacyToolCalls(body)
 	}
 
-	usage := map[string]any{
-		"input_tokens":  gjson.GetBytes(body, "usage.prompt_tokens").Int(),
-		"output_tokens": gjson.GetBytes(body, "usage.completion_tokens").Int(),
-	}
-	if usage["input_tokens"] == int64(0) && usage["output_tokens"] == int64(0) {
-		usage = map[string]any{}
-	}
+	usage := extractLegacyUsageAsResponses(body)
 
 	output := make([]any, 0, 1+len(toolCalls))
 	messageItem := map[string]any{
@@ -801,7 +799,12 @@ func (s *openAILegacyResponsesStreamState) Convert(data string) (string, bool) {
 
 	s.captureMetadata(trimmed)
 	s.captureUsage(trimmed)
-	content := gjson.Get(trimmed, "choices.0.delta.content").String()
+	content := ""
+	if s.Protocol == OpenAILegacyProtocolCompletions {
+		content = gjson.Get(trimmed, "choices.0.text").String()
+	} else {
+		content = gjson.Get(trimmed, "choices.0.delta.content").String()
+	}
 	if content != "" {
 		s.OutputText.WriteString(content)
 		payload := map[string]any{
@@ -857,7 +860,13 @@ func (s *openAILegacyResponsesStreamState) captureUsage(payload string) {
 		return
 	}
 	inputTokens := gjson.Get(payload, "usage.prompt_tokens").Int()
+	if inputTokens == 0 {
+		inputTokens = gjson.Get(payload, "usage.input_tokens").Int()
+	}
 	outputTokens := gjson.Get(payload, "usage.completion_tokens").Int()
+	if outputTokens == 0 {
+		outputTokens = gjson.Get(payload, "usage.output_tokens").Int()
+	}
 	totalTokens := gjson.Get(payload, "usage.total_tokens").Int()
 	usageMap := map[string]any{}
 	if inputTokens > 0 {
@@ -872,6 +881,29 @@ func (s *openAILegacyResponsesStreamState) captureUsage(payload string) {
 	if len(usageMap) > 0 {
 		s.Usage = usageMap
 	}
+}
+
+func extractLegacyUsageAsResponses(body []byte) map[string]any {
+	inputTokens := gjson.GetBytes(body, "usage.prompt_tokens").Int()
+	if inputTokens == 0 {
+		inputTokens = gjson.GetBytes(body, "usage.input_tokens").Int()
+	}
+	outputTokens := gjson.GetBytes(body, "usage.completion_tokens").Int()
+	if outputTokens == 0 {
+		outputTokens = gjson.GetBytes(body, "usage.output_tokens").Int()
+	}
+	totalTokens := gjson.GetBytes(body, "usage.total_tokens").Int()
+	usage := map[string]any{}
+	if inputTokens > 0 {
+		usage["input_tokens"] = inputTokens
+	}
+	if outputTokens > 0 {
+		usage["output_tokens"] = outputTokens
+	}
+	if totalTokens > 0 {
+		usage["total_tokens"] = totalTokens
+	}
+	return usage
 }
 
 func (s *openAILegacyResponsesStreamState) responseID() string {

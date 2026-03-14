@@ -176,6 +176,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/model-test',
+    name: 'ModelTest',
+    component: () => import('@/views/user/ModelTestView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Model Test',
+      titleKey: 'modelTest.title',
+      descriptionKey: 'modelTest.description'
+    }
+  },
+  {
     path: '/redeem',
     name: 'Redeem',
     component: () => import('@/views/user/RedeemView.vue'),
@@ -418,6 +430,18 @@ const routes: RouteRecordRaw[] = [
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
+    }
+  },
+  {
+    path: '/admin/pricing',
+    name: 'AdminPricingManagement',
+    component: () => import('@/views/admin/PricingManagementView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Pricing Management',
+      titleKey: 'admin.pricingManagement.title',
+      descriptionKey: 'admin.pricingManagement.description'
     }
   },
   {
