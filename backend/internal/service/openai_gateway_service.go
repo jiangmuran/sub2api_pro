@@ -2762,6 +2762,7 @@ func writeOpenAIPassthroughResponseHeaders(dst http.Header, src http.Header, fil
 func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string, isStream bool, promptCacheKey string, isCodexCLI bool) (*http.Request, error) {
 	// Determine target URL based on account type
 	var targetURL string
+	var usingChatCompletions bool
 	switch account.Type {
 	case AccountTypeOAuth:
 		// OAuth accounts use ChatGPT internal API
@@ -2772,6 +2773,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		if baseURL == "" {
 			if account.IsOpenAICompatChatFallback() {
 				targetURL = buildOpenAIChatCompletionsURL("https://api.openai.com")
+				usingChatCompletions = true
 			} else if account.IsOpenAICompatCompletionsFallback() {
 				targetURL = buildOpenAICompletionsURL("https://api.openai.com")
 			} else {
@@ -2784,6 +2786,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 			}
 			if account.IsOpenAICompatChatFallback() {
 				targetURL = buildOpenAIChatCompletionsURL(validatedURL)
+				usingChatCompletions = true
 			} else if account.IsOpenAICompatCompletionsFallback() {
 				targetURL = buildOpenAICompletionsURL(validatedURL)
 			} else {
@@ -2792,6 +2795,18 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		}
 	default:
 		targetURL = openaiPlatformAPIURL
+	}
+
+	// Convert tools to ChatCompletions format when using /v1/chat/completions endpoint
+	if usingChatCompletions && gjson.GetBytes(body, "tools").Exists() {
+		var payload map[string]any
+		if err := json.Unmarshal(body, &payload); err == nil {
+			if ConvertResponsesToChatCompletionsTools(payload) {
+				if modifiedBody, err := json.Marshal(payload); err == nil {
+					body = modifiedBody
+				}
+			}
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))

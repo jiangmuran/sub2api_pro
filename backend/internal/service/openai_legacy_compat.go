@@ -319,6 +319,78 @@ func normalizeOpenAITools(payload map[string]any) bool {
 	return true
 }
 
+// ConvertResponsesToChatCompletionsTools converts Responses-format tools to ChatCompletions format
+// Responses format: {type: "function", name: "...", parameters: {...}}
+// ChatCompletions format: {type: "function", function: {name: "...", parameters: {...}}}
+func ConvertResponsesToChatCompletionsTools(payload map[string]any) bool {
+	toolsRaw, ok := payload["tools"].([]any)
+	if !ok || len(toolsRaw) == 0 {
+		return false
+	}
+
+	modified := false
+	converted := make([]any, 0, len(toolsRaw))
+
+	for _, tool := range toolsRaw {
+		toolMap, ok := tool.(map[string]any)
+		if !ok {
+			converted = append(converted, tool)
+			continue
+		}
+
+		toolType, _ := toolMap["type"].(string)
+		if !strings.EqualFold(strings.TrimSpace(toolType), "function") {
+			converted = append(converted, toolMap)
+			continue
+		}
+
+		// If already has function wrapper, keep as-is
+		if _, hasFn := toolMap["function"]; hasFn {
+			converted = append(converted, toolMap)
+			continue
+		}
+
+		// Check if it's Responses format (has name at top level)
+		name, hasName := toolMap["name"].(string)
+		if !hasName || strings.TrimSpace(name) == "" {
+			// Invalid tool, skip
+			continue
+		}
+
+		// Convert Responses format to ChatCompletions format
+		functionObj := map[string]any{
+			"name": name,
+		}
+
+		// Move description to function object
+		if desc, ok := toolMap["description"]; ok {
+			functionObj["description"] = desc
+		}
+
+		// Move parameters to function object
+		if params, ok := toolMap["parameters"]; ok {
+			functionObj["parameters"] = params
+		}
+
+		// Move strict to function object
+		if strict, ok := toolMap["strict"]; ok {
+			functionObj["strict"] = strict
+		}
+
+		converted = append(converted, map[string]any{
+			"type":     "function",
+			"function": functionObj,
+		})
+		modified = true
+	}
+
+	if modified {
+		payload["tools"] = converted
+	}
+
+	return modified
+}
+
 // coerceOpenAIInputToItems converts legacy string input into Responses-compatible
 // input items without changing existing map/array structures.
 // It only handles string values (or arrays of strings) and leaves other shapes
