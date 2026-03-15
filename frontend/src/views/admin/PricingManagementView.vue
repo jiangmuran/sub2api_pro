@@ -103,17 +103,17 @@
                   <tr>
                     <td class="px-3 py-2 text-gray-900 dark:text-white">{{ item.id }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
-                      <template v-if="item.pricing_available || hasManualPricing(item.id)">{{ formatPrice(resolveInputPrice(item), true) }}</template>
+                      <template v-if="item.pricing_available && !hasManualPricing(item.id)">{{ formatPrice(resolveInputPrice(item), true) }}</template>
                       <input v-else v-model="manualPricing[item.id].input" type="number" min="0" step="0.01" class="input h-8 w-24 text-right text-xs" />
                     </td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
-                      <template v-if="item.pricing_available || hasManualPricing(item.id)">{{ formatPrice(resolveOutputPrice(item), true) }}</template>
+                      <template v-if="item.pricing_available && !hasManualPricing(item.id)">{{ formatPrice(resolveOutputPrice(item), true) }}</template>
                       <input v-else v-model="manualPricing[item.id].output" type="number" min="0" step="0.01" class="input h-8 w-24 text-right text-xs" />
                     </td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveInputPrice(item) * rateMultiplierValue, item.pricing_available || hasManualPricing(item.id)) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveOutputPrice(item) * rateMultiplierValue, item.pricing_available || hasManualPricing(item.id)) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
-                      <template v-if="item.image_price_per_image > 0 || hasManualPricing(item.id)">{{ formatPrice(resolveImagePrice(item), item.image_price_per_image > 0 || hasManualPricing(item.id)) }}</template>
+                      <template v-if="item.image_price_per_image > 0 && !hasManualPricing(item.id)">{{ formatPrice(resolveImagePrice(item), true) }}</template>
                       <input v-else v-model="manualPricing[item.id].image" type="number" min="0" step="0.01" class="input h-8 w-24 text-right text-xs" />
                     </td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveImagePrice(item) * rateMultiplierValue, item.image_price_per_image > 0 || hasManualPricing(item.id)) }}</td>
