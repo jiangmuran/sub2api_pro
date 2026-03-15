@@ -299,7 +299,17 @@ const generatedImages = ref<string[]>([])
 const apiKeyOptions = computed(() => apiKeys.value.map((key) => ({ value: key.id, label: `${key.name} · ${maskKey(key.key)}` })))
 const groupOptions = computed(() => groups.value.map((group) => ({ value: group.id, label: `${group.name} · ${effectiveRateForGroup(group.id).toFixed(2)}x` })))
 const modelOptions = computed(() => models.value.map((model) => ({ value: model.id, label: model.display_name || model.id })))
-const imageModelOptions = computed(() => models.value.filter((model) => /imagine|image/i.test(model.id)).map((model) => ({ value: model.id, label: model.display_name || model.id })))
+const imageModelOptions = computed(() =>
+  models.value
+    .filter((model) => {
+      const pricing = pricingMap.value[model.id]
+      if ((pricing?.image_price_per_image || 0) > 0) {
+        return true
+      }
+      return /(imagine|image|img|flux|sdxl|dall-e|recraft|canvas|vision-image)/i.test(model.id)
+    })
+    .map((model) => ({ value: model.id, label: model.display_name || model.id }))
+)
 const imageSizeOptions = [
   { value: '1024x1024', label: '1024x1024' },
   { value: '1792x1024', label: '1792x1024' },

@@ -174,17 +174,22 @@ const hasManualChanges = computed(() => manualCount.value > 0)
 const rateMultiplierValue = computed(() => (selectedAccount.value?.rate_multiplier && selectedAccount.value.rate_multiplier > 0 ? selectedAccount.value.rate_multiplier : 1))
 
 const formatPrice = (value: number, available: boolean) => (available ? `$${value.toFixed(2)}` : '--')
-const parseManualPrice = (value: string) => {
-  const parsed = Number.parseFloat(value)
+const normalizeManualValue = (value: unknown) => String(value ?? '')
+const parseManualPrice = (value: unknown) => {
+  const parsed = Number.parseFloat(normalizeManualValue(value))
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
 }
 const hasManualPricing = (modelId: string) => {
   const entry = manualPricing.value[modelId]
-  return !!entry && (entry.input.trim() !== '' || entry.output.trim() !== '' || entry.image.trim() !== '')
+  return !!entry && (
+    normalizeManualValue(entry.input).trim() !== '' ||
+    normalizeManualValue(entry.output).trim() !== '' ||
+    normalizeManualValue(entry.image).trim() !== ''
+  )
 }
-const resolveInputPrice = (item: OpenAICompatiblePreviewModel) => item.pricing_available ? item.input_price_per_1m : parseManualPrice(manualPricing.value[item.id]?.input || '')
-const resolveOutputPrice = (item: OpenAICompatiblePreviewModel) => item.pricing_available ? item.output_price_per_1m : parseManualPrice(manualPricing.value[item.id]?.output || '')
-const resolveImagePrice = (item: OpenAICompatiblePreviewModel) => item.image_price_per_image > 0 ? item.image_price_per_image : parseManualPrice(manualPricing.value[item.id]?.image || '')
+const resolveInputPrice = (item: OpenAICompatiblePreviewModel) => item.pricing_available ? item.input_price_per_1m : parseManualPrice(manualPricing.value[item.id]?.input)
+const resolveOutputPrice = (item: OpenAICompatiblePreviewModel) => item.pricing_available ? item.output_price_per_1m : parseManualPrice(manualPricing.value[item.id]?.output)
+const resolveImagePrice = (item: OpenAICompatiblePreviewModel) => item.image_price_per_image > 0 ? item.image_price_per_image : parseManualPrice(manualPricing.value[item.id]?.image)
 
 const pricingSourceLabel = (item: OpenAICompatiblePreviewModel) => {
   if (hasManualPricing(item.id)) return t('admin.accounts.openai.pricingSourceManual')
