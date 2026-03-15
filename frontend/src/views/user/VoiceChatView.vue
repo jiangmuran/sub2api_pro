@@ -446,6 +446,9 @@ const runPreflight = async () => {
   preflighting.value = true
   try {
     preflight.value = await voiceAPI.preflight(apiKeyInput.value.trim())
+    if (!preflight.value?.livekit_probe_url) {
+      throw new Error(t('voiceChat.preflightFailed'))
+    }
     await Promise.all([
       checkBrowserConnectivity(preflight.value.livekit_probe_url),
       checkMicrophoneSupport()

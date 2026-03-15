@@ -361,106 +361,6 @@ export default {
       failed: 'Image generation failed',
       empty: 'Choose an image model and prompt to see generated images here.'
     },
-    voiceChat: {
-      badge: 'Realtime Voice',
-      title: 'Voice Chat',
-      description: 'Choose a user key, pass the connectivity checks, and start a realtime voice conversation with live pricing and session status.',
-      bootstrapFailed: 'Failed to load voice chat page data',
-      preflightFailed: 'Voice environment check failed',
-      summary: {
-        keyCount: 'Available Keys',
-        price: 'Session Price',
-        status: 'Current Status'
-      },
-      keyPanel: {
-        title: 'Voice Key',
-        description: 'Pricing and availability update dynamically after you choose a user key.',
-        existingKeys: 'Existing API Keys',
-        existingKeysPlaceholder: 'Select an existing key',
-        directInput: 'Direct Key Input',
-        directInputPlaceholder: 'Enter a user API key',
-        directInputRequired: 'Please enter a user API key first',
-        check: 'Check',
-        generateTitle: 'Generate a Voice Key',
-        generateHint: 'Choose a group and create a fresh user key for voice usage or testing.',
-        groupLabel: 'Group',
-        groupPlaceholder: 'Choose a group',
-        groupRequired: 'Please choose a group first',
-        generateButton: 'Generate and Fill',
-        generatedAndCopied: 'Generated, filled, and copied the voice key',
-        generateFailed: 'Failed to generate the voice key'
-      },
-      setup: {
-        title: 'Session Setup',
-        description: 'This experience uses the special `grok-livechat` model. You only need to choose voice, theme, and speed.',
-        model: 'Voice Model',
-        voice: 'Voice',
-        personality: 'Theme',
-        speed: 'Speed'
-      },
-      price: {
-        title: 'Call Pricing',
-        description: 'Pricing appears after you choose a key. The final user price is calculated with the selected key group multiplier.',
-        refresh: 'Re-check',
-        singleBase: 'Base Single Fee',
-        singleActual: 'Actual Single Fee',
-        rateHint: 'Current rate {rate}x'
-      },
-      checks: {
-        title: 'Readiness Checks',
-        description: 'Before starting, we check server capability, browser connectivity, and microphone readiness.',
-        server: 'Server Voice Capability',
-        serverHint: 'Checks the voice token endpoint and upstream LiveKit reachability.',
-        browser: 'Browser Connectivity',
-        browserHint: 'Checks whether this device can reach the LiveKit entry.',
-        microphone: 'Microphone Environment',
-        microphoneHint: 'Requires HTTPS and browser microphone support.',
-        pending: 'Pending',
-        pass: 'Ready',
-        fail: 'Unavailable'
-      },
-      status: {
-        checking: 'Checking',
-        connecting: 'Connecting',
-        connected: 'In Call',
-        ready: 'Ready'
-      },
-      network: {
-        ok: 'Reachable',
-        blocked: 'Blocked'
-      },
-      disclaimer: {
-        title: 'Disclaimer',
-        body: 'This feature is designed for end users. Starting a conversation incurs charges, and the feature is currently unavailable to users in Mainland China. Please ensure your local network environment, compliance requirements, and microphone permissions are all properly handled.'
-      },
-      call: {
-        title: 'Realtime Call',
-        description: 'Once all checks pass, you can start a voice conversation immediately. The UI shows timing, pricing, and connection state throughout the session.',
-        start: 'Start Call',
-        stop: 'End Call',
-        startFailed: 'Failed to start voice chat',
-        connectedToast: 'Voice conversation started',
-        charge: 'Charge',
-        timer: 'Duration',
-        network: 'Network'
-      },
-      log: {
-        title: 'Session Feed',
-        clear: 'Clear',
-        empty: 'Complete the checks and start a call to see connection updates here.',
-        preflightTitle: 'Environment Checked',
-        preflightSuccess: 'Server and browser checks completed successfully.',
-        connectedTitle: 'Call Connected',
-        connectedDetail: 'The LiveKit session is ready and the current single fee is {price}.',
-        participantConnected: 'Remote participant joined',
-        participantDisconnected: 'Remote participant left',
-        audioReady: 'Audio channel ready',
-        audioReadyDetail: 'Remote audio is subscribed and realtime conversation can begin.',
-        disconnected: 'Call Ended',
-        disconnectedDetail: 'You can adjust the setup and start a new conversation at any time.',
-        errorTitle: 'Error'
-      }
-    },
     chat: {
       title: 'Multi-turn Chat',
       description: 'This uses the real user gateway path instead of the admin upstream preview path.',
@@ -473,6 +373,107 @@ export default {
       send: 'Send',
       failed: 'Multi-turn chat failed',
       emptyReply: 'The model returned an empty reply'
+    }
+  },
+
+  voiceChat: {
+    badge: 'Realtime Voice',
+    title: 'Voice Chat',
+    description: 'Choose a user key, pass the connectivity checks, and start a realtime voice conversation with live pricing and session status.',
+    bootstrapFailed: 'Failed to load voice chat page data',
+    preflightFailed: 'Voice environment check failed',
+    summary: {
+      keyCount: 'Available Keys',
+      price: 'Session Price',
+      status: 'Current Status'
+    },
+    keyPanel: {
+      title: 'Voice Key',
+      description: 'Pricing and availability update dynamically after you choose a user key.',
+      existingKeys: 'Existing API Keys',
+      existingKeysPlaceholder: 'Select an existing key',
+      directInput: 'Direct Key Input',
+      directInputPlaceholder: 'Enter a user API key',
+      directInputRequired: 'Please enter a user API key first',
+      check: 'Check',
+      generateTitle: 'Generate a Voice Key',
+      generateHint: 'Choose a group and create a fresh user key for voice usage or testing.',
+      groupLabel: 'Group',
+      groupPlaceholder: 'Choose a group',
+      groupRequired: 'Please choose a group first',
+      generateButton: 'Generate and Fill',
+      generatedAndCopied: 'Generated, filled, and copied the voice key',
+      generateFailed: 'Failed to generate the voice key'
+    },
+    setup: {
+      title: 'Session Setup',
+      description: 'This experience uses the special `grok-livechat` model. You only need to choose voice, theme, and speed.',
+      model: 'Voice Model',
+      voice: 'Voice',
+      personality: 'Theme',
+      speed: 'Speed'
+    },
+    price: {
+      title: 'Call Pricing',
+      description: 'Pricing appears after you choose a key. The final user price is calculated with the selected key group multiplier.',
+      refresh: 'Re-check',
+      singleBase: 'Base Single Fee',
+      singleActual: 'Actual Single Fee',
+      rateHint: 'Current rate {rate}x'
+    },
+    checks: {
+      title: 'Readiness Checks',
+      description: 'Before starting, we check server capability, browser connectivity, and microphone readiness.',
+      server: 'Server Voice Capability',
+      serverHint: 'Checks the voice token endpoint and upstream LiveKit reachability.',
+      browser: 'Browser Connectivity',
+      browserHint: 'Checks whether this device can reach the LiveKit entry.',
+      microphone: 'Microphone Environment',
+      microphoneHint: 'Requires HTTPS and browser microphone support.',
+      pending: 'Pending',
+      pass: 'Ready',
+      fail: 'Unavailable'
+    },
+    status: {
+      checking: 'Checking',
+      connecting: 'Connecting',
+      connected: 'In Call',
+      ready: 'Ready'
+    },
+    network: {
+      ok: 'Reachable',
+      blocked: 'Blocked'
+    },
+    disclaimer: {
+      title: 'Disclaimer',
+      body: 'This feature is designed for end users. Starting a conversation incurs charges, and the feature is currently unavailable to users in Mainland China. Please ensure your local network environment, compliance requirements, and microphone permissions are all properly handled.'
+    },
+    call: {
+      title: 'Realtime Call',
+      description: 'Once all checks pass, you can start a voice conversation immediately. The UI shows timing, pricing, and connection state throughout the session.',
+      start: 'Start Call',
+      stop: 'End Call',
+      startFailed: 'Failed to start voice chat',
+      connectedToast: 'Voice conversation started',
+      charge: 'Charge',
+      timer: 'Duration',
+      network: 'Network'
+    },
+    log: {
+      title: 'Session Feed',
+      clear: 'Clear',
+      empty: 'Complete the checks and start a call to see connection updates here.',
+      preflightTitle: 'Environment Checked',
+      preflightSuccess: 'Server and browser checks completed successfully.',
+      connectedTitle: 'Call Connected',
+      connectedDetail: 'The LiveKit session is ready and the current single fee is {price}.',
+      participantConnected: 'Remote participant joined',
+      participantDisconnected: 'Remote participant left',
+      audioReady: 'Audio channel ready',
+      audioReadyDetail: 'Remote audio is subscribed and realtime conversation can begin.',
+      disconnected: 'Call Ended',
+      disconnectedDetail: 'You can adjust the setup and start a new conversation at any time.',
+      errorTitle: 'Error'
     }
   },
 
