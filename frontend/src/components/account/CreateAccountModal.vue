@@ -931,6 +931,17 @@
           <p class="input-hint">{{ apiKeyHint }}</p>
         </div>
 
+        <div v-if="form.platform === 'openai'">
+          <label class="input-label">{{ t('admin.accounts.functionKey') }}</label>
+          <input
+            v-model="apiKeyFunctionKey"
+            type="password"
+            class="input font-mono"
+            :placeholder="t('admin.accounts.functionKeyPlaceholder')"
+          />
+          <p class="input-hint">{{ t('admin.accounts.functionKeyHint') }}</p>
+        </div>
+
         <div v-if="form.platform === 'openai' && accountCategory === 'apikey'" class="xl:grid xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start xl:gap-5">
           <div class="space-y-4">
             <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
@@ -2541,6 +2552,7 @@ const accountCategory = ref<'oauth-based' | 'apikey'>('oauth-based') // UI selec
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+const apiKeyFunctionKey = ref('')
 const openAICompatChecking = ref(false)
 const openAICompatCheckResult = ref<OpenAICompatibleCheckResult | null>(null)
 const suspendOpenAICompatReset = ref(false)
@@ -3275,6 +3287,7 @@ const resetForm = () => {
   addMethod.value = 'oauth'
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
+  apiKeyFunctionKey.value = ''
   modelMappings.value = []
   modelRestrictionMode.value = 'whitelist'
   allowedModels.value = [...claudeModels] // Default fill related models
@@ -3597,6 +3610,9 @@ const handleSubmit = async () => {
   const credentials: Record<string, unknown> = {
     base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
     api_key: apiKeyValue.value.trim()
+  }
+  if (form.platform === 'openai' && apiKeyFunctionKey.value.trim()) {
+    credentials.function_key = apiKeyFunctionKey.value.trim()
   }
   if (form.platform === 'gemini') {
     credentials.tier_id = geminiTierAIStudio.value

@@ -12,6 +12,7 @@ export { authAPI, isTotp2FARequired, type LoginResponse } from './auth'
 // User APIs
 export { keysAPI } from './keys'
 export { usageAPI } from './usage'
+export { voiceAPI } from './voice'
 export { userAPI } from './user'
 export { default as distributorAPI } from './distributor'
 export { redeemAPI, type RedeemHistoryItem } from './redeem'

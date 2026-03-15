@@ -474,6 +474,26 @@ export interface ModelPricingPreviewResponse {
   models: ModelPricingPreviewItem[]
 }
 
+export interface VoicePreflightResponse {
+  model: string
+  single_price_per_call: number
+  account_id: number
+  group_id?: number | null
+  subscription_mode: boolean
+  function_ready: boolean
+  server_livekit_ready: boolean
+  livekit_probe_url: string
+}
+
+export interface VoiceSessionResponse {
+  model: string
+  single_price_per_call: number
+  token: string
+  url: string
+  participant_name?: string
+  room_name?: string
+}
+
 export interface CreateGroupRequest {
   name: string
   description?: string | null

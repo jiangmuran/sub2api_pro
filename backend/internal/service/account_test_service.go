@@ -146,6 +146,9 @@ var builtInCompatibleModelPricing = map[string]openRouterModelPricing{
 
 func (s *AccountTestService) PreviewOpenAICompatibleModels(ctx context.Context, input OpenAICompatibleProbeInput, rateMultiplier float64, extraModels []string) ([]OpenAICompatiblePreviewModel, error) {
 	discoveredModels := s.DiscoverOpenAICompatibleModels(ctx, input.BaseURL, input.APIKey, input.ProxyURL, input.UserAgent)
+	if strings.Contains(strings.ToLower(strings.TrimSpace(input.BaseURL)), "grok.ai.org.kg") {
+		discoveredModels = append(discoveredModels, OpenAIModelGrokLivechat)
+	}
 	models := mergeModelLists(discoveredModels, extraModels)
 	if len(models) == 0 {
 		return nil, nil

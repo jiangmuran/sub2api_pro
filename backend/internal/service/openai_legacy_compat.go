@@ -649,6 +649,9 @@ func ConvertOpenAILegacyResponseToResponses(body []byte, protocol string, fallba
 		content = gjson.GetBytes(body, "choices.0.message.content").String()
 		toolCalls = extractLegacyToolCalls(body)
 	}
+	if sanitized, changed := sanitizeOpenAIOutputText(content); changed {
+		content = sanitized
+	}
 
 	usage := extractLegacyUsageAsResponses(body)
 
@@ -723,6 +726,9 @@ func ConvertOpenAILegacySSEToResponses(data string, protocol string, fallbackMod
 
 	if protocol == OpenAILegacyProtocolCompletions {
 		text := gjson.Get(trimmed, "choices.0.text").String()
+		if sanitized, changed := sanitizeOpenAIOutputText(text); changed {
+			text = sanitized
+		}
 		if text == "" {
 			return "", false
 		}
@@ -743,6 +749,9 @@ func ConvertOpenAILegacySSEToResponses(data string, protocol string, fallbackMod
 	}
 
 	content := gjson.Get(trimmed, "choices.0.delta.content").String()
+	if sanitized, changed := sanitizeOpenAIOutputText(content); changed {
+		content = sanitized
+	}
 	if content != "" {
 		payload := map[string]any{
 			"type":  "response.output_text.delta",

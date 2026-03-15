@@ -274,6 +274,7 @@ export default {
     announcements: '公告',
     apiKeys: 'API 密钥',
     modelTest: '测试模型',
+    voiceChat: '语音对话',
     usage: '使用记录',
     redeem: '兑换',
     distributor: '分销',
@@ -347,7 +348,7 @@ export default {
       standardOutput: '标准输出',
       actualInput: '用户输入',
       actualOutput: '用户输出',
-      imagePrice: '图片单价',
+      imagePrice: '单次价格',
       empty: '获取模型后，这里会显示对应的价格预览。'
     },
     image: {
@@ -359,6 +360,106 @@ export default {
       generate: '生成图片',
       failed: '图片生成失败',
       empty: '选择生图模型并输入提示词后，这里会显示生成结果。'
+    },
+    voiceChat: {
+      badge: '实时语音体验',
+      title: '语音对话',
+      description: '选择你的用户 Key，完成网络预检后即可发起实时语音对话。页面会显示实际通话价格、连接状态与通话计时。',
+      bootstrapFailed: '加载语音对话页面数据失败',
+      preflightFailed: '语音环境检测失败',
+      summary: {
+        keyCount: '可用 Key',
+        price: '本次价格',
+        status: '当前状态'
+      },
+      keyPanel: {
+        title: '通话 Key',
+        description: '价格与可用性会根据你选择的用户 Key 动态计算。',
+        existingKeys: '已有 API Key',
+        existingKeysPlaceholder: '选择已有 Key',
+        directInput: '直接填入 Key',
+        directInputPlaceholder: '输入用户 API Key',
+        directInputRequired: '请先填入用户 API Key',
+        check: '检测',
+        generateTitle: '一键生成通话 Key',
+        generateHint: '选择一个分组后生成新的用户 Key，用于语音通话测试或正式使用。',
+        groupLabel: '绑定分组',
+        groupPlaceholder: '选择一个可用分组',
+        groupRequired: '请先选择分组',
+        generateButton: '生成并填入',
+        generatedAndCopied: '已生成、填入并复制通话 Key',
+        generateFailed: '生成通话 Key 失败'
+      },
+      setup: {
+        title: '会话设置',
+        description: '固定使用特殊模型 `grok-livechat`，只需选择偏好的声音、主题和语速。',
+        model: '语音模型',
+        voice: '音色',
+        personality: '主题',
+        speed: '语速'
+      },
+      price: {
+        title: '通话价格',
+        description: '价格会在你选择 Key 后显示，倍率按当前 Key 所属分组实时计算。',
+        refresh: '重新检测',
+        singleBase: '基础单次价格',
+        singleActual: '实际单次价格',
+        rateHint: '当前倍率 {rate}x'
+      },
+      checks: {
+        title: '连接检查',
+        description: '开始对话前会同时检查服务端能力、浏览器网络和麦克风环境。',
+        server: '服务端语音能力',
+        serverHint: '检查语音 token 接口和上游 LiveKit 基础连通性。',
+        browser: '浏览器网络连通性',
+        browserHint: '检测当前设备是否可访问 LiveKit 入口。',
+        microphone: '麦克风环境',
+        microphoneHint: '需要 HTTPS 环境和浏览器麦克风能力。',
+        pending: '待检测',
+        pass: '可用',
+        fail: '不可用'
+      },
+      status: {
+        checking: '检测中',
+        connecting: '连接中',
+        connected: '通话中',
+        ready: '待开始'
+      },
+      network: {
+        ok: '网络可用',
+        blocked: '网络受限'
+      },
+      disclaimer: {
+        title: '使用说明',
+        body: '该功能面向最终用户提供实时语音体验。开始对话将产生费用，且功能目前不对中国大陆用户开放。请自行确认所在地区网络环境、当地合规要求以及麦克风权限设置。'
+      },
+      call: {
+        title: '实时通话',
+        description: '检测通过后即可发起语音对话。通话过程中会显示计时、价格与连接状态。',
+        start: '开始对话',
+        stop: '结束对话',
+        startFailed: '发起语音对话失败',
+        connectedToast: '语音对话已开始',
+        charge: '本次扣费',
+        timer: '通话时长',
+        network: '网络状态'
+      },
+      log: {
+        title: '会话动态',
+        clear: '清空',
+        empty: '完成检测并开始对话后，这里会显示连接与会话状态。',
+        preflightTitle: '环境检测完成',
+        preflightSuccess: '服务端与浏览器检查均已完成。',
+        connectedTitle: '通话已建立',
+        connectedDetail: '已成功获取 LiveKit 会话，当前单次扣费 {price}。',
+        participantConnected: '远端参与者已加入',
+        participantDisconnected: '远端参与者已离开',
+        audioReady: '音频通道已就绪',
+        audioReadyDetail: '远端音轨已订阅，可开始实时语音交流。',
+        disconnected: '通话已结束',
+        disconnectedDetail: '你可以调整设置后再次发起新的语音对话。',
+        errorTitle: '发生错误'
+      }
     },
     chat: {
       title: '多轮对话',
@@ -965,8 +1066,8 @@ export default {
       showMissingOnly: '只看缺失价格模型',
       tableTitle: '模型价格表',
       tableDesc: '支持自动预览、内置预设、复用其他账号已保存价格，并允许手动录入。',
-      imagePrice: '图片单价',
-      accountImagePrice: '账号图片单价',
+      imagePrice: '单次价格',
+      accountImagePrice: '账号单次价格',
       noModels: '选择一个账号后，这里会显示模型价格表。',
       savePricing: '保存价格',
       saveSuccess: '模型价格已保存',
@@ -2302,6 +2403,9 @@ export default {
       mixedChannelWarning: '警告：分组 "{groupName}" 中同时包含 {currentPlatform} 和 {otherPlatform} 账号。混合使用不同渠道可能导致 thinking block 签名验证问题，会自动回退到非 thinking 模式。确定要继续吗？',
       pleaseEnterAccountName: '请输入账号名称',
       pleaseEnterApiKey: '请输入 API Key',
+      functionKey: 'Function Key',
+      functionKeyPlaceholder: '用于玩法接口的 Bearer Key',
+      functionKeyHint: '仅在接入 `/v1/function/*`（如语音对话）时需要，可留空。',
       apiKeyIsRequired: 'API Key 是必需的',
       leaveEmptyToKeep: '留空以保持当前密钥',
       // Upstream type

@@ -80,6 +80,8 @@ type TempUnschedulableRule struct {
 	Description     string   `json:"description"`
 }
 
+const OpenAIModelGrokLivechat = "grok-livechat"
+
 func (a *Account) IsActive() bool {
 	return a.Status == StatusActive
 }
@@ -402,7 +404,7 @@ func (a *Account) GetModelMapping() map[string]string {
 		a.modelMappingCacheRawPtr == rawPtr &&
 		a.modelMappingCacheRawLen == rawLen &&
 		a.modelMappingCacheExtraPtr == extraPtr {
-		rawSig = modelMappingSignature(rawMapping)
+		rawSig = modelMappingSignature(rawMapping) ^ modelMappingFeatureSignature(a)
 		extraSig = modelMappingExtraSignature(a.Extra)
 		rawSigReady = true
 		if a.modelMappingCacheRawSig == rawSig && a.modelMappingCacheExtraSig == extraSig {
@@ -412,7 +414,7 @@ func (a *Account) GetModelMapping() map[string]string {
 
 	mapping := a.resolveModelMapping(rawMapping)
 	if !rawSigReady {
-		rawSig = modelMappingSignature(rawMapping)
+		rawSig = modelMappingSignature(rawMapping) ^ modelMappingFeatureSignature(a)
 		extraSig = modelMappingExtraSignature(a.Extra)
 	}
 
@@ -433,17 +435,17 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 		if a.Platform == domain.PlatformAntigravity {
 			return domain.DefaultAntigravityModelMapping
 		}
-		return nil
+		return appendSpecialModelMappings(a, nil)
 	}
 	if len(rawMapping) == 0 {
 		if compatMapping := a.resolveOpenAICompatModels(); len(compatMapping) > 0 {
-			return compatMapping
+			return appendSpecialModelMappings(a, compatMapping)
 		}
 		// Antigravity 平台使用默认映射
 		if a.Platform == domain.PlatformAntigravity {
-			return domain.DefaultAntigravityModelMapping
+			return appendSpecialModelMappings(a, domain.DefaultAntigravityModelMapping)
 		}
-		return nil
+		return appendSpecialModelMappings(a, nil)
 	}
 
 	result := make(map[string]string)
@@ -460,14 +462,14 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 				"gemini-3.1-pro-low",
 			})
 		}
-		return result
+		return appendSpecialModelMappings(a, result)
 	}
 
 	// Antigravity 平台使用默认映射
 	if a.Platform == domain.PlatformAntigravity {
-		return domain.DefaultAntigravityModelMapping
+		return appendSpecialModelMappings(a, domain.DefaultAntigravityModelMapping)
 	}
-	return nil
+	return appendSpecialModelMappings(a, nil)
 }
 
 func (a *Account) resolveOpenAICompatModels() map[string]string {
@@ -537,6 +539,36 @@ func modelMappingExtraSignature(extra map[string]any) uint64 {
 	return h.Sum64()
 }
 
+func modelMappingFeatureSignature(a *Account) uint64 {
+	if a == nil {
+		return 0
+	}
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(strings.TrimSpace(a.GetOpenAIBaseURL())))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(strings.TrimSpace(a.GetOpenAIFunctionKey())))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(strings.TrimSpace(a.GetOpenAILivechatBaseURL())))
+	_, _ = h.Write([]byte{0})
+	if a.SupportsGrokLivechat() {
+		_, _ = h.Write([]byte{1})
+	}
+	return h.Sum64()
+}
+
+func appendSpecialModelMappings(account *Account, mapping map[string]string) map[string]string {
+	if account == nil || !account.SupportsGrokLivechat() {
+		return mapping
+	}
+	if mapping == nil {
+		mapping = make(map[string]string, 1)
+	}
+	if _, exists := mapping[OpenAIModelGrokLivechat]; !exists {
+		mapping[OpenAIModelGrokLivechat] = OpenAIModelGrokLivechat
+	}
+	return mapping
+}
+
 func mapPtr(m map[string]any) uintptr {
 	if m == nil {
 		return 0
@@ -595,6 +627,9 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	requestedModel = strings.TrimSpace(requestedModel)
 	if requestedModel == "" {
 		return true
+	}
+	if requestedModel == OpenAIModelGrokLivechat {
+		return a.SupportsGrokLivechat()
 	}
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
@@ -900,6 +935,54 @@ func (a *Account) GetOpenAIApiKey() string {
 		return ""
 	}
 	return a.GetCredential("api_key")
+}
+
+func (a *Account) GetOpenAIFunctionKey() string {
+	if !a.IsOpenAI() {
+		return ""
+	}
+	if v := strings.TrimSpace(a.GetCredential("function_key")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(a.GetExtraString("function_key")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(a.GetExtraString("openai_function_key")); v != "" {
+		return v
+	}
+	return ""
+}
+
+func (a *Account) GetOpenAILivechatBaseURL() string {
+	if !a.IsOpenAI() {
+		return ""
+	}
+	if v := strings.TrimSpace(a.GetCredential("livechat_base_url")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(a.GetExtraString("openai_livechat_base_url")); v != "" {
+		return v
+	}
+	return a.GetOpenAIBaseURL()
+}
+
+func (a *Account) SupportsGrokLivechat() bool {
+	if a == nil || !a.IsOpenAIApiKey() {
+		return false
+	}
+	baseURL := strings.ToLower(strings.TrimSpace(a.GetOpenAILivechatBaseURL()))
+	if baseURL == "" {
+		return false
+	}
+	if strings.Contains(baseURL, "grok.ai.org.kg") {
+		return true
+	}
+	if rawMapping, ok := a.Credentials["model_mapping"].(map[string]any); ok {
+		if _, exists := rawMapping[OpenAIModelGrokLivechat]; exists {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Account) GetOpenAIUserAgent() string {

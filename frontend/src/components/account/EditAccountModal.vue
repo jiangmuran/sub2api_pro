@@ -65,6 +65,17 @@
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
         </div>
 
+        <div v-if="account.platform === 'openai'">
+          <label class="input-label">{{ t('admin.accounts.functionKey') }}</label>
+          <input
+            v-model="editFunctionKey"
+            type="password"
+            class="input font-mono"
+            :placeholder="t('admin.accounts.functionKeyPlaceholder')"
+          />
+          <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
+        </div>
+
         <!-- Model Restriction Section (不适用于 Antigravity) -->
         <div v-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
@@ -1331,6 +1342,7 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const editFunctionKey = ref('')
 const modelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
@@ -1583,6 +1595,7 @@ watch(
               ? 'https://generativelanguage.googleapis.com'
               : 'https://api.anthropic.com'
         editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
+        editFunctionKey.value = (credentials.function_key as string) || ''
 
         // Load model mappings and detect mode
         const existingMappings = credentials.model_mapping as Record<string, string> | undefined
@@ -1619,6 +1632,7 @@ watch(
       } else if (newAccount.type === 'upstream' && newAccount.credentials) {
         const credentials = newAccount.credentials as Record<string, unknown>
         editBaseUrl.value = (credentials.base_url as string) || ''
+        editFunctionKey.value = (credentials.function_key as string) || ''
       } else {
         const platformDefaultUrl =
           newAccount.platform === 'openai' || newAccount.platform === 'sora'
@@ -1634,6 +1648,7 @@ watch(
         selectedErrorCodes.value = []
       }
       editApiKey.value = ''
+      editFunctionKey.value = ''
     }
   },
   { immediate: true }
@@ -2067,6 +2082,14 @@ const handleSubmit = async () => {
         return
       }
 
+	      if (props.account.platform === 'openai') {
+	        if (editFunctionKey.value.trim()) {
+	          newCredentials.function_key = editFunctionKey.value.trim()
+	        } else if (currentCredentials.function_key) {
+	          newCredentials.function_key = currentCredentials.function_key
+	        }
+	      }
+
       // Add model mapping if configured（OpenAI 开启自动透传时保留现有映射，不再编辑）
       if (shouldApplyModelMapping) {
         const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
@@ -2099,6 +2122,10 @@ const handleSubmit = async () => {
       if (editApiKey.value.trim()) {
         newCredentials.api_key = editApiKey.value.trim()
       }
+
+	      if (props.account.platform === 'openai' && editFunctionKey.value.trim()) {
+	        newCredentials.function_key = editFunctionKey.value.trim()
+	      }
 
       // Add intercept warmup requests setting
       applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')

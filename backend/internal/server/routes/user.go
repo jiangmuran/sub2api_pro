@@ -66,6 +66,12 @@ func RegisterUserRoutes(
 			usage.POST("/dashboard/api-keys-usage", h.Usage.DashboardAPIKeysUsage)
 		}
 
+		voice := authenticated.Group("/voice")
+		{
+			voice.POST("/preflight", h.Voice.Preflight)
+			voice.POST("/session", h.Voice.CreateSession)
+		}
+
 		// 公告（用户可见）
 		announcements := authenticated.Group("/announcements")
 		{

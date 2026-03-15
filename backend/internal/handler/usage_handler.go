@@ -21,14 +21,16 @@ type UsageHandler struct {
 	usageService   *service.UsageService
 	apiKeyService  *service.APIKeyService
 	billingService *service.BillingService
+	gatewayService *service.OpenAIGatewayService
 }
 
 // NewUsageHandler creates a new UsageHandler
-func NewUsageHandler(usageService *service.UsageService, apiKeyService *service.APIKeyService, billingService *service.BillingService) *UsageHandler {
+func NewUsageHandler(usageService *service.UsageService, apiKeyService *service.APIKeyService, billingService *service.BillingService, gatewayService *service.OpenAIGatewayService) *UsageHandler {
 	return &UsageHandler{
 		usageService:   usageService,
 		apiKeyService:  apiKeyService,
 		billingService: billingService,
+		gatewayService: gatewayService,
 	}
 }
 
@@ -42,6 +44,65 @@ type ModelPricingPreviewItem struct {
 	OutputPricePer1M   float64 `json:"output_price_per_1m"`
 	ImagePricePerImage float64 `json:"image_price_per_image"`
 	PricingAvailable   bool    `json:"pricing_available"`
+}
+
+type manualModelPricing struct {
+	InputPricePer1M    float64
+	OutputPricePer1M   float64
+	ImagePricePerImage float64
+}
+
+func lookupManualModelPricing(account *service.Account, model string) (manualModelPricing, bool) {
+	if account == nil || len(account.Extra) == 0 {
+		return manualModelPricing{}, false
+	}
+	rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+	if !ok {
+		return manualModelPricing{}, false
+	}
+	pricingMap, ok := rawPricing.(map[string]any)
+	if !ok {
+		return manualModelPricing{}, false
+	}
+	entry, ok := pricingMap[model]
+	if !ok {
+		entry, ok = pricingMap[strings.ToLower(model)]
+	}
+	if !ok {
+		return manualModelPricing{}, false
+	}
+	entryMap, ok := entry.(map[string]any)
+	if !ok {
+		return manualModelPricing{}, false
+	}
+	pricing := manualModelPricing{
+		InputPricePer1M:    readFloat(entryMap["input_price_per_1m"]),
+		OutputPricePer1M:   readFloat(entryMap["output_price_per_1m"]),
+		ImagePricePerImage: readFloat(entryMap["image_price_per_image"]),
+	}
+	if pricing.InputPricePer1M <= 0 && pricing.OutputPricePer1M <= 0 && pricing.ImagePricePerImage <= 0 {
+		return manualModelPricing{}, false
+	}
+	return pricing, true
+}
+
+func readFloat(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		if err == nil {
+			return parsed
+		}
+	}
+	return 0
 }
 
 // ModelPricingPreview returns standard model pricing preview for the user model test page.
@@ -62,6 +123,7 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 	}
 	items := make([]ModelPricingPreviewItem, 0, len(req.Models))
 	seen := make(map[string]struct{}, len(req.Models))
+	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
 	for _, model := range req.Models {
 		model = strings.TrimSpace(model)
 		if model == "" {
@@ -72,12 +134,24 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 		}
 		seen[model] = struct{}{}
 		item := ModelPricingPreviewItem{Model: model}
+		if apiKey != nil && h.gatewayService != nil {
+			if account, err := h.gatewayService.SelectAccountForModel(c.Request.Context(), apiKey.GroupID, "", model); err == nil && account != nil {
+				if pricing, ok := lookupManualModelPricing(account, model); ok {
+					item.InputPricePer1M = pricing.InputPricePer1M
+					item.OutputPricePer1M = pricing.OutputPricePer1M
+					item.ImagePricePerImage = pricing.ImagePricePerImage
+					item.PricingAvailable = pricing.InputPricePer1M > 0 || pricing.OutputPricePer1M > 0 || pricing.ImagePricePerImage > 0
+				}
+			}
+		}
 		if h.billingService != nil {
-			if pricing := h.billingService.GetPreviewModelPricing(model); pricing != nil {
-				item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000
-				item.OutputPricePer1M = pricing.OutputPricePerToken * 1_000_000
-				item.ImagePricePerImage = pricing.OutputPricePerImage
-				item.PricingAvailable = item.InputPricePer1M > 0 || item.OutputPricePer1M > 0 || item.ImagePricePerImage > 0
+			if !item.PricingAvailable {
+				if pricing := h.billingService.GetPreviewModelPricing(model); pricing != nil {
+					item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000
+					item.OutputPricePer1M = pricing.OutputPricePerToken * 1_000_000
+					item.ImagePricePerImage = pricing.OutputPricePerImage
+					item.PricingAvailable = item.InputPricePer1M > 0 || item.OutputPricePer1M > 0 || item.ImagePricePerImage > 0
+				}
 			}
 		}
 		items = append(items, item)

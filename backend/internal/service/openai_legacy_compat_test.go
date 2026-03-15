@@ -457,6 +457,13 @@ func TestConvertOpenAILegacyResponseToResponses_Chat(t *testing.T) {
 	require.Equal(t, int64(4), gjson.GetBytes(converted, "usage.output_tokens").Int())
 }
 
+func TestConvertOpenAILegacyResponseToResponses_StripsSystemReminder(t *testing.T) {
+	body := []byte(`{"id":"chatcmpl_2","model":"gpt-4.1","choices":[{"message":{"role":"assistant","content":"<system-reminder>Your operational mode has changed from plan to build.</system-reminder>ok"}}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`)
+	converted, err := ConvertOpenAILegacyResponseToResponses(body, OpenAILegacyProtocolChat, "gpt-4.1")
+	require.NoError(t, err)
+	require.Equal(t, "ok", gjson.GetBytes(converted, "output_text").String())
+}
+
 func TestOpenAILegacyResponsesStreamState_ConvertsFinishAndDone(t *testing.T) {
 	state := &openAILegacyResponsesStreamState{FallbackModel: "kimi-k2.5"}
 

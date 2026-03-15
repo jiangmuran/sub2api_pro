@@ -188,6 +188,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/voice-chat',
+    name: 'VoiceChat',
+    component: () => import('@/views/user/VoiceChatView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Voice Chat',
+      titleKey: 'voiceChat.title',
+      descriptionKey: 'voiceChat.description'
+    }
+  },
+  {
     path: '/redeem',
     name: 'Redeem',
     component: () => import('@/views/user/RedeemView.vue'),
