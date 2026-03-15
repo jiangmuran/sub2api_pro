@@ -445,10 +445,6 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 			}
 		}
 
-		// Remove the 'function' wrapper after extracting all fields (Responses format doesn't use it)
-		delete(toolMap, "function")
-		modified = true
-
 		validTools = append(validTools, toolMap)
 	}
 
