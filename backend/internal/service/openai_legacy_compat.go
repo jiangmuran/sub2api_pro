@@ -1023,8 +1023,6 @@ func extractResponsesMessagesValue(input any) []map[string]any {
 			switch strings.ToLower(role) {
 			case "developer":
 				role = "system"
-			case "tool":
-				role = "user"
 			}
 		}
 		messages = append(messages, map[string]any{
