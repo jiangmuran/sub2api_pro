@@ -173,9 +173,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { i18n } from '@/i18n'
-import zhMessages from '@/i18n/locales/zh'
-import enMessages from '@/i18n/locales/en'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -195,26 +192,7 @@ interface LivekitRoom {
   }
 }
 
-const t = (key: string, params?: Record<string, unknown> | undefined) => {
-  const value = params ? useI18n().t(key, params) : useI18n().t(key)
-  if (typeof value === 'string') {
-    return value
-  }
-  return key
-}
-
-const ensureVoiceChatMessages = () => {
-  const locale = i18n.global.locale.value
-  const base = i18n.global.getLocaleMessage(locale)
-  if ((base as any)?.voiceChat) {
-    return
-  }
-  const source = locale === 'zh' ? (zhMessages as any) : (enMessages as any)
-  const fallback = source.voiceChat || source.modelTest?.voiceChat
-  if (fallback) {
-    i18n.global.setLocaleMessage(locale, { ...base, voiceChat: fallback })
-  }
-}
+const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
 
@@ -227,7 +205,12 @@ const apiKeyInput = ref('')
 const generatingKey = ref(false)
 const preflighting = ref(false)
 const preflight = ref<VoicePreflightResponse | null>(null)
-const browserConnectivity = ref<{ ok: boolean; checked: boolean; label: string; shortLabel: string }>({ ok: false, checked: false, label: '', shortLabel: '' })
+const browserConnectivity = ref<{ ok: boolean; checked: boolean; label: string; shortLabel: string }>({ 
+  ok: false, 
+  checked: false, 
+  label: t('voiceChat.checks.pending'), 
+  shortLabel: t('common.notAvailable') 
+})
 const microphoneReady = ref(false)
 
 const selectedVoice = ref('shimmer')
@@ -273,7 +256,7 @@ const actualSinglePrice = computed(() => {
   const sub = preflight.value.subscription_mode
   return sub ? 0 : baseSinglePrice.value
 })
-const formatPrice = (p: number) => (p > 0 ? `¥${p.toFixed(4)}` : (useI18n().t('common.free')))
+const formatPrice = (p: number) => (p > 0 ? `¥${p.toFixed(4)}` : t('common.free'))
 const canStart = computed(() => !!apiKeyInput.value.trim() && !!preflight.value?.function_ready && browserConnectivity.value.ok && microphoneReady.value)
 const statusText = computed(() => {
   if (startingCall.value) return t('voiceChat.status.connecting')
@@ -506,14 +489,6 @@ watch(() => apiKeyInput.value.trim(), (value, oldValue) => {
 })
 
 onMounted(() => {
-  ensureVoiceChatMessages()
-  // Initialize browserConnectivity labels after i18n is loaded
-  browserConnectivity.value = { 
-    ok: false, 
-    checked: false, 
-    label: t('voiceChat.checks.pending'), 
-    shortLabel: t('common.notAvailable') 
-  }
   void loadBootstrap()
   void checkMicrophoneSupport()
 })
