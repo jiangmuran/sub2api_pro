@@ -1,97 +1,22 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-4xl space-y-6 py-6">
+    <div class="space-y-6">
       <!-- Hero Section -->
-      <section class="text-center">
-        <div class="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/30">
-          <Icon name="microphone" size="lg" class="text-white" :stroke-width="2.5" />
-        </div>
-        <h1 class="text-4xl font-bold tracking-tight text-gray-900 dark:text-white">{{ t('voiceChat.title') }}</h1>
-        <p class="mt-3 text-lg text-gray-600 dark:text-gray-300">{{ t('voiceChat.description') }}</p>
-      </section>
-
-      <!-- Main Call Interface -->
-      <section class="overflow-hidden rounded-3xl border border-gray-200 bg-gradient-to-br from-white via-purple-50/30 to-pink-50/30 shadow-xl dark:border-dark-600 dark:from-dark-800 dark:via-purple-950/20 dark:to-pink-950/20">
-        <div class="p-8">
-          <!-- Voice Visualizer -->
-          <div class="mb-8">
-            <div class="relative mx-auto aspect-square max-w-xs overflow-hidden rounded-full border-4 border-white bg-gradient-to-br from-violet-500 via-purple-500 to-pink-500 p-1 shadow-2xl shadow-purple-500/40 dark:border-dark-700">
-              <div class="flex h-full w-full items-center justify-center rounded-full bg-gray-950">
-                <div class="flex h-32 w-full items-end justify-center gap-1.5 px-8">
-                  <div v-for="(bar, index) in visualizerBars" :key="index" class="w-full rounded-full bg-gradient-to-t from-violet-500 via-purple-400 to-pink-300 transition-all duration-150" :style="{ height: `${bar}px`, opacity: roomConnected ? '1' : '0.3' }" />
-                </div>
-              </div>
+      <section class="rounded-3xl border border-gray-200 bg-gradient-to-br from-white via-cyan-50 to-slate-50 p-6 shadow-sm dark:border-dark-600 dark:from-dark-800 dark:via-dark-800 dark:to-cyan-950/20">
+        <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div class="max-w-3xl">
+            <div class="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-cyan-700 shadow-sm dark:bg-dark-700/80 dark:text-cyan-300">
+              <Icon name="sparkles" size="sm" :stroke-width="2" />
+              {{ t('voiceChat.badge') }}
             </div>
-            
-            <!-- Status Badge -->
-            <div class="mt-6 text-center">
-              <span class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold" :class="callStatusClass">
-                <span class="relative flex h-2 w-2">
-                  <span v-if="roomConnected" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75"></span>
-                  <span class="relative inline-flex h-2 w-2 rounded-full bg-current"></span>
-                </span>
-                {{ statusText }}
-              </span>
-            </div>
-
-            <!-- Duration -->
-            <div v-if="roomConnected" class="mt-3 text-center text-2xl font-bold tabular-nums text-gray-900 dark:text-white">
-              {{ formattedDuration }}
-            </div>
-          </div>
-
-          <!-- Voice Settings (Compact) -->
-          <div v-if="!roomConnected" class="mb-6 grid gap-3 sm:grid-cols-3">
-            <div class="rounded-xl border border-gray-200 bg-white/80 px-3 py-2 text-center dark:border-dark-600 dark:bg-dark-800/80">
-              <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('voiceChat.setup.voice') }}</div>
-              <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ selectedVoiceLabel }}</div>
-            </div>
-            <div class="rounded-xl border border-gray-200 bg-white/80 px-3 py-2 text-center dark:border-dark-600 dark:bg-dark-800/80">
-              <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('voiceChat.setup.personality') }}</div>
-              <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ selectedPersonalityLabel }}</div>
-            </div>
-            <div class="rounded-xl border border-gray-200 bg-white/80 px-3 py-2 text-center dark:border-dark-600 dark:bg-dark-800/80">
-              <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('voiceChat.setup.speed') }}</div>
-              <div class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ speed.toFixed(1) }}x</div>
-            </div>
-          </div>
-
-          <!-- Call Controls -->
-          <div class="flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <button v-if="!roomConnected" type="button" class="btn-large bg-gradient-to-r from-violet-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-purple-500/60 disabled:opacity-50 disabled:shadow-none" :disabled="!canStart || startingCall" @click="startConversation">
-              <Icon name="phone" size="sm" />
-              {{ startingCall ? t('common.loading') + '...' : t('voiceChat.call.start') }}
-            </button>
-            <button v-else type="button" class="btn-large bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg shadow-red-500/50 hover:shadow-xl hover:shadow-red-500/60" @click="stopConversation">
-              <Icon name="phoneOff" size="sm" />
-              {{ t('voiceChat.call.stop') }}
-            </button>
-            <button v-if="!roomConnected" type="button" class="btn-large border-2 border-gray-300 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200 dark:hover:border-dark-500 dark:hover:bg-dark-700" @click="showSettings = !showSettings">
-              <Icon name="settings" size="sm" />
-              {{ showSettings ? t('common.hide') : t('common.settings') }}
-            </button>
-          </div>
-
-          <!-- Quick Status Checks (Minimized) -->
-          <div v-if="!roomConnected && preflight" class="mt-6 flex items-center justify-center gap-4 text-xs">
-            <div class="flex items-center gap-1.5">
-              <div class="h-2 w-2 rounded-full" :class="preflight?.function_ready ? 'bg-green-500' : 'bg-red-500'"></div>
-              <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.checks.server') }}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <div class="h-2 w-2 rounded-full" :class="browserConnectivity.ok ? 'bg-green-500' : 'bg-red-500'"></div>
-              <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.checks.browser') }}</span>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <div class="h-2 w-2 rounded-full" :class="microphoneReady ? 'bg-green-500' : 'bg-yellow-500'"></div>
-              <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.checks.microphone') }}</span>
-            </div>
+            <h1 class="mt-4 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">{{ t('voiceChat.title') }}</h1>
+            <p class="mt-3 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-300">{{ t('voiceChat.description') }}</p>
           </div>
         </div>
       </section>
 
-      <!-- Expandable Settings Panel -->
-      <section v-show="showSettings" class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg dark:border-dark-600 dark:bg-dark-800">
+      <!-- Settings Panel (Always visible, no expand/collapse) -->
+      <section class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800">
         <div class="border-b border-gray-200 px-6 py-4 dark:border-dark-600">
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('common.settings') }}</h2>
         </div>
@@ -119,8 +44,8 @@
             </div>
 
             <!-- Quick Generate -->
-            <div class="rounded-xl border-2 border-dashed border-purple-200 bg-purple-50/50 p-4 dark:border-purple-900/40 dark:bg-purple-950/20">
-              <div class="mb-3 text-sm font-medium text-purple-900 dark:text-purple-200">{{ t('voiceChat.keyPanel.generateTitle') }}</div>
+            <div class="rounded-xl border-2 border-dashed border-cyan-200 bg-cyan-50/50 p-4 dark:border-cyan-900/40 dark:bg-cyan-950/20">
+              <div class="mb-3 text-sm font-medium text-cyan-900 dark:text-cyan-200">{{ t('voiceChat.keyPanel.generateTitle') }}</div>
               <div class="space-y-2">
                 <Select v-model="selectedGroupId" :options="groupOptions" value-key="value" label-key="label" :placeholder="t('voiceChat.keyPanel.groupPlaceholder')" />
                 <button type="button" class="btn btn-primary w-full" :disabled="generatingKey || selectedGroupId == null" @click="generateApiKey">
@@ -149,22 +74,71 @@
                 <label class="input-label">{{ t('voiceChat.setup.speed') }}</label>
                 <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ speed.toFixed(1) }}x</span>
               </div>
-              <input v-model="speed" type="range" min="0.8" max="1.4" step="0.1" class="mt-2 w-full accent-purple-500" />
+              <input v-model="speed" type="range" min="0.8" max="1.4" step="0.1" class="mt-2 w-full accent-cyan-500" />
             </div>
 
-            <!-- Pricing (Collapsed by default, small) -->
-            <details class="rounded-lg border border-gray-200 bg-gray-50 dark:border-dark-600 dark:bg-dark-900/50">
-              <summary class="cursor-pointer px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-800">
-                {{ t('voiceChat.price.title') }}
-              </summary>
-              <div class="border-t border-gray-200 px-4 py-3 dark:border-dark-600">
-                <div class="flex items-center justify-between text-sm">
-                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.price.singleActual') }}</span>
-                  <span class="font-semibold text-gray-900 dark:text-white">{{ actualPriceLabel }}</span>
+            <!-- Status Checks -->
+            <div class="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-900/50">
+              <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('voiceChat.checks.title') }}</div>
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.checks.server') }}</span>
+                  <span :class="preflight?.function_ready ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">{{ preflight?.function_ready ? '✓' : '○' }}</span>
                 </div>
-                <div v-if="effectiveRateLabel" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ effectiveRateLabel }}</div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.checks.browser') }}</span>
+                  <span :class="browserConnectivity.ok ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">{{ browserConnectivity.ok ? '✓' : '○' }}</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.checks.microphone') }}</span>
+                  <span :class="microphoneReady ? 'text-green-600 dark:text-green-400' : 'text-gray-400'">{{ microphoneReady ? '✓' : '○' }}</span>
+                </div>
               </div>
-            </details>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Call Interface -->
+      <section class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800">
+        <div class="p-8">
+          <!-- Voice Visualizer -->
+          <div class="mb-8">
+            <div class="relative mx-auto aspect-square max-w-xs overflow-hidden rounded-full border-4 border-cyan-100 bg-gradient-to-br from-cyan-500 to-blue-500 p-1 shadow-2xl shadow-cyan-500/30 dark:border-cyan-900/30">
+              <div class="flex h-full w-full items-center justify-center rounded-full bg-gray-950">
+                <div class="flex h-32 w-full items-end justify-center gap-1.5 px-8">
+                  <div v-for="(bar, index) in visualizerBars" :key="index" class="w-full rounded-full bg-gradient-to-t from-cyan-500 via-sky-400 to-emerald-300 transition-all duration-150" :style="{ height: `${bar}px`, opacity: roomConnected ? '1' : '0.3' }" />
+                </div>
+              </div>
+            </div>
+            
+            <!-- Status Badge -->
+            <div class="mt-6 text-center">
+              <span class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold" :class="callStatusClass">
+                <span class="relative flex h-2 w-2">
+                  <span v-if="roomConnected" class="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75"></span>
+                  <span class="relative inline-flex h-2 w-2 rounded-full bg-current"></span>
+                </span>
+                {{ statusText }}
+              </span>
+            </div>
+
+            <!-- Duration -->
+            <div class="mt-3 text-center text-2xl font-bold tabular-nums text-gray-900 dark:text-white">
+              {{ roomConnected ? formattedDuration : '00:00' }}
+            </div>
+          </div>
+
+          <!-- Call Controls -->
+          <div class="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button v-if="!roomConnected" type="button" class="btn-large bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/60 disabled:opacity-50 disabled:shadow-none" :disabled="!canStart || startingCall" @click="startConversation">
+              <Icon name="phone" size="sm" />
+              {{ startingCall ? t('common.loading') + '...' : t('voiceChat.call.start') }}
+            </button>
+            <button v-else type="button" class="btn-large bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg shadow-red-500/50 hover:shadow-xl hover:shadow-red-500/60" @click="stopConversation">
+              <Icon name="phoneOff" size="sm" />
+              {{ t('voiceChat.call.stop') }}
+            </button>
           </div>
         </div>
       </section>
@@ -244,7 +218,6 @@ const ensureVoiceChatMessages = () => {
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
 
-const showSettings = ref(false)
 const loadingBootstrap = ref(false)
 const apiKeys = ref<ApiKey[]>([])
 const groupOptions = ref<Array<{ value: number; label: string }>>([])
@@ -300,11 +273,7 @@ const actualSinglePrice = computed(() => {
   const sub = preflight.value.subscription_mode
   return sub ? 0 : baseSinglePrice.value
 })
-const effectiveRateLabel = computed(() => (preflight.value?.subscription_mode ? t('voiceChat.price.subscriptionMode') : ''))
 const formatPrice = (p: number) => (p > 0 ? `¥${p.toFixed(4)}` : t('common.free'))
-const actualPriceLabel = computed(() => (preflight.value ? formatPrice(actualSinglePrice.value) : '--'))
-const selectedVoiceLabel = computed(() => voiceOptions.find((item) => item.value === selectedVoice.value)?.label || selectedVoice.value)
-const selectedPersonalityLabel = computed(() => personalityOptions.find((item) => item.value === selectedPersonality.value)?.label || selectedPersonality.value)
 const canStart = computed(() => !!apiKeyInput.value.trim() && !!preflight.value?.function_ready && browserConnectivity.value.ok && microphoneReady.value)
 const statusText = computed(() => {
   if (startingCall.value) return t('voiceChat.status.connecting')
@@ -529,7 +498,8 @@ const stopConversation = async () => {
 }
 
 watch(() => apiKeyInput.value.trim(), (value, oldValue) => {
-  if (value !== oldValue) {
+  if (value !== oldValue && value === '') {
+    // Only reset when input is cleared
     preflight.value = null
     browserConnectivity.value = { ok: false, checked: false, label: t('voiceChat.checks.pending'), shortLabel: t('common.notAvailable') }
   }

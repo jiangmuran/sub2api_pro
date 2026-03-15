@@ -239,6 +239,8 @@ export default {
     now: '现在',
     unknown: '未知',
     minutes: '分钟',
+    hide: '收起',
+    free: '免费',
     time: {
       never: '从未',
       justNow: '刚刚',
@@ -413,6 +415,11 @@ export default {
       personality: '主题',
       speed: '语速'
     },
+    personality: {
+      friendly: '友好',
+      professional: '专业',
+      casual: '随意'
+    },
     price: {
       title: '通话价格',
       description: '价格会在你选择 Key 后显示，倍率按当前 Key 所属分组实时计算。',
@@ -438,7 +445,8 @@ export default {
       checking: '检测中',
       connecting: '连接中',
       connected: '通话中',
-      ready: '待开始'
+      ready: '待开始',
+      idle: '空闲'
     },
     network: {
       ok: '网络可用',
