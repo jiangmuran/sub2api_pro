@@ -281,19 +281,27 @@ func normalizeOpenAITools(payload map[string]any) bool {
 		}
 		toolType, _ := toolMap["type"].(string)
 		if strings.EqualFold(strings.TrimSpace(toolType), "function") {
+			// Check if it's ChatCompletions format with function wrapper
 			functionMap, ok := toolMap["function"].(map[string]any)
-			if !ok {
+			if ok {
+				// ChatCompletions format: {type: "function", function: {...}}
+				name, _ := functionMap["name"].(string)
+				if strings.TrimSpace(name) == "" {
+					continue
+				}
+				cleaned = append(cleaned, map[string]any{
+					"type":     "function",
+					"function": functionMap,
+				})
 				continue
 			}
-			name, _ := functionMap["name"].(string)
-			if strings.TrimSpace(name) == "" {
+			// Responses format: {type: "function", name: "...", ...}
+			// Just validate it has a name and keep as-is
+			name, _ := toolMap["name"].(string)
+			if strings.TrimSpace(name) != "" {
+				cleaned = append(cleaned, toolMap)
 				continue
 			}
-			cleaned = append(cleaned, map[string]any{
-				"type":     "function",
-				"function": functionMap,
-			})
-			continue
 		}
 		cleaned = append(cleaned, toolMap)
 	}
@@ -346,35 +354,43 @@ func coerceOpenAIInputToItems(value any) ([]any, bool) {
 }
 
 func normalizeOpenAIInputRoles(input []any) bool {
-	changed := false
-	for _, item := range input {
-		msg, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		role, ok := msg["role"].(string)
-		if !ok || !strings.EqualFold(strings.TrimSpace(role), "tool") {
-			continue
-		}
+	// DISABLED: This conversion breaks tool calling for APIs that support it natively
+	// The original purpose was to make tool messages compatible with APIs that don't support them,
+	// but it was applied universally and broke OpenAI-compatible APIs that DO support tool role.
+	// TODO: Only apply this conversion when targeting APIs that don't support tool role
+	return false
 
-		msg["role"] = "user"
-		changed = true
+	/*
+		changed := false
+		for _, item := range input {
+			msg, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			role, ok := msg["role"].(string)
+			if !ok || !strings.EqualFold(strings.TrimSpace(role), "tool") {
+				continue
+			}
 
-		toolCallID, _ := msg["tool_call_id"].(string)
-		if content, ok := msg["content"].(string); ok {
-			trimmedID := strings.TrimSpace(toolCallID)
-			if trimmedID != "" {
-				msg["content"] = fmt.Sprintf("[tool:%s] %s", trimmedID, content)
+			msg["role"] = "user"
+			changed = true
+
+			toolCallID, _ := msg["tool_call_id"].(string)
+			if content, ok := msg["content"].(string); ok {
+				trimmedID := strings.TrimSpace(toolCallID)
+				if trimmedID != "" {
+					msg["content"] = fmt.Sprintf("[tool:%s] %s", trimmedID, content)
+					changed = true
+				}
+			}
+
+			if _, has := msg["tool_call_id"]; has {
+				delete(msg, "tool_call_id")
 				changed = true
 			}
 		}
-
-		if _, has := msg["tool_call_id"]; has {
-			delete(msg, "tool_call_id")
-			changed = true
-		}
-	}
-	return changed
+		return changed
+	*/
 }
 
 func normalizeOpenAIInputContentTypes(input []any) bool {
