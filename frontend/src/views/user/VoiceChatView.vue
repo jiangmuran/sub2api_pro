@@ -267,7 +267,18 @@ type LivekitRoom = {
   localParticipant: { publishTrack: (track: any) => Promise<void> }
 }
 
-const { t } = useI18n()
+const { t: tRaw } = useI18n()
+const t = (key: string, params?: Record<string, unknown>) => {
+  const value = tRaw(key, params as any)
+  if (value === key && key.startsWith('voiceChat.')) {
+    const fallbackKey = key.replace(/^voiceChat\./, 'modelTest.voiceChat.')
+    const fallback = tRaw(fallbackKey, params as any)
+    if (fallback !== fallbackKey) {
+      return fallback
+    }
+  }
+  return value
+}
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
 
