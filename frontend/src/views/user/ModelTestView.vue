@@ -528,6 +528,12 @@ watch(selectedGroupId, () => {
   }
 })
 
+watch(imageModelOptions, (options) => {
+  if (!imageModel.value && options.length > 0) {
+    imageModel.value = options[0].value
+  }
+})
+
 onMounted(() => {
   void loadBootstrap()
 })

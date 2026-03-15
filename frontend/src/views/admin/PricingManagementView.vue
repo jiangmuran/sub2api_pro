@@ -165,10 +165,10 @@ const filteredAccounts = computed(() => {
 
 const visibleModels = computed(() =>
   showMissingOnly.value
-    ? previewModels.value.filter((item) => !item.pricing_available && !hasManualPricing(item.id))
+    ? previewModels.value.filter((item) => !item.pricing_available)
     : previewModels.value
 )
-const missingCount = computed(() => previewModels.value.filter((item) => !item.pricing_available && !hasManualPricing(item.id)).length)
+const missingCount = computed(() => previewModels.value.filter((item) => !item.pricing_available).length)
 const manualCount = computed(() => Object.keys(buildManualPricingPayload()).length)
 const hasManualChanges = computed(() => manualCount.value > 0)
 const rateMultiplierValue = computed(() => (selectedAccount.value?.rate_multiplier && selectedAccount.value.rate_multiplier > 0 ? selectedAccount.value.rate_multiplier : 1))
