@@ -273,7 +273,7 @@ const actualSinglePrice = computed(() => {
   const sub = preflight.value.subscription_mode
   return sub ? 0 : baseSinglePrice.value
 })
-const formatPrice = (p: number) => (p > 0 ? `¥${p.toFixed(4)}` : t('common.free'))
+const formatPrice = (p: number) => (p > 0 ? `¥${p.toFixed(4)}` : (useI18n().t('common.free')))
 const canStart = computed(() => !!apiKeyInput.value.trim() && !!preflight.value?.function_ready && browserConnectivity.value.ok && microphoneReady.value)
 const statusText = computed(() => {
   if (startingCall.value) return t('voiceChat.status.connecting')
