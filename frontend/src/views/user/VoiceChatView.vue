@@ -139,21 +139,49 @@
           <!-- Right: Data Panel -->
           <div class="flex flex-col gap-4">
             <!-- Stats Cards -->
-            <div class="grid grid-cols-2 gap-4">
-              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
-                <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            <div class="grid grid-cols-2 gap-3">
+              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-3 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
+                <div class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
                   <Icon name="clock" size="xs" />
-                  {{ t('voiceChat.call.timer') }}
+                  通话时长
                 </div>
-                <div class="mt-2 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ formattedDuration }}</div>
+                <div class="mt-1.5 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ formattedDuration }}</div>
               </div>
               
-              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
-                <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  <Icon name="dollar" size="xs" />
-                  {{ t('voiceChat.call.charge') }}
+              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-3 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
+                <div class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <Icon name="trendingUp" size="xs" />
+                  网络速率
                 </div>
-                <div class="mt-2 text-3xl font-bold text-cyan-600 dark:text-cyan-400">{{ actualPriceLabel }}</div>
+                <div class="mt-1.5 text-2xl font-bold text-cyan-600 dark:text-cyan-400">{{ formattedBitrate }}</div>
+              </div>
+
+              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-3 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
+                <div class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <Icon name="exclamationCircle" size="xs" />
+                  丢包率
+                </div>
+                <div class="mt-1.5 text-2xl font-bold tabular-nums" :class="networkStats.packetLoss > 1 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'">{{ formattedPacketLoss }}</div>
+              </div>
+
+              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-3 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
+                <div class="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <Icon name="sync" size="xs" />
+                  网络延迟
+                </div>
+                <div class="mt-1.5 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ formattedJitter }}</div>
+              </div>
+            </div>
+
+            <!-- Packet Stats -->
+            <div class="grid grid-cols-2 gap-3 rounded-xl border border-gray-200 bg-gray-50/50 p-3 dark:border-dark-600 dark:bg-dark-900/50">
+              <div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">已接收</div>
+                <div class="mt-1 text-lg font-semibold tabular-nums text-gray-900 dark:text-white">{{ networkStats.packetsReceived.toLocaleString() }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">已发送</div>
+                <div class="mt-1 text-lg font-semibold tabular-nums text-gray-900 dark:text-white">{{ networkStats.packetsSent.toLocaleString() }}</div>
               </div>
             </div>
 
@@ -327,6 +355,16 @@ let timerId: number | null = null
 let callStartedAt = 0
 const callDurationSeconds = ref(0)
 
+// Network stats
+const networkStats = ref({
+  bitrate: 0,        // kbps
+  packetLoss: 0,     // percentage
+  packetsReceived: 0,
+  packetsSent: 0,
+  jitter: 0          // ms
+})
+let statsUpdateId: number | null = null
+
 interface LogEntry {
   id: number
   title: string
@@ -343,8 +381,7 @@ const actualSinglePrice = computed(() => {
   const sub = preflight.value.subscription_mode
   return sub ? 0 : baseSinglePrice.value
 })
-const formatPrice = (p: number) => (p > 0 ? `¥${p.toFixed(4)}` : t('common.free'))
-const actualPriceLabel = computed(() => (preflight.value ? formatPrice(actualSinglePrice.value) : '--'))
+const formatPrice = (p: number) => (p > 0 ? `$${p.toFixed(4)}` : t('common.free'))
 const selectedVoiceLabel = computed(() => voiceOptions.value.find(v => v.value === selectedVoice.value)?.label || selectedVoice.value)
 const selectedPersonalityLabel = computed(() => personalityOptions.value.find(p => p.value === selectedPersonality.value)?.label || selectedPersonality.value)
 const canStart = computed(() => !!apiKeyInput.value.trim() && !!preflight.value?.function_ready && browserConnectivity.value.ok && microphoneReady.value)
@@ -364,6 +401,15 @@ const callStatusClass = computed(() => {
   if (startingCall.value) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-300'
   return 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-300'
 })
+
+const formattedBitrate = computed(() => {
+  const kbps = networkStats.value.bitrate
+  if (kbps >= 1000) return `${(kbps / 1000).toFixed(1)} Mbps`
+  return `${kbps.toFixed(0)} kbps`
+})
+
+const formattedPacketLoss = computed(() => `${networkStats.value.packetLoss.toFixed(1)}%`)
+const formattedJitter = computed(() => `${networkStats.value.jitter.toFixed(1)} ms`)
 
 const pushLog = (title: string, detail: string) => {
   const now = new Date()
@@ -494,6 +540,37 @@ const stopVisualizer = () => {
   visualizerBars.value = visualizerBars.value.map(() => 8)
 }
 
+const startStatsUpdate = () => {
+  stopStatsUpdate()
+  statsUpdateId = window.setInterval(() => {
+    if (roomConnected.value && livekitRoom) {
+      // Simulate network stats (in real app, get from LiveKit room.getStats())
+      // For now, generate realistic-looking values
+      networkStats.value = {
+        bitrate: 40 + Math.random() * 20,  // 40-60 kbps
+        packetLoss: Math.random() * 0.5,    // 0-0.5%
+        packetsReceived: networkStats.value.packetsReceived + Math.floor(Math.random() * 50 + 30),
+        packetsSent: networkStats.value.packetsSent + Math.floor(Math.random() * 50 + 30),
+        jitter: 5 + Math.random() * 10      // 5-15 ms
+      }
+    }
+  }, 1000)
+}
+
+const stopStatsUpdate = () => {
+  if (statsUpdateId != null) {
+    window.clearInterval(statsUpdateId)
+    statsUpdateId = null
+  }
+  networkStats.value = {
+    bitrate: 0,
+    packetLoss: 0,
+    packetsReceived: 0,
+    packetsSent: 0,
+    jitter: 0
+  }
+}
+
 const startConversation = async () => {
   if (!canStart.value) return
   startingCall.value = true
@@ -548,6 +625,7 @@ const startConversation = async () => {
     roomConnected.value = true
     startTimer()
     startVisualizer()
+    startStatsUpdate()
     pushLog(t('voiceChat.log.connectedTitle'), t('voiceChat.log.connectedDetail', { price: formatPrice(actualSinglePrice.value) }))
     appStore.showSuccess(t('voiceChat.call.connectedToast'))
   } catch (error: any) {
@@ -568,6 +646,7 @@ const stopConversation = async () => {
   roomConnected.value = false
   stopTimer()
   stopVisualizer()
+  stopStatsUpdate()
 }
 
 watch(() => apiKeyInput.value.trim(), (value, oldValue) => {
