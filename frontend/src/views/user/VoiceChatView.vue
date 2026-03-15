@@ -227,7 +227,7 @@ const apiKeyInput = ref('')
 const generatingKey = ref(false)
 const preflighting = ref(false)
 const preflight = ref<VoicePreflightResponse | null>(null)
-const browserConnectivity = ref<{ ok: boolean; checked: boolean; label: string; shortLabel: string }>({ ok: false, checked: false, label: t('voiceChat.checks.pending'), shortLabel: t('common.notAvailable') })
+const browserConnectivity = ref<{ ok: boolean; checked: boolean; label: string; shortLabel: string }>({ ok: false, checked: false, label: '', shortLabel: '' })
 const microphoneReady = ref(false)
 
 const selectedVoice = ref('shimmer')
@@ -507,6 +507,13 @@ watch(() => apiKeyInput.value.trim(), (value, oldValue) => {
 
 onMounted(() => {
   ensureVoiceChatMessages()
+  // Initialize browserConnectivity labels after i18n is loaded
+  browserConnectivity.value = { 
+    ok: false, 
+    checked: false, 
+    label: t('voiceChat.checks.pending'), 
+    shortLabel: t('common.notAvailable') 
+  }
   void loadBootstrap()
   void checkMicrophoneSupport()
 })

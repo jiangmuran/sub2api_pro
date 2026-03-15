@@ -1,0 +1,1 @@
+{"choices":[{"finish_reason":"stop","index":0,"message":{"content":"KIMI_OK","role":"assistant"}}],"created":1773431552,"id":"02177343154832812d36d959f62742d385ad4f63c9952ad76dfa8","model":"kimi-k2.5","object":"chat.completion","usage":{"completion_tokens":110,"prompt_tokens":15,"total_tokens":125}}

@@ -1,0 +1,1 @@
+{"created":1773431551,"id":"02177343154825412d36d959f62742d385ad4f63c9952ad885a0d","model":"kimi-k2.5","object":"response","output":[{"content":[{"text":"KIMI_OK","type":"output_text"}],"id":"02177343154825412d36d959f62742d385ad4f63c9952ad885a0d","role":"assistant","status":"completed","type":"message"}],"output_text":"KIMI_OK","usage":{"input_tokens":15,"output_tokens":93}}
