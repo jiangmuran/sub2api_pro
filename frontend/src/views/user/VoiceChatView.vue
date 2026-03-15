@@ -241,11 +241,11 @@ const voiceOptions = [
   { value: 'verse', label: 'Verse' }
 ]
 
-const personalityOptions = [
+const personalityOptions = computed(() => [
   { value: 'friendly', label: t('voiceChat.personality.friendly') },
   { value: 'professional', label: t('voiceChat.personality.professional') },
   { value: 'casual', label: t('voiceChat.personality.casual') }
-]
+])
 
 const startingCall = ref(false)
 const roomConnected = ref(false)
