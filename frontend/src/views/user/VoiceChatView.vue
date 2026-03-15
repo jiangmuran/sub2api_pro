@@ -65,6 +65,11 @@
             </div>
 
             <div>
+              <label class="input-label">{{ t('voiceChat.setup.personality') }}</label>
+              <Select v-model="selectedPersonality" :options="personalityOptions" value-key="value" label-key="label" />
+            </div>
+
+            <div>
               <div class="flex items-center justify-between">
                 <label class="input-label">{{ t('voiceChat.setup.speed') }}</label>
                 <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ speed.toFixed(1) }}x</span>
@@ -208,14 +213,34 @@ const browserConnectivity = ref<{ ok: boolean; checked: boolean; label: string; 
 })
 const microphoneReady = ref(false)
 
-const selectedVoice = ref('shimmer')
+const selectedVoice = ref('ara')
+const selectedPersonality = ref('assistant')
 const speed = ref(1.0)
 
 const voiceOptions = [
-  { value: 'alloy', label: 'Alloy' },
-  { value: 'echo', label: 'Echo' },
-  { value: 'shimmer', label: 'Shimmer' },
-  { value: 'verse', label: 'Verse' }
+  { value: 'ara', label: 'Ara (Upbeat Female)' },
+  { value: 'eve', label: 'Eve (Soothing Female)' },
+  { value: 'leo', label: 'Leo (British Male)' },
+  { value: 'rex', label: 'Rex (Calm Male)' },
+  { value: 'sal', label: 'Sal (Smooth Male)' },
+  { value: 'gork', label: 'Gork (Lazy Male)' }
+]
+
+const personalityOptions = [
+  { value: 'assistant', label: 'Assistant (Default)' },
+  { value: 'custom', label: 'Custom' },
+  { value: 'therapist', label: 'Therapist' },
+  { value: 'storyteller', label: 'Storyteller' },
+  { value: 'kids_story_time', label: 'Kids Story Time' },
+  { value: 'kids_trivia_game', label: 'Kids Trivia Game' },
+  { value: 'meditation', label: 'Meditation' },
+  { value: 'doc', label: 'Grok "Doc"' },
+  { value: 'unhinged', label: 'Unhinged 18+' },
+  { value: 'sexy', label: 'Sexy 18+' },
+  { value: 'motivation', label: 'Motivation 18+' },
+  { value: 'conspiracy', label: 'Conspiracy' },
+  { value: 'romantic', label: 'Romantic 18+' },
+  { value: 'argumentative', label: 'Argumentative 18+' }
 ]
 
 const startingCall = ref(false)
@@ -399,7 +424,7 @@ const startConversation = async () => {
     const session = await voiceAPI.createSession({
       api_key: apiKeyInput.value.trim(),
       voice: selectedVoice.value,
-      personality: '',
+      personality: selectedPersonality.value,
       speed: speed.value
     })
     
