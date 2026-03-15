@@ -101,10 +101,10 @@
 
       <!-- Main Call Interface -->
       <section class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-dark-600 dark:bg-dark-800">
-        <div class="p-8">
-          <!-- Voice Visualizer -->
-          <div class="mb-8">
-            <div class="relative mx-auto aspect-square max-w-xs overflow-hidden rounded-full border-4 border-cyan-100 bg-gradient-to-br from-cyan-500 to-blue-500 p-1 shadow-2xl shadow-cyan-500/30 dark:border-cyan-900/30">
+        <div class="grid gap-6 p-6 lg:grid-cols-[350px_1fr]">
+          <!-- Left: Voice Visualizer -->
+          <div class="flex flex-col items-center justify-center">
+            <div class="relative aspect-square w-full max-w-[280px] overflow-hidden rounded-full border-4 border-cyan-100 bg-gradient-to-br from-cyan-500 to-blue-500 p-1 shadow-2xl shadow-cyan-500/30 dark:border-cyan-900/30">
               <div class="flex h-full w-full items-center justify-center rounded-full bg-gray-950">
                 <div class="flex h-32 w-full items-end justify-center gap-1.5 px-8">
                   <div v-for="(bar, index) in visualizerBars" :key="index" class="w-full rounded-full bg-gradient-to-t from-cyan-500 via-sky-400 to-emerald-300 transition-all duration-150" :style="{ height: `${bar}px`, opacity: roomConnected ? '1' : '0.3' }" />
@@ -123,22 +123,82 @@
               </span>
             </div>
 
-            <!-- Duration -->
-            <div class="mt-3 text-center text-2xl font-bold tabular-nums text-gray-900 dark:text-white">
-              {{ roomConnected ? formattedDuration : '00:00' }}
+            <!-- Call Controls -->
+            <div class="mt-6 flex w-full flex-col gap-3">
+              <button v-if="!roomConnected" type="button" class="btn-large bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/60 disabled:opacity-50 disabled:shadow-none" :disabled="!canStart || startingCall" @click="startConversation">
+                <Icon name="phone" size="sm" />
+                {{ startingCall ? t('common.loading') + '...' : t('voiceChat.call.start') }}
+              </button>
+              <button v-else type="button" class="btn-large bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg shadow-red-500/50 hover:shadow-xl hover:shadow-red-500/60" @click="stopConversation">
+                <Icon name="phoneOff" size="sm" />
+                {{ t('voiceChat.call.stop') }}
+              </button>
             </div>
           </div>
 
-          <!-- Call Controls -->
-          <div class="flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <button v-if="!roomConnected" type="button" class="btn-large bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/50 hover:shadow-xl hover:shadow-cyan-500/60 disabled:opacity-50 disabled:shadow-none" :disabled="!canStart || startingCall" @click="startConversation">
-              <Icon name="phone" size="sm" />
-              {{ startingCall ? t('common.loading') + '...' : t('voiceChat.call.start') }}
-            </button>
-            <button v-else type="button" class="btn-large bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg shadow-red-500/50 hover:shadow-xl hover:shadow-red-500/60" @click="stopConversation">
-              <Icon name="phoneOff" size="sm" />
-              {{ t('voiceChat.call.stop') }}
-            </button>
+          <!-- Right: Data Panel -->
+          <div class="flex flex-col gap-4">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-2 gap-4">
+              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
+                <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <Icon name="clock" size="xs" />
+                  {{ t('voiceChat.call.timer') }}
+                </div>
+                <div class="mt-2 text-3xl font-bold tabular-nums text-gray-900 dark:text-white">{{ formattedDuration }}</div>
+              </div>
+              
+              <div class="rounded-xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4 dark:border-dark-600 dark:from-dark-800 dark:to-dark-900">
+                <div class="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  <Icon name="dollar" size="xs" />
+                  {{ t('voiceChat.call.charge') }}
+                </div>
+                <div class="mt-2 text-3xl font-bold text-cyan-600 dark:text-cyan-400">{{ actualPriceLabel }}</div>
+              </div>
+            </div>
+
+            <!-- Session Info -->
+            <div class="space-y-3 rounded-xl border border-gray-200 bg-gray-50/50 p-4 dark:border-dark-600 dark:bg-dark-900/50">
+              <div class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('voiceChat.call.title') }}</div>
+              
+              <div class="space-y-2 text-sm">
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.setup.voice') }}</span>
+                  <span class="font-medium text-gray-900 dark:text-white">{{ selectedVoiceLabel }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.setup.personality') }}</span>
+                  <span class="font-medium text-gray-900 dark:text-white">{{ selectedPersonalityLabel }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.setup.speed') }}</span>
+                  <span class="font-medium text-gray-900 dark:text-white">{{ speed.toFixed(1) }}x</span>
+                </div>
+                <div class="flex items-center justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
+                  <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.call.network') }}</span>
+                  <span class="inline-flex items-center gap-1.5 font-medium" :class="browserConnectivity.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                    <span class="h-1.5 w-1.5 rounded-full" :class="browserConnectivity.ok ? 'bg-green-500' : 'bg-red-500'"></span>
+                    {{ browserConnectivity.shortLabel }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Activity Log (Compact) -->
+            <div class="max-h-48 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 dark:border-dark-600 dark:bg-dark-800">
+              <div class="mb-2 flex items-center justify-between">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{{ t('voiceChat.log.title') }}</div>
+                <button v-if="logs.length > 0" type="button" class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300" @click="logs = []">{{ t('voiceChat.log.clear') }}</button>
+              </div>
+              <div v-if="logs.length === 0" class="py-8 text-center text-xs text-gray-400 dark:text-gray-500">{{ t('voiceChat.log.empty') }}</div>
+              <div v-for="entry in logs.slice(0, 5)" :key="entry.id" class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-xs dark:border-dark-700 dark:bg-dark-900">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="font-medium text-gray-900 dark:text-white">{{ entry.title }}</span>
+                  <span class="text-[10px] text-gray-400 dark:text-gray-500">{{ entry.at }}</span>
+                </div>
+                <div class="mt-0.5 text-[11px] leading-4 text-gray-600 dark:text-gray-400">{{ entry.detail }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -177,6 +237,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { useClipboard } from '@/composables/useClipboard'
 import * as keysAPI from '@/api/keys'
 import * as groupsAPI from '@/api/admin/groups'
@@ -194,7 +255,10 @@ interface LivekitRoom {
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 const { copyToClipboard } = useClipboard()
+
+const isAdmin = computed(() => authStore.user?.role === 'admin')
 
 const loadingBootstrap = ref(false)
 const apiKeys = ref<ApiKey[]>([])
@@ -217,31 +281,41 @@ const selectedVoice = ref('ara')
 const selectedPersonality = ref('assistant')
 const speed = ref(1.0)
 
-const voiceOptions = [
-  { value: 'ara', label: 'Ara (Upbeat Female)' },
-  { value: 'eve', label: 'Eve (Soothing Female)' },
-  { value: 'leo', label: 'Leo (British Male)' },
-  { value: 'rex', label: 'Rex (Calm Male)' },
-  { value: 'sal', label: 'Sal (Smooth Male)' },
-  { value: 'gork', label: 'Gork (Lazy Male)' }
-]
+const voiceOptions = computed(() => [
+  { value: 'ara', label: t('voiceChat.voices.ara') },
+  { value: 'eve', label: t('voiceChat.voices.eve') },
+  { value: 'leo', label: t('voiceChat.voices.leo') },
+  { value: 'rex', label: t('voiceChat.voices.rex') },
+  { value: 'sal', label: t('voiceChat.voices.sal') },
+  { value: 'gork', label: t('voiceChat.voices.gork') }
+])
 
-const personalityOptions = [
-  { value: 'assistant', label: 'Assistant (Default)' },
-  { value: 'custom', label: 'Custom' },
-  { value: 'therapist', label: 'Therapist' },
-  { value: 'storyteller', label: 'Storyteller' },
-  { value: 'kids_story_time', label: 'Kids Story Time' },
-  { value: 'kids_trivia_game', label: 'Kids Trivia Game' },
-  { value: 'meditation', label: 'Meditation' },
-  { value: 'doc', label: 'Grok "Doc"' },
-  { value: 'unhinged', label: 'Unhinged 18+' },
-  { value: 'sexy', label: 'Sexy 18+' },
-  { value: 'motivation', label: 'Motivation 18+' },
-  { value: 'conspiracy', label: 'Conspiracy' },
-  { value: 'romantic', label: 'Romantic 18+' },
-  { value: 'argumentative', label: 'Argumentative 18+' }
-]
+const personalityOptions = computed(() => {
+  const baseOptions = [
+    { value: 'assistant', label: t('voiceChat.personality.assistant') },
+    { value: 'custom', label: t('voiceChat.personality.custom') },
+    { value: 'therapist', label: t('voiceChat.personality.therapist') },
+    { value: 'storyteller', label: t('voiceChat.personality.storyteller') },
+    { value: 'kids_story_time', label: t('voiceChat.personality.kids_story_time') },
+    { value: 'kids_trivia_game', label: t('voiceChat.personality.kids_trivia_game') },
+    { value: 'meditation', label: t('voiceChat.personality.meditation') },
+    { value: 'doc', label: t('voiceChat.personality.doc') },
+    { value: 'conspiracy', label: t('voiceChat.personality.conspiracy') }
+  ]
+  
+  // Only add 18+ options for admin users
+  if (isAdmin.value) {
+    baseOptions.push(
+      { value: 'unhinged', label: t('voiceChat.personality.unhinged') },
+      { value: 'sexy', label: t('voiceChat.personality.sexy') },
+      { value: 'motivation', label: t('voiceChat.personality.motivation') },
+      { value: 'romantic', label: t('voiceChat.personality.romantic') },
+      { value: 'argumentative', label: t('voiceChat.personality.argumentative') }
+    )
+  }
+  
+  return baseOptions
+})
 
 const startingCall = ref(false)
 const roomConnected = ref(false)
@@ -270,6 +344,9 @@ const actualSinglePrice = computed(() => {
   return sub ? 0 : baseSinglePrice.value
 })
 const formatPrice = (p: number) => (p > 0 ? `¥${p.toFixed(4)}` : t('common.free'))
+const actualPriceLabel = computed(() => (preflight.value ? formatPrice(actualSinglePrice.value) : '--'))
+const selectedVoiceLabel = computed(() => voiceOptions.value.find(v => v.value === selectedVoice.value)?.label || selectedVoice.value)
+const selectedPersonalityLabel = computed(() => personalityOptions.value.find(p => p.value === selectedPersonality.value)?.label || selectedPersonality.value)
 const canStart = computed(() => !!apiKeyInput.value.trim() && !!preflight.value?.function_ready && browserConnectivity.value.ok && microphoneReady.value)
 const statusText = computed(() => {
   if (startingCall.value) return t('voiceChat.status.connecting')

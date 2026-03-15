@@ -415,10 +415,29 @@ export default {
       personality: '主题',
       speed: '语速'
     },
+    voices: {
+      ara: 'Ara (活泼女声)',
+      eve: 'Eve (舒缓女声)',
+      leo: 'Leo (英式男声)',
+      rex: 'Rex (沉稳男声)',
+      sal: 'Sal (温和男声)',
+      gork: 'Gork (慵懒男声)'
+    },
     personality: {
-      friendly: '友好',
-      professional: '专业',
-      casual: '随意'
+      assistant: '助手 (默认)',
+      custom: '自定义',
+      therapist: '心理咨询师',
+      storyteller: '故事讲述者',
+      kids_story_time: '儿童故事时间',
+      kids_trivia_game: '儿童趣味问答',
+      meditation: '冥想引导',
+      doc: 'Grok "博士"',
+      conspiracy: '阴谋论者',
+      unhinged: '放飞自我 (18+)',
+      sexy: '性感撩人 (18+)',
+      motivation: '励志导师 (18+)',
+      romantic: '浪漫情人 (18+)',
+      argumentative: '好辩者 (18+)'
     },
     price: {
       title: '通话价格',
