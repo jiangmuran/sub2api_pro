@@ -960,8 +960,16 @@ func extractResponsesMessagesValue(input any) []map[string]any {
 			continue
 		}
 		role, _ := entry["role"].(string)
-		if strings.TrimSpace(role) == "" {
+		role = strings.TrimSpace(role)
+		if role == "" {
 			role = "user"
+		} else {
+			switch strings.ToLower(role) {
+			case "developer":
+				role = "system"
+			case "tool":
+				role = "user"
+			}
 		}
 		messages = append(messages, map[string]any{
 			"role":    role,

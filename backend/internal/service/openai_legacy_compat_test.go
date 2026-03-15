@@ -431,6 +431,13 @@ func TestConvertOpenAIResponsesRequestToLegacy_StreamEnablesUsage(t *testing.T) 
 	require.True(t, gjson.GetBytes(converted, "stream_options.include_usage").Bool())
 }
 
+func TestConvertOpenAIResponsesRequestToLegacy_MapsDeveloperRole(t *testing.T) {
+	body := []byte(`{"model":"glm-4.7","input":[{"role":"developer","content":[{"type":"input_text","text":"guard"}]}]}`)
+	converted, err := ConvertOpenAIResponsesRequestToLegacy(body, OpenAILegacyProtocolChat)
+	require.NoError(t, err)
+	require.Equal(t, "system", gjson.GetBytes(converted, "messages.0.role").String())
+}
+
 func TestConvertOpenAIResponsesRequestToLegacy_CompletionsDropsTools(t *testing.T) {
 	body := []byte(`{"model":"glm-4.7","input":"hi","tools":[{"type":"function","name":"tool_a"}],"tool_choice":"auto","parallel_tool_calls":true}`)
 	converted, err := ConvertOpenAIResponsesRequestToLegacy(body, OpenAILegacyProtocolCompletions)
