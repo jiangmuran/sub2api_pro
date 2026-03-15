@@ -466,6 +466,7 @@ export interface ModelPricingPreviewItem {
   model: string
   input_price_per_1m: number
   output_price_per_1m: number
+  image_price_per_image: number
   pricing_available: boolean
 }
 
@@ -890,8 +891,10 @@ export interface OpenAICompatiblePreviewModel {
   display_name: string
   input_price_per_1m: number
   output_price_per_1m: number
+  image_price_per_image: number
   account_input_price_per_1m: number
   account_output_price_per_1m: number
+  account_image_price_per_image: number
   pricing_available: boolean
   pricing_source?: 'local' | 'builtin' | 'openrouter' | 'account'
 }

@@ -51,6 +51,7 @@ type BillingCache interface {
 type ModelPricing struct {
 	InputPricePerToken         float64 // 每token输入价格 (USD)
 	OutputPricePerToken        float64 // 每token输出价格 (USD)
+	OutputPricePerImage        float64 // 每张图片价格 (USD)
 	CacheCreationPricePerToken float64 // 缓存创建每token价格 (USD)
 	CacheReadPricePerToken     float64 // 缓存读取每token价格 (USD)
 	CacheCreation5mPrice       float64 // 5分钟缓存创建每token价格 (USD)
@@ -275,6 +276,7 @@ func (s *BillingService) GetPreviewModelPricing(model string) *ModelPricing {
 			return &ModelPricing{
 				InputPricePerToken:         pricing.InputCostPerToken,
 				OutputPricePerToken:        pricing.OutputCostPerToken,
+				OutputPricePerImage:        pricing.OutputCostPerImage,
 				CacheCreationPricePerToken: pricing.CacheCreationInputTokenCost,
 				CacheReadPricePerToken:     pricing.CacheReadInputTokenCost,
 				CacheCreation5mPrice:       price5m,
@@ -593,9 +595,10 @@ func (s *BillingService) ForceUpdatePricing() error {
 
 // ImagePriceConfig 图片计费配置
 type ImagePriceConfig struct {
-	Price1K *float64 // 1K 尺寸价格（nil 表示使用默认值）
-	Price2K *float64 // 2K 尺寸价格（nil 表示使用默认值）
-	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
+	Price1K       *float64 // 1K 尺寸价格（nil 表示使用默认值）
+	Price2K       *float64 // 2K 尺寸价格（nil 表示使用默认值）
+	Price4K       *float64 // 4K 尺寸价格（nil 表示使用默认值）
+	PricePerImage *float64 // 单张价格（优先于尺寸价格）
 }
 
 // SoraPriceConfig Sora 按次计费配置
@@ -698,6 +701,9 @@ func (s *BillingService) CalculateSoraVideoCost(model string, groupConfig *SoraP
 func (s *BillingService) getImageUnitPrice(model string, imageSize string, groupConfig *ImagePriceConfig) float64 {
 	// 优先使用分组配置的价格
 	if groupConfig != nil {
+		if groupConfig.PricePerImage != nil {
+			return *groupConfig.PricePerImage
+		}
 		switch imageSize {
 		case "1K":
 			if groupConfig.Price1K != nil {

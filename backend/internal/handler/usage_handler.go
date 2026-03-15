@@ -37,10 +37,11 @@ type ModelPricingPreviewRequest struct {
 }
 
 type ModelPricingPreviewItem struct {
-	Model            string  `json:"model"`
-	InputPricePer1M  float64 `json:"input_price_per_1m"`
-	OutputPricePer1M float64 `json:"output_price_per_1m"`
-	PricingAvailable bool    `json:"pricing_available"`
+	Model              string  `json:"model"`
+	InputPricePer1M    float64 `json:"input_price_per_1m"`
+	OutputPricePer1M   float64 `json:"output_price_per_1m"`
+	ImagePricePerImage float64 `json:"image_price_per_image"`
+	PricingAvailable   bool    `json:"pricing_available"`
 }
 
 // ModelPricingPreview returns standard model pricing preview for the user model test page.
@@ -75,7 +76,8 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 			if pricing := h.billingService.GetPreviewModelPricing(model); pricing != nil {
 				item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000
 				item.OutputPricePer1M = pricing.OutputPricePerToken * 1_000_000
-				item.PricingAvailable = true
+				item.ImagePricePerImage = pricing.OutputPricePerImage
+				item.PricingAvailable = item.InputPricePer1M > 0 || item.OutputPricePer1M > 0 || item.ImagePricePerImage > 0
 			}
 		}
 		items = append(items, item)

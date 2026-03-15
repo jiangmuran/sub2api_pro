@@ -218,6 +218,40 @@ func TestPreviewOpenAICompatibleModels(t *testing.T) {
 	}
 }
 
+func TestPreviewOpenAICompatibleModels_IncludesImagePrice(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/coding/v3/models":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"grok-imagine-1.0","status":"Active"}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := server.Client()
+	billing := NewBillingService(&config.Config{}, nil)
+	billing.pricingService = NewPricingService(&config.Config{}, nil)
+	billing.pricingService.pricingData = map[string]*LiteLLMModelPricing{
+		"grok-imagine-1.0": {OutputCostPerImage: 0.12},
+	}
+	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: client}, billing, &config.Config{})
+	models, err := svc.PreviewOpenAICompatibleModels(context.Background(), OpenAICompatibleProbeInput{
+		BaseURL: server.URL + "/api/coding/v3",
+		APIKey:  "sk-test",
+	}, 2, nil)
+	if err != nil {
+		t.Fatalf("PreviewOpenAICompatibleModels error = %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("models len = %d, want 1", len(models))
+	}
+	if models[0].ImagePricePerImage != 0.12 || models[0].AccountImagePricePerImage != 0.24 {
+		t.Fatalf("unexpected image pricing: %+v", models[0])
+	}
+}
+
 func TestAccountTestServiceLookupOpenRouterModelPricing(t *testing.T) {
 	svc := NewAccountTestService(nil, nil, nil, &probeHTTPUpstream{client: http.DefaultClient}, nil, &config.Config{})
 	svc.openRouterPricingCache = map[string]openRouterModelPricing{

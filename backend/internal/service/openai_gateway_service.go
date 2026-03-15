@@ -207,11 +207,16 @@ type OpenAIForwardResult struct {
 	Model     string
 	// ReasoningEffort is extracted from request body (reasoning.effort) or derived from model suffix.
 	// Stored for usage records display; nil means not provided / not applicable.
-	ReasoningEffort *string
-	Stream          bool
-	OpenAIWSMode    bool
-	Duration        time.Duration
-	FirstTokenMs    *int
+	ReasoningEffort       *string
+	Stream                bool
+	OpenAIWSMode          bool
+	Duration              time.Duration
+	FirstTokenMs          *int
+	EstimatedInputTokens  int
+	EstimatedOutputTokens int
+	ImageCount            int
+	ImageSize             string
+	MediaType             string
 }
 
 type OpenAIWSRetryMetricsSnapshot struct {
@@ -1409,6 +1414,82 @@ func (s *OpenAIGatewayService) GetAccessToken(ctx context.Context, account *Acco
 	}
 }
 
+func (s *OpenAIGatewayService) ForwardImageGeneration(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+	start := time.Now()
+	token, _, err := s.GetAccessToken(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+
+	targetURL := buildOpenAIEndpointURL("https://api.openai.com", "images/generations")
+	if baseURL := strings.TrimSpace(account.GetOpenAIBaseURL()); baseURL != "" {
+		validatedURL, validateErr := s.validateUpstreamBaseURL(baseURL)
+		if validateErr != nil {
+			return nil, validateErr
+		}
+		targetURL = buildOpenAIEndpointURL(validatedURL, "images/generations")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("authorization", "Bearer "+token)
+	for key, values := range c.Request.Header {
+		lowerKey := strings.ToLower(key)
+		if openaiAllowedHeaders[lowerKey] {
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
+		}
+	}
+	req.Header.Set("content-type", "application/json")
+
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+
+	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	if err != nil {
+		return nil, fmt.Errorf("upstream request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	maxBytes := resolveUpstreamResponseReadLimit(s.cfg)
+	respBody, err := readUpstreamResponseBodyLimited(resp.Body, maxBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	c.Status(resp.StatusCode)
+	_, _ = c.Writer.Write(respBody)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+			s.handleFailoverSideEffects(ctx, resp, account)
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
+		}
+		return nil, fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody))))
+	}
+
+	result := &OpenAIForwardResult{
+		RequestID:            strings.TrimSpace(resp.Header.Get("x-request-id")),
+		Model:                strings.TrimSpace(gjson.GetBytes(body, "model").String()),
+		Stream:               false,
+		Duration:             time.Since(start),
+		EstimatedInputTokens: estimateOpenAIRequestTokens(body),
+		ImageCount:           countGeneratedImages(respBody),
+		ImageSize:            normalizeOpenAIImageSize(strings.TrimSpace(gjson.GetBytes(body, "size").String())),
+		MediaType:            "image",
+	}
+	if result.ImageCount <= 0 {
+		result.ImageCount = 1
+	}
+	return result, nil
+}
+
 func (s *OpenAIGatewayService) shouldFailoverUpstreamError(statusCode int) bool {
 	switch statusCode {
 	case 401, 402, 403, 429, 529:
@@ -2010,6 +2091,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	// Handle normal response
 	var usage *OpenAIUsage
 	var firstTokenMs *int
+	estimatedOutputText := ""
 	if reqStream {
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, mappedModel)
 		if err != nil {
@@ -2023,6 +2105,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 		usage = streamResult.usage
 		firstTokenMs = streamResult.firstTokenMs
+		estimatedOutputText = streamResult.outputText
 	} else {
 		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, mappedModel)
 		if err != nil {
@@ -2050,14 +2133,16 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	reasoningEffort := extractOpenAIReasoningEffort(reqBody, originalModel)
 
 	return &OpenAIForwardResult{
-		RequestID:       resp.Header.Get("x-request-id"),
-		Usage:           *usage,
-		Model:           originalModel,
-		ReasoningEffort: reasoningEffort,
-		Stream:          reqStream,
-		OpenAIWSMode:    false,
-		Duration:        time.Since(startTime),
-		FirstTokenMs:    firstTokenMs,
+		RequestID:             resp.Header.Get("x-request-id"),
+		Usage:                 *usage,
+		Model:                 originalModel,
+		ReasoningEffort:       reasoningEffort,
+		Stream:                reqStream,
+		OpenAIWSMode:          false,
+		Duration:              time.Since(startTime),
+		FirstTokenMs:          firstTokenMs,
+		EstimatedInputTokens:  estimateOpenAIRequestTokens(originalBody),
+		EstimatedOutputTokens: estimateOpenAIResponseTokens(estimatedOutputText),
 	}, nil
 }
 
@@ -2181,6 +2266,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 
 	var usage *OpenAIUsage
 	var firstTokenMs *int
+	estimatedOutputText := ""
 	if reqStream {
 		result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime)
 		if err != nil {
@@ -2188,10 +2274,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 		usage = result.usage
 		firstTokenMs = result.firstTokenMs
+		estimatedOutputText = result.outputText
 	} else {
 		usage, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c)
 		if err != nil {
 			return nil, err
+		}
+		if c != nil {
+			estimatedOutputText = strings.TrimSpace(c.GetString(openAIEstimatedOutputTextContextKey))
 		}
 	}
 
@@ -2204,14 +2294,16 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 
 	return &OpenAIForwardResult{
-		RequestID:       resp.Header.Get("x-request-id"),
-		Usage:           *usage,
-		Model:           reqModel,
-		ReasoningEffort: reasoningEffort,
-		Stream:          reqStream,
-		OpenAIWSMode:    false,
-		Duration:        time.Since(startTime),
-		FirstTokenMs:    firstTokenMs,
+		RequestID:             resp.Header.Get("x-request-id"),
+		Usage:                 *usage,
+		Model:                 reqModel,
+		ReasoningEffort:       reasoningEffort,
+		Stream:                reqStream,
+		OpenAIWSMode:          false,
+		Duration:              time.Since(startTime),
+		FirstTokenMs:          firstTokenMs,
+		EstimatedInputTokens:  estimateOpenAIRequestTokens(body),
+		EstimatedOutputTokens: estimateOpenAIResponseTokens(estimatedOutputText),
 	}, nil
 }
 
@@ -2467,6 +2559,7 @@ func collectOpenAIPassthroughTimeoutHeaders(h http.Header) []string {
 type openaiStreamingResultPassthrough struct {
 	usage        *OpenAIUsage
 	firstTokenMs *int
+	outputText   string
 }
 
 func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
@@ -2498,6 +2591,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	clientDisconnected := false
 	sawDone := false
 	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
+	var outputTextBuilder strings.Builder
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -2513,6 +2607,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		if data, ok := extractOpenAISSEDataLine(line); ok {
 			dataBytes := []byte(data)
 			trimmedData := strings.TrimSpace(data)
+			appendOpenAIOutputTextFromEvent(data, &outputTextBuilder)
 			if trimmedData == "[DONE]" {
 				sawDone = true
 			}
@@ -2535,7 +2630,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	if err := scanner.Err(); err != nil {
 		if clientDisconnected {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Upstream read error after client disconnect: account=%d err=%v", account.ID, err)
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, outputText: outputTextBuilder.String()}, nil
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			logger.LegacyPrintf("service.openai_gateway",
@@ -2545,11 +2640,11 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				err,
 				ctx.Err(),
 			)
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, outputText: outputTextBuilder.String()}, nil
 		}
 		if errors.Is(err, bufio.ErrTooLong) {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] SSE line too long: account=%d max_size=%d error=%v", account.ID, maxLineSize, err)
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, err
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, outputText: outputTextBuilder.String()}, err
 		}
 		logger.LegacyPrintf("service.openai_gateway",
 			"[OpenAI passthrough] 流读取异常中断: account=%d request_id=%s err=%v",
@@ -2557,7 +2652,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			upstreamRequestID,
 			err,
 		)
-		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream read error: %w", err)
+		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, outputText: outputTextBuilder.String()}, fmt.Errorf("stream read error: %w", err)
 	}
 	if !clientDisconnected && !sawDone && ctx.Err() == nil {
 		logger.FromContext(ctx).With(
@@ -2567,7 +2662,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		).Info("OpenAI passthrough 上游流在未收到 [DONE] 时结束，疑似断流")
 	}
 
-	return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
+	return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs, outputText: outputTextBuilder.String()}, nil
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
@@ -2604,6 +2699,9 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	}
 
 	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	if c != nil {
+		c.Set(openAIEstimatedOutputTextContextKey, extractOpenAIResponseOutputTextFromBodyBytes(body))
+	}
 
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
@@ -2911,6 +3009,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 type openaiStreamingResult struct {
 	usage        *OpenAIUsage
 	firstTokenMs *int
+	outputText   string
 }
 
 type openAIPollutedOutputRetryError struct{}
@@ -2920,6 +3019,7 @@ func (e *openAIPollutedOutputRetryError) Error() string {
 }
 
 const openAIPollutedOutputRetryKey = "openai_polluted_output_retry"
+const openAIEstimatedOutputTextContextKey = "openai_estimated_output_text"
 
 func (s *OpenAIGatewayService) retryOpenAIPollutedOutputOnce(
 	ctx context.Context,
@@ -3043,6 +3143,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	legacyProtocol := GetOpenAILegacyProtocol(c)
 	needModelReplace := legacyProtocol == "" && originalModel != mappedModel
 	var legacyToResponsesBridge *openAILegacyResponsesStreamState
+	var outputTextBuilder strings.Builder
 	if legacyProtocol := account.OpenAICompatLegacyProtocol(); legacyProtocol != "" {
 		legacyToResponsesBridge = &openAILegacyResponsesStreamState{
 			Protocol:      legacyProtocol,
@@ -3050,7 +3151,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		}
 	}
 	resultWithUsage := func() *openaiStreamingResult {
-		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
+		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs, outputText: outputTextBuilder.String()}
 	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
 		if pollutedOutputDetected && !wroteDownstream && firstTokenMs == nil {
@@ -3103,6 +3204,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				}
 			}
 			usageData := data
+			appendOpenAIOutputTextFromEvent(usageData, &outputTextBuilder)
 			if legacyProtocol != "" {
 				if converted, ok := ConvertOpenAIResponsesSSEToLegacy(data, legacyProtocol, originalModel); ok {
 					if converted == "[DONE]" {
@@ -3433,6 +3535,9 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		return nil, fmt.Errorf("parse response: invalid json response")
 	}
 	usage := &usageValue
+	if c != nil {
+		c.Set(openAIEstimatedOutputTextContextKey, extractOpenAIResponseOutputTextFromBodyBytes(body))
+	}
 
 	// Replace model in response if needed
 	if legacyProtocol != "" {
@@ -3658,6 +3763,12 @@ type OpenAIRecordUsageInput struct {
 	APIKeyService APIKeyQuotaUpdater
 }
 
+type openAIAccountStoredModelPricing struct {
+	InputPricePer1M    float64 `json:"input_price_per_1m"`
+	OutputPricePer1M   float64 `json:"output_price_per_1m"`
+	ImagePricePerImage float64 `json:"image_price_per_image"`
+}
+
 // RecordUsage records usage and deducts balance
 func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error {
 	result := input.Result
@@ -3672,13 +3783,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if actualInputTokens < 0 {
 		actualInputTokens = 0
 	}
-
-	// Calculate cost
-	tokens := UsageTokens{
-		InputTokens:         actualInputTokens,
-		OutputTokens:        result.Usage.OutputTokens,
-		CacheCreationTokens: result.Usage.CacheCreationInputTokens,
-		CacheReadTokens:     result.Usage.CacheReadInputTokens,
+	outputTokens := result.Usage.OutputTokens
+	if result.ImageCount == 0 && actualInputTokens == 0 && outputTokens == 0 {
+		actualInputTokens = result.EstimatedInputTokens
+		outputTokens = result.EstimatedOutputTokens
 	}
 
 	// Get rate multiplier
@@ -3687,9 +3795,37 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		multiplier = apiKey.Group.RateMultiplier
 	}
 
-	cost, err := s.billingService.CalculateCost(result.Model, tokens, multiplier)
-	if err != nil {
-		cost = &CostBreakdown{ActualCost: 0}
+	var cost *CostBreakdown
+	if result.ImageCount > 0 {
+		var imageConfig *ImagePriceConfig
+		if apiKey.Group != nil {
+			imageConfig = &ImagePriceConfig{
+				Price1K: apiKey.Group.ImagePrice1K,
+				Price2K: apiKey.Group.ImagePrice2K,
+				Price4K: apiKey.Group.ImagePrice4K,
+			}
+		}
+		if imageConfig == nil {
+			imageConfig = &ImagePriceConfig{}
+		}
+		if imageConfig.PricePerImage == nil {
+			if manual := lookupOpenAIAccountStoredImagePricing(account, result.Model); manual > 0 {
+				imageConfig.PricePerImage = &manual
+			}
+		}
+		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, imageConfig, multiplier)
+	} else {
+		tokens := UsageTokens{
+			InputTokens:         actualInputTokens,
+			OutputTokens:        outputTokens,
+			CacheCreationTokens: result.Usage.CacheCreationInputTokens,
+			CacheReadTokens:     result.Usage.CacheReadInputTokens,
+		}
+		var err error
+		cost, err = s.billingService.CalculateCost(result.Model, tokens, multiplier)
+		if err != nil {
+			cost = &CostBreakdown{ActualCost: 0}
+		}
 	}
 
 	// Determine billing type
@@ -3710,7 +3846,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		Model:                 result.Model,
 		ReasoningEffort:       result.ReasoningEffort,
 		InputTokens:           actualInputTokens,
-		OutputTokens:          result.Usage.OutputTokens,
+		OutputTokens:          outputTokens,
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:       result.Usage.CacheReadInputTokens,
 		InputCost:             cost.InputCost,
@@ -3726,7 +3862,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		OpenAIWSMode:          result.OpenAIWSMode,
 		DurationMs:            &durationMs,
 		FirstTokenMs:          result.FirstTokenMs,
+		ImageCount:            result.ImageCount,
 		CreatedAt:             time.Now(),
+	}
+	if result.ImageSize != "" {
+		usageLog.ImageSize = &result.ImageSize
+	}
+	if strings.TrimSpace(result.MediaType) != "" {
+		mediaType := result.MediaType
+		usageLog.MediaType = &mediaType
 	}
 
 	// 添加 UserAgent
@@ -4265,6 +4409,184 @@ func cloneAccountWithCompatMode(account *Account, compatMode string) *Account {
 	}
 	clone.Extra["openai_compat_mode"] = compatMode
 	return &clone
+}
+
+func lookupOpenAIAccountStoredImagePricing(account *Account, model string) float64 {
+	if account == nil || len(account.Extra) == 0 {
+		return 0
+	}
+	rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+	if !ok {
+		return 0
+	}
+	pricingMap, ok := rawPricing.(map[string]any)
+	if !ok {
+		return 0
+	}
+	model = strings.TrimSpace(model)
+	entry, ok := pricingMap[model]
+	if !ok {
+		entry, ok = pricingMap[strings.ToLower(model)]
+	}
+	if !ok {
+		return 0
+	}
+	entryMap, ok := entry.(map[string]any)
+	if !ok {
+		return 0
+	}
+	value, ok := entryMap["image_price_per_image"]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case float64:
+		if typed > 0 {
+			return typed
+		}
+	case int:
+		if typed > 0 {
+			return float64(typed)
+		}
+	case int64:
+		if typed > 0 {
+			return float64(typed)
+		}
+	}
+	return 0
+}
+
+func countGeneratedImages(body []byte) int {
+	data := gjson.GetBytes(body, "data")
+	if data.Exists() && data.IsArray() {
+		return len(data.Array())
+	}
+	return 0
+}
+
+func normalizeOpenAIImageSize(size string) string {
+	switch strings.TrimSpace(strings.ToLower(size)) {
+	case "1024x1024", "1024", "1k", "auto", "":
+		return "1K"
+	case "1536x1024", "1024x1536", "1792x1024", "1024x1792", "2k":
+		return "2K"
+	case "2048x2048", "4k":
+		return "4K"
+	default:
+		return "1K"
+	}
+}
+
+func estimateOpenAIRequestTokens(body []byte) int {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return 0
+	}
+	var builder strings.Builder
+	if instructions := strings.TrimSpace(gjson.GetBytes(body, "instructions").String()); instructions != "" {
+		builder.WriteString(instructions)
+		builder.WriteByte('\n')
+	}
+	input := gjson.GetBytes(body, "input")
+	appendOpenAIInputText(input, &builder)
+	return estimateOpenAITextTokens(builder.String())
+}
+
+func appendOpenAIInputText(value gjson.Result, builder *strings.Builder) {
+	if builder == nil || !value.Exists() {
+		return
+	}
+	switch value.Type {
+	case gjson.String:
+		if text := strings.TrimSpace(value.String()); text != "" {
+			builder.WriteString(text)
+			builder.WriteByte('\n')
+		}
+	case gjson.JSON:
+		if value.IsArray() {
+			for _, item := range value.Array() {
+				appendOpenAIInputText(item, builder)
+			}
+			return
+		}
+		roleContent := value.Get("content")
+		if roleContent.Exists() {
+			appendOpenAIInputText(roleContent, builder)
+		}
+		if text := strings.TrimSpace(value.Get("text").String()); text != "" {
+			builder.WriteString(text)
+			builder.WriteByte('\n')
+		}
+	}
+}
+
+func estimateOpenAIResponseTokens(text string) int {
+	return estimateOpenAITextTokens(text)
+}
+
+func estimateOpenAITextTokens(text string) int {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0
+	}
+	runes := []rune(text)
+	if len(runes) == 0 {
+		return 0
+	}
+	ascii := 0
+	for _, runeValue := range runes {
+		if runeValue <= 0x7f {
+			ascii++
+		}
+	}
+	asciiRatio := float64(ascii) / float64(len(runes))
+	if asciiRatio >= 0.8 {
+		return (len(runes) + 3) / 4
+	}
+	return len(runes)
+}
+
+func appendOpenAIOutputTextFromEvent(data string, builder *strings.Builder) {
+	if builder == nil || strings.TrimSpace(data) == "" || data == "[DONE]" {
+		return
+	}
+	eventType := gjson.Get(data, "type").String()
+	switch eventType {
+	case "response.output_text.delta":
+		if delta := gjson.Get(data, "delta").String(); delta != "" {
+			builder.WriteString(delta)
+		}
+	case "response.completed", "response.done":
+		if builder.Len() == 0 {
+			builder.WriteString(extractOpenAIResponseOutputTextFromBodyBytes([]byte(data)))
+		}
+	}
+}
+
+func extractOpenAIResponseOutputTextFromBodyBytes(body []byte) string {
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return ""
+	}
+	if outputText := strings.TrimSpace(gjson.GetBytes(body, "output_text").String()); outputText != "" {
+		return outputText
+	}
+	var builder strings.Builder
+	for _, item := range gjson.GetBytes(body, "output").Array() {
+		for _, contentItem := range item.Get("content").Array() {
+			if text := strings.TrimSpace(contentItem.Get("text").String()); text != "" {
+				if builder.Len() > 0 {
+					builder.WriteByte('\n')
+				}
+				builder.WriteString(text)
+			}
+		}
+	}
+	if builder.Len() > 0 {
+		return builder.String()
+	}
+	if message := strings.TrimSpace(gjson.GetBytes(body, "response.output_text").String()); message != "" {
+		return message
+	}
+	return ""
 }
 
 func (s *OpenAIGatewayService) retryOpenAIOAuthInvalidBearerOnce(

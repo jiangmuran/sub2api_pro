@@ -145,11 +145,12 @@
                     <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.standardOutput') }}</th>
                     <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.actualInput') }}</th>
                     <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.actualOutput') }}</th>
+                    <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.imagePrice') }}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
                   <tr v-if="models.length === 0">
-                    <td colspan="5" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.empty') }}</td>
+                    <td colspan="6" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.empty') }}</td>
                   </tr>
                   <tr v-for="model in pricedModels" :key="model.id">
                     <td class="px-3 py-2 text-gray-900 dark:text-white">{{ model.id }}</td>
@@ -157,9 +158,42 @@
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.standardOutputPrice, model.pricingAvailable) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.actualInputPrice, model.pricingAvailable) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.actualOutputPrice, model.pricingAvailable) }}</td>
+                    <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.imagePricePerImage, model.pricingAvailable && model.imagePricePerImage > 0) }}</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div class="flex-1">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('modelTest.image.title') }}</h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('modelTest.image.description') }}</p>
+              </div>
+              <div class="flex w-full gap-3 lg:w-[420px]">
+                <Select v-model="imageModel" class="flex-1" :options="imageModelOptions" value-key="value" label-key="label" :placeholder="t('modelTest.image.selectModel')" />
+                <Select v-model="imageSize" class="w-[140px]" :options="imageSizeOptions" value-key="value" label-key="label" />
+              </div>
+            </div>
+
+            <div class="mt-4 space-y-3">
+              <textarea v-model="imagePrompt" rows="3" class="input" :placeholder="t('modelTest.image.placeholder')" />
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('modelTest.image.hint') }}</div>
+                <button type="button" class="btn btn-primary" :disabled="generatingImage || !apiKeyInput.trim() || !imageModel || !imagePrompt.trim()" @click="generateImage">
+                  {{ generatingImage ? t('common.loading') + '...' : t('modelTest.image.generate') }}
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div v-if="generatedImages.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
+                {{ t('modelTest.image.empty') }}
+              </div>
+              <a v-for="(image, index) in generatedImages" :key="`${image}-${index}`" :href="image" target="_blank" rel="noreferrer" class="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
+                <img :src="image" :alt="`generated-${index}`" class="aspect-square w-full object-cover" />
+              </a>
             </div>
           </div>
 
@@ -233,6 +267,7 @@ import type { ApiKey, Group, ModelPricingPreviewItem } from '@/types'
 
 type LiveModel = { id: string; display_name?: string }
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
+type ImageGenerationResponse = { data?: Array<{ url?: string }> }
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -242,6 +277,7 @@ const loadingBootstrap = ref(false)
 const loadingModels = ref(false)
 const generatingKey = ref(false)
 const sending = ref(false)
+const generatingImage = ref(false)
 
 const apiKeys = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
@@ -255,10 +291,20 @@ const chatModel = ref('')
 const chatInput = ref('')
 const chatMessages = ref<ChatMessage[]>([])
 const chatScrollRef = ref<HTMLElement | null>(null)
+const imageModel = ref('')
+const imagePrompt = ref('')
+const imageSize = ref('1024x1024')
+const generatedImages = ref<string[]>([])
 
 const apiKeyOptions = computed(() => apiKeys.value.map((key) => ({ value: key.id, label: `${key.name} · ${maskKey(key.key)}` })))
 const groupOptions = computed(() => groups.value.map((group) => ({ value: group.id, label: `${group.name} · ${effectiveRateForGroup(group.id).toFixed(2)}x` })))
 const modelOptions = computed(() => models.value.map((model) => ({ value: model.id, label: model.display_name || model.id })))
+const imageModelOptions = computed(() => models.value.filter((model) => /imagine|image/i.test(model.id)).map((model) => ({ value: model.id, label: model.display_name || model.id })))
+const imageSizeOptions = [
+  { value: '1024x1024', label: '1024x1024' },
+  { value: '1792x1024', label: '1792x1024' },
+  { value: '1024x1792', label: '1024x1792' }
+]
 
 const effectiveRateForGroup = (groupId?: number | null) => {
   if (!groupId) return 1
@@ -282,11 +328,13 @@ const pricedModels = computed(() =>
     const pricing = pricingMap.value[model.id]
     const standardInputPrice = pricing?.input_price_per_1m || 0
     const standardOutputPrice = pricing?.output_price_per_1m || 0
+    const imagePricePerImage = pricing?.image_price_per_image || 0
     return {
       ...model,
       pricingAvailable: pricing?.pricing_available || false,
       standardInputPrice,
       standardOutputPrice,
+      imagePricePerImage,
       actualInputPrice: standardInputPrice * effectiveRate.value,
       actualOutputPrice: standardOutputPrice * effectiveRate.value
     }
@@ -364,6 +412,9 @@ const loadModels = async () => {
     if (!chatModel.value && models.value.length > 0) {
       chatModel.value = models.value[0].id
     }
+    if (!imageModel.value && imageModelOptions.value.length > 0) {
+      imageModel.value = imageModelOptions.value[0].value
+    }
     const pricing = await usageAPI.getModelPricingPreview(models.value.map((item) => item.id))
     pricingMap.value = Object.fromEntries((pricing.models || []).map((item) => [item.model, item]))
   } catch (error: any) {
@@ -433,6 +484,29 @@ const sendMessage = async () => {
     appStore.showError(error.message || t('modelTest.chat.failed'))
   } finally {
     sending.value = false
+  }
+}
+
+const generateImage = async () => {
+  const prompt = imagePrompt.value.trim()
+  if (!prompt || !imageModel.value || !apiKeyInput.value.trim()) return
+  generatingImage.value = true
+  try {
+    const result = await fetchGatewayJSON('/v1/images/generations', {
+      model: imageModel.value,
+      prompt,
+      n: 1,
+      size: imageSize.value,
+      response_format: 'url'
+    }) as ImageGenerationResponse
+    generatedImages.value = (result.data || []).map((item) => item.url || '').filter(Boolean)
+    if (generatedImages.value.length === 0) {
+      throw new Error(t('modelTest.image.failed'))
+    }
+  } catch (error: any) {
+    appStore.showError(error.message || t('modelTest.image.failed'))
+  } finally {
+    generatingImage.value = false
   }
 }
 

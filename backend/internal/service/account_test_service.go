@@ -97,14 +97,16 @@ func NewAccountTestService(
 }
 
 type OpenAICompatiblePreviewModel struct {
-	ID                      string  `json:"id"`
-	DisplayName             string  `json:"display_name"`
-	InputPricePer1M         float64 `json:"input_price_per_1m"`
-	OutputPricePer1M        float64 `json:"output_price_per_1m"`
-	AccountInputPricePer1M  float64 `json:"account_input_price_per_1m"`
-	AccountOutputPricePer1M float64 `json:"account_output_price_per_1m"`
-	PricingAvailable        bool    `json:"pricing_available"`
-	PricingSource           string  `json:"pricing_source,omitempty"`
+	ID                        string  `json:"id"`
+	DisplayName               string  `json:"display_name"`
+	InputPricePer1M           float64 `json:"input_price_per_1m"`
+	OutputPricePer1M          float64 `json:"output_price_per_1m"`
+	ImagePricePerImage        float64 `json:"image_price_per_image"`
+	AccountInputPricePer1M    float64 `json:"account_input_price_per_1m"`
+	AccountOutputPricePer1M   float64 `json:"account_output_price_per_1m"`
+	AccountImagePricePerImage float64 `json:"account_image_price_per_image"`
+	PricingAvailable          bool    `json:"pricing_available"`
+	PricingSource             string  `json:"pricing_source,omitempty"`
 }
 
 type OpenAICompatibleChatPreviewInput struct {
@@ -128,8 +130,9 @@ type openRouterModelPricing struct {
 }
 
 type accountStoredModelPricing struct {
-	InputPricePer1M  float64 `json:"input_price_per_1m"`
-	OutputPricePer1M float64 `json:"output_price_per_1m"`
+	InputPricePer1M    float64 `json:"input_price_per_1m"`
+	OutputPricePer1M   float64 `json:"output_price_per_1m"`
+	ImagePricePerImage float64 `json:"image_price_per_image"`
 }
 
 var builtInCompatibleModelPricing = map[string]openRouterModelPricing{
@@ -157,9 +160,11 @@ func (s *AccountTestService) PreviewOpenAICompatibleModels(ctx context.Context, 
 			if pricing := s.billingService.GetPreviewModelPricing(model); pricing != nil {
 				item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000
 				item.OutputPricePer1M = pricing.OutputPricePerToken * 1_000_000
+				item.ImagePricePerImage = pricing.OutputPricePerImage
 				item.AccountInputPricePer1M = item.InputPricePer1M * rateMultiplier
 				item.AccountOutputPricePer1M = item.OutputPricePer1M * rateMultiplier
-				item.PricingAvailable = true
+				item.AccountImagePricePerImage = item.ImagePricePerImage * rateMultiplier
+				item.PricingAvailable = item.InputPricePer1M > 0 || item.OutputPricePer1M > 0 || item.ImagePricePerImage > 0
 				item.PricingSource = "local"
 			}
 		}
@@ -187,9 +192,11 @@ func (s *AccountTestService) PreviewOpenAICompatibleModels(ctx context.Context, 
 			if pricing, ok := s.lookupAccountStoredModelPricing(ctx, model); ok {
 				item.InputPricePer1M = pricing.InputPricePer1M
 				item.OutputPricePer1M = pricing.OutputPricePer1M
+				item.ImagePricePerImage = pricing.ImagePricePerImage
 				item.AccountInputPricePer1M = item.InputPricePer1M * rateMultiplier
 				item.AccountOutputPricePer1M = item.OutputPricePer1M * rateMultiplier
-				item.PricingAvailable = true
+				item.AccountImagePricePerImage = item.ImagePricePerImage * rateMultiplier
+				item.PricingAvailable = item.InputPricePer1M > 0 || item.OutputPricePer1M > 0 || item.ImagePricePerImage > 0
 				item.PricingSource = "account"
 			}
 		}

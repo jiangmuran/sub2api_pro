@@ -1624,6 +1624,35 @@ func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
 	require.Contains(t, string(finalResp), `"input_tokens":11`)
 }
 
+func TestNormalizeOpenAIImageSize(t *testing.T) {
+	require.Equal(t, "1K", normalizeOpenAIImageSize("1024x1024"))
+	require.Equal(t, "2K", normalizeOpenAIImageSize("1792x1024"))
+	require.Equal(t, "4K", normalizeOpenAIImageSize("2048x2048"))
+	require.Equal(t, "1K", normalizeOpenAIImageSize(""))
+}
+
+func TestCountGeneratedImages(t *testing.T) {
+	require.Equal(t, 2, countGeneratedImages([]byte(`{"data":[{"url":"a"},{"url":"b"}]}`)))
+	require.Equal(t, 0, countGeneratedImages([]byte(`{"data":{}}`)))
+}
+
+func TestEstimateOpenAIRequestTokens(t *testing.T) {
+	body := []byte(`{"instructions":"be concise","input":[{"role":"user","content":[{"type":"input_text","text":"你好世界"}]}]}`)
+	require.Greater(t, estimateOpenAIRequestTokens(body), 0)
+}
+
+func TestExtractOpenAIResponseOutputTextFromBodyBytes(t *testing.T) {
+	body := []byte(`{"output":[{"content":[{"type":"output_text","text":"hello world"}]}]}`)
+	require.Equal(t, "hello world", extractOpenAIResponseOutputTextFromBodyBytes(body))
+}
+
+func TestAppendOpenAIOutputTextFromEvent(t *testing.T) {
+	var builder strings.Builder
+	appendOpenAIOutputTextFromEvent(`{"type":"response.output_text.delta","delta":"hello"}`, &builder)
+	appendOpenAIOutputTextFromEvent(`{"type":"response.output_text.delta","delta":" world"}`, &builder)
+	require.Equal(t, "hello world", builder.String())
+}
+
 func TestHandleOAuthSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()

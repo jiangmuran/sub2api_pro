@@ -89,13 +89,15 @@
                   <th class="px-3 py-2 text-left font-medium text-gray-500 dark:text-gray-400">{{ t('common.name') }}</th>
                   <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.standardInputPrice') }}</th>
                   <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.standardOutputPrice') }}</th>
-                  <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.accountInputPrice') }}</th>
-                  <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.accountOutputPrice') }}</th>
+                    <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.accountInputPrice') }}</th>
+                    <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.accounts.openai.accountOutputPrice') }}</th>
+                    <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.pricingManagement.imagePrice') }}</th>
+                    <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('admin.pricingManagement.accountImagePrice') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
                 <tr v-if="visibleModels.length === 0">
-                  <td colspan="5" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('admin.pricingManagement.noModels') }}</td>
+                  <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('admin.pricingManagement.noModels') }}</td>
                 </tr>
                 <template v-for="item in visibleModels" :key="item.id">
                   <tr>
@@ -110,9 +112,14 @@
                     </td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveInputPrice(item) * rateMultiplierValue, item.pricing_available || hasManualPricing(item.id)) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveOutputPrice(item) * rateMultiplierValue, item.pricing_available || hasManualPricing(item.id)) }}</td>
+                    <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
+                      <template v-if="item.image_price_per_image > 0 || hasManualPricing(item.id)">{{ formatPrice(resolveImagePrice(item), item.image_price_per_image > 0 || hasManualPricing(item.id)) }}</template>
+                      <input v-else v-model="manualPricing[item.id].image" type="number" min="0" step="0.01" class="input h-8 w-24 text-right text-xs" />
+                    </td>
+                    <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveImagePrice(item) * rateMultiplierValue, item.image_price_per_image > 0 || hasManualPricing(item.id)) }}</td>
                   </tr>
                   <tr class="bg-gray-50/70 dark:bg-dark-900/20">
-                    <td colspan="5" class="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">{{ pricingSourceLabel(item) }}</td>
+                    <td colspan="7" class="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">{{ pricingSourceLabel(item) }}</td>
                   </tr>
                 </template>
               </tbody>
@@ -145,7 +152,7 @@ const accounts = ref<Account[]>([])
 const selectedAccountId = ref<number | null>(null)
 const selectedAccount = ref<Account | null>(null)
 const previewModels = ref<OpenAICompatiblePreviewModel[]>([])
-const manualPricing = ref<Record<string, { input: string; output: string }>>({})
+const manualPricing = ref<Record<string, { input: string; output: string; image: string }>>({})
 
 const filteredAccounts = computed(() => {
   const keyword = search.value.trim().toLowerCase()
@@ -173,10 +180,11 @@ const parseManualPrice = (value: string) => {
 }
 const hasManualPricing = (modelId: string) => {
   const entry = manualPricing.value[modelId]
-  return !!entry && (entry.input.trim() !== '' || entry.output.trim() !== '')
+  return !!entry && (entry.input.trim() !== '' || entry.output.trim() !== '' || entry.image.trim() !== '')
 }
 const resolveInputPrice = (item: OpenAICompatiblePreviewModel) => item.pricing_available ? item.input_price_per_1m : parseManualPrice(manualPricing.value[item.id]?.input || '')
 const resolveOutputPrice = (item: OpenAICompatiblePreviewModel) => item.pricing_available ? item.output_price_per_1m : parseManualPrice(manualPricing.value[item.id]?.output || '')
+const resolveImagePrice = (item: OpenAICompatiblePreviewModel) => item.image_price_per_image > 0 ? item.image_price_per_image : parseManualPrice(manualPricing.value[item.id]?.image || '')
 
 const pricingSourceLabel = (item: OpenAICompatiblePreviewModel) => {
   if (hasManualPricing(item.id)) return t('admin.accounts.openai.pricingSourceManual')
@@ -190,11 +198,12 @@ const pricingSourceLabel = (item: OpenAICompatiblePreviewModel) => {
 }
 
 const buildManualPricingPayload = () => {
-  const payload: Record<string, { input_price_per_1m: number; output_price_per_1m: number }> = {}
+  const payload: Record<string, { input_price_per_1m: number; output_price_per_1m: number; image_price_per_image?: number }> = {}
   for (const [model, pricing] of Object.entries(manualPricing.value)) {
     const input = parseManualPrice(pricing.input)
     const output = parseManualPrice(pricing.output)
-    if (input > 0 || output > 0) payload[model] = { input_price_per_1m: input, output_price_per_1m: output }
+    const image = parseManualPrice(pricing.image)
+    if (input > 0 || output > 0 || image > 0) payload[model] = { input_price_per_1m: input, output_price_per_1m: output, ...(image > 0 ? { image_price_per_image: image } : {}) }
   }
   return payload
 }
@@ -231,10 +240,10 @@ const selectAccount = async (accountID: number) => {
       models: extractAccountModels(account)
     })
     previewModels.value = result.models || []
-    const saved = ((account.extra as Record<string, any> | undefined)?.openai_manual_model_pricing || {}) as Record<string, { input_price_per_1m: number; output_price_per_1m: number }>
+    const saved = ((account.extra as Record<string, any> | undefined)?.openai_manual_model_pricing || {}) as Record<string, { input_price_per_1m: number; output_price_per_1m: number; image_price_per_image?: number }>
     manualPricing.value = Object.fromEntries(
-      previewModels.value.map((item) => [item.id, { input: saved[item.id]?.input_price_per_1m?.toString?.() || '', output: saved[item.id]?.output_price_per_1m?.toString?.() || '' }])
-    )
+        previewModels.value.map((item) => [item.id, { input: saved[item.id]?.input_price_per_1m?.toString?.() || '', output: saved[item.id]?.output_price_per_1m?.toString?.() || '', image: saved[item.id]?.image_price_per_image?.toString?.() || '' }])
+      )
   } catch (error: any) {
     appStore.showError(error.response?.data?.message || t('admin.pricingManagement.loadFailed'))
   } finally {

@@ -347,7 +347,18 @@ export default {
       standardOutput: '标准输出',
       actualInput: '用户输入',
       actualOutput: '用户输出',
+      imagePrice: '图片单价',
       empty: '获取模型后，这里会显示对应的价格预览。'
+    },
+    image: {
+      title: '生图测试',
+      description: '直接通过当前用户 Key 调用 `/v1/images/generations`，验证真实用户路径下的生图能力。',
+      selectModel: '选择生图模型',
+      placeholder: '输入你的生图提示词，例如：一只赛博朋克风格的猫。',
+      hint: '当前仅测试标准 `images/generations` 接口。',
+      generate: '生成图片',
+      failed: '图片生成失败',
+      empty: '选择生图模型并输入提示词后，这里会显示生成结果。'
     },
     chat: {
       title: '多轮对话',
@@ -590,6 +601,7 @@ export default {
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         codexCliWs: 'Codex CLI (WebSocket)',
+        apiExamples: 'API 示例',
         opencode: 'OpenCode'
       },
       antigravity: {
@@ -953,6 +965,8 @@ export default {
       showMissingOnly: '只看缺失价格模型',
       tableTitle: '模型价格表',
       tableDesc: '支持自动预览、内置预设、复用其他账号已保存价格，并允许手动录入。',
+      imagePrice: '图片单价',
+      accountImagePrice: '账号图片单价',
       noModels: '选择一个账号后，这里会显示模型价格表。',
       savePricing: '保存价格',
       saveSuccess: '模型价格已保存',

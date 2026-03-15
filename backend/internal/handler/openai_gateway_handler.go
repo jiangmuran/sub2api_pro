@@ -359,6 +359,73 @@ func (h *OpenAIGatewayHandler) Completions(c *gin.Context) {
 	h.handleLegacyCompletions(c, service.OpenAILegacyProtocolCompletions)
 }
 
+// ImageGenerations handles OpenAI-compatible image generation.
+func (h *OpenAIGatewayHandler) ImageGenerations(c *gin.Context) {
+	setOpenAIClientTransportHTTP(c)
+
+	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	if !ok {
+		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
+		return
+	}
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
+		return
+	}
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	}
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if model == "" {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
+		return
+	}
+	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	failedAccountIDs := make(map[int64]struct{})
+	for switchCount := 0; switchCount <= h.maxAccountSwitches; switchCount++ {
+		account, selectErr := h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, "", model, failedAccountIDs)
+		if selectErr != nil {
+			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", selectErr.Error())
+			return
+		}
+		result, forwardErr := h.gatewayService.ForwardImageGeneration(c.Request.Context(), c, account, body)
+		if forwardErr != nil {
+			var failoverErr *service.UpstreamFailoverError
+			if errors.As(forwardErr, &failoverErr) {
+				failedAccountIDs[account.ID] = struct{}{}
+				if switchCount >= h.maxAccountSwitches {
+					return
+				}
+				continue
+			}
+			return
+		}
+		userAgent := c.GetHeader("User-Agent")
+		clientIP := ip.GetClientIP(c)
+		h.submitUsageRecordTask(func(ctx context.Context) {
+			_ = h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
+				Result:        result,
+				APIKey:        apiKey,
+				User:          apiKey.User,
+				Account:       account,
+				Subscription:  subscription,
+				UserAgent:     userAgent,
+				IPAddress:     clientIP,
+				APIKeyService: h.apiKeyService,
+			})
+		})
+		_ = subject
+		return
+	}
+}
+
 func (h *OpenAIGatewayHandler) handleLegacyCompletions(c *gin.Context, protocol string) {
 	setOpenAIClientTransportHTTP(c)
 	service.SetOpenAILegacyProtocol(c, protocol)

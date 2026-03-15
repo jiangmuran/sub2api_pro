@@ -347,7 +347,18 @@ export default {
       standardOutput: 'Std Output',
       actualInput: 'User Input',
       actualOutput: 'User Output',
+      imagePrice: 'Image Price',
       empty: 'Pricing preview appears here after models are loaded.'
+    },
+    image: {
+      title: 'Image Generation',
+      description: 'Call `/v1/images/generations` with the current user key to verify real image generation access.',
+      selectModel: 'Select image model',
+      placeholder: 'Describe the image you want to generate.',
+      hint: 'This currently tests the standard `images/generations` endpoint.',
+      generate: 'Generate Image',
+      failed: 'Image generation failed',
+      empty: 'Choose an image model and prompt to see generated images here.'
     },
     chat: {
       title: 'Multi-turn Chat',
@@ -588,6 +599,7 @@ export default {
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         codexCliWs: 'Codex CLI (WebSocket)',
+        apiExamples: 'API Examples',
         opencode: 'OpenCode',
       },
       antigravity: {
@@ -947,6 +959,8 @@ export default {
       showMissingOnly: 'Show missing prices only',
       tableTitle: 'Model Pricing Table',
       tableDesc: 'Supports automatic preview, built-in presets, reuse from other accounts, and manual inputs.',
+      imagePrice: 'Image Price',
+      accountImagePrice: 'Account Image Price',
       noModels: 'Choose an account to load the model pricing table.',
       savePricing: 'Save Pricing',
       saveSuccess: 'Model pricing saved',

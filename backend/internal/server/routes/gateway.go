@@ -48,6 +48,7 @@ func RegisterGatewayRoutes(
 		// OpenAI Responses API
 		gateway.POST("/responses", h.OpenAIGateway.Responses)
 		gateway.GET("/responses", h.OpenAIGateway.ResponsesWebSocket)
+		gateway.POST("/images/generations", h.OpenAIGateway.ImageGenerations)
 		// OpenAI legacy endpoints (compat)
 		gateway.POST("/chat/completions", h.OpenAIGateway.ChatCompletions)
 		gateway.POST("/completions", h.OpenAIGateway.Completions)

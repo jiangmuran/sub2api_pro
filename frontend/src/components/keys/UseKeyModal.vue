@@ -325,12 +325,13 @@ const SparkleIcon = {
 const clientTabs = computed((): TabConfig[] => {
   if (!props.platform) return []
   switch (props.platform) {
-    case 'openai':
-      return [
-        { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
-        { id: 'codex-ws', label: t('keys.useKeyModal.cliTabs.codexCliWs'), icon: TerminalIcon },
-        { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
-      ]
+      case 'openai':
+        return [
+          { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
+          { id: 'codex-ws', label: t('keys.useKeyModal.cliTabs.codexCliWs'), icon: TerminalIcon },
+          { id: 'api', label: t('keys.useKeyModal.cliTabs.apiExamples'), icon: SparkleIcon },
+          { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
+        ]
     case 'gemini':
       return [
         { id: 'gemini', label: t('keys.useKeyModal.cliTabs.geminiCli'), icon: SparkleIcon },
@@ -363,7 +364,7 @@ const openaiTabs: TabConfig[] = [
   { id: 'windows', label: 'Windows', icon: WindowsIcon }
 ]
 
-const showShellTabs = computed(() => activeClientTab.value !== 'opencode')
+const showShellTabs = computed(() => activeClientTab.value !== 'opencode' && activeClientTab.value !== 'api')
 
 const currentTabs = computed(() => {
   if (!showShellTabs.value) return []
@@ -458,6 +459,10 @@ const currentFiles = computed((): FileConfig[] => {
       default:
         return [generateOpenCodeConfig('openai', apiBase, apiKey, undefined, discoveredModels.value)]
     }
+  }
+
+  if (props.platform === 'openai' && activeClientTab.value === 'api') {
+    return generateOpenAIAPIFiles(baseRoot, apiKey)
   }
 
   switch (props.platform) {
@@ -1077,6 +1082,35 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
     content,
     hint: t('keys.useKeyModal.opencode.hint')
   }
+}
+
+function generateOpenAIAPIFiles(baseUrl: string, apiKey: string): FileConfig[] {
+  const apiBase = buildModelsURL(baseUrl).replace(/\/models$/, '')
+  return [
+    {
+      path: 'curl chat',
+      content: `curl ${apiBase}/responses \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -d '{
+    "model": "gpt-5.3-codex",
+    "input": "Hello"
+  }'`
+    },
+    {
+      path: 'curl image generation',
+      content: `curl ${apiBase}/images/generations \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -d '{
+    "model": "grok-imagine-1.0",
+    "prompt": "A cinematic cat astronaut",
+    "n": 1,
+    "size": "1024x1024",
+    "response_format": "url"
+  }'`
+    }
+  ]
 }
 
 function buildOpenCodeDiscoveredModels(modelMeta: DiscoveredModelMeta[]): Record<string, any> {
