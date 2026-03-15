@@ -201,6 +201,9 @@ func ConvertOpenAIResponsesRequestToLegacy(body []byte, protocol string) ([]byte
 	}
 
 	if protocol == OpenAILegacyProtocolCompletions {
+		delete(legacy, "tools")
+		delete(legacy, "tool_choice")
+		delete(legacy, "parallel_tool_calls")
 		legacy["prompt"] = extractResponsesPromptValue(payload["input"])
 		return json.Marshal(legacy)
 	}

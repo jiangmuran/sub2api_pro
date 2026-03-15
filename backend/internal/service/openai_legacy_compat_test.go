@@ -431,6 +431,15 @@ func TestConvertOpenAIResponsesRequestToLegacy_StreamEnablesUsage(t *testing.T) 
 	require.True(t, gjson.GetBytes(converted, "stream_options.include_usage").Bool())
 }
 
+func TestConvertOpenAIResponsesRequestToLegacy_CompletionsDropsTools(t *testing.T) {
+	body := []byte(`{"model":"glm-4.7","input":"hi","tools":[{"type":"function","name":"tool_a"}],"tool_choice":"auto","parallel_tool_calls":true}`)
+	converted, err := ConvertOpenAIResponsesRequestToLegacy(body, OpenAILegacyProtocolCompletions)
+	require.NoError(t, err)
+	require.False(t, gjson.GetBytes(converted, "tools").Exists())
+	require.False(t, gjson.GetBytes(converted, "tool_choice").Exists())
+	require.False(t, gjson.GetBytes(converted, "parallel_tool_calls").Exists())
+}
+
 func TestConvertOpenAILegacyResponseToResponses_Chat(t *testing.T) {
 	body := []byte(`{"id":"chatcmpl_1","model":"gpt-4.1","choices":[{"message":{"role":"assistant","content":"pong"}}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`)
 	converted, err := ConvertOpenAILegacyResponseToResponses(body, OpenAILegacyProtocolChat, "gpt-4.1")
