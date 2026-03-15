@@ -36,6 +36,7 @@ func NewUsageHandler(usageService *service.UsageService, apiKeyService *service.
 
 type ModelPricingPreviewRequest struct {
 	Models []string `json:"models" binding:"required"`
+	APIKey string   `json:"api_key"`
 }
 
 type ModelPricingPreviewItem struct {
@@ -108,7 +109,8 @@ func readFloat(value any) float64 {
 // ModelPricingPreview returns standard model pricing preview for the user model test page.
 // POST /api/v1/usage/model-pricing
 func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
-	if _, ok := middleware2.GetAuthSubjectFromContext(c); !ok {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
@@ -123,7 +125,26 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 	}
 	items := make([]ModelPricingPreviewItem, 0, len(req.Models))
 	seen := make(map[string]struct{}, len(req.Models))
-	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
+	var apiKey *service.APIKey
+	apiKeyValue := strings.TrimSpace(req.APIKey)
+	if apiKeyValue != "" && h.apiKeyService != nil {
+		resolved, err := h.apiKeyService.GetByKey(c.Request.Context(), apiKeyValue)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if resolved.UserID != subject.UserID {
+			response.ErrorFrom(c, service.ErrInsufficientPerms)
+			return
+		}
+		if !resolved.IsActive() || resolved.IsExpired() || resolved.IsQuotaExhausted() {
+			response.ErrorFrom(c, service.ErrAPIKeyQuotaExhausted)
+			return
+		}
+		apiKey = resolved
+	} else {
+		apiKey, _ = middleware2.GetAPIKeyFromContext(c)
+	}
 	for _, model := range req.Models {
 		model = strings.TrimSpace(model)
 		if model == "" {

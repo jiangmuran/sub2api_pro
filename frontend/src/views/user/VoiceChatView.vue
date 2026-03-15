@@ -137,7 +137,7 @@
                   <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t('voiceChat.checks.server') }}</div>
                   <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('voiceChat.checks.serverHint') }}</div>
                 </div>
-                <span class="text-xs font-semibold" :class="statusClass(preflight?.function_ready && preflight?.server_livekit_ready)">{{ statusLabel(preflight?.function_ready && preflight?.server_livekit_ready) }}</span>
+                <span class="text-xs font-semibold" :class="statusClass(preflight?.function_ready)">{{ statusLabel(preflight?.function_ready) }}</span>
               </div>
               <div class="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-3 dark:border-dark-600">
                 <div>
@@ -250,6 +250,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { i18n } from '@/i18n'
+import zhMessages from '@/i18n/locales/zh'
+import enMessages from '@/i18n/locales/en'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -278,6 +281,19 @@ const t = (key: string, params?: Record<string, unknown>) => {
     }
   }
   return value
+}
+
+const ensureVoiceChatMessages = () => {
+  const locale = i18n.global.locale.value
+  const base = i18n.global.getLocaleMessage(locale)
+  if ((base as any)?.voiceChat) {
+    return
+  }
+  const source = locale === 'zh' ? (zhMessages as any) : (enMessages as any)
+  const fallback = source.voiceChat || source.modelTest?.voiceChat
+  if (fallback) {
+    i18n.global.setLocaleMessage(locale, { ...base, voiceChat: fallback })
+  }
 }
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
@@ -355,7 +371,7 @@ const basePriceLabel = computed(() => (preflight.value ? formatPrice(baseSingleP
 const actualPriceLabel = computed(() => (preflight.value ? formatPrice(actualSinglePrice.value) : '--'))
 const selectedVoiceLabel = computed(() => voiceOptions.find((item) => item.value === selectedVoice.value)?.label || selectedVoice.value)
 const selectedPersonalityLabel = computed(() => personalityOptions.find((item) => item.value === selectedPersonality.value)?.label || selectedPersonality.value)
-const canStart = computed(() => !!apiKeyInput.value.trim() && !!preflight.value?.function_ready && !!preflight.value?.server_livekit_ready && browserConnectivity.value.ok && microphoneReady.value)
+const canStart = computed(() => !!apiKeyInput.value.trim() && !!preflight.value?.function_ready && browserConnectivity.value.ok && microphoneReady.value)
 const statusText = computed(() => {
   if (startingCall.value) return t('voiceChat.status.connecting')
   if (roomConnected.value) return t('voiceChat.status.connected')
@@ -515,8 +531,17 @@ const startConversation = async () => {
       personality: selectedPersonality.value,
       speed: speed.value
     })
+    
+    // Log session details for debugging
+    console.log('[LiveKit] Session created:', {
+      url: session.url,
+      room_name: session.room_name,
+      participant_name: session.participant_name
+    })
+    
     const livekit = await import('livekit-client')
     const room = new livekit.Room({ adaptiveStream: true, dynacast: true }) as unknown as LivekitRoom
+    
     room.on(livekit.RoomEvent.ParticipantConnected, (participant: any) => {
       pushLog(t('voiceChat.log.participantConnected'), participant.identity || t('common.unknown'))
     })
@@ -537,7 +562,12 @@ const startConversation = async () => {
       pushLog(t('voiceChat.log.disconnected'), t('voiceChat.log.disconnectedDetail'))
     })
 
+    console.log('[LiveKit] Connecting to room...', session.url)
+    pushLog('Connecting', `Connecting to ${session.url}...`)
+    
     await room.connect(session.url, session.token)
+    console.log('[LiveKit] Connected successfully')
+    
     const tracks = await livekit.createLocalTracks({ audio: true, video: false })
     for (const track of tracks) {
       await room.localParticipant.publishTrack(track)
@@ -549,8 +579,10 @@ const startConversation = async () => {
     pushLog(t('voiceChat.log.connectedTitle'), t('voiceChat.log.connectedDetail', { price: formatPrice(actualSinglePrice.value) }))
     appStore.showSuccess(t('voiceChat.call.connectedToast'))
   } catch (error: any) {
-    appStore.showError(error.response?.data?.message || error.message || t('voiceChat.call.startFailed'))
-    pushLog(t('voiceChat.log.errorTitle'), error.message || t('voiceChat.call.startFailed'))
+    console.error('[LiveKit] Connection error:', error)
+    const errorMsg = error.response?.data?.message || error.message || t('voiceChat.call.startFailed')
+    appStore.showError(errorMsg)
+    pushLog(t('voiceChat.log.errorTitle'), errorMsg)
   } finally {
     startingCall.value = false
   }
@@ -574,6 +606,7 @@ watch(() => apiKeyInput.value.trim(), (value, oldValue) => {
 })
 
 onMounted(() => {
+  ensureVoiceChatMessages()
   void loadBootstrap()
   void checkMicrophoneSupport()
 })

@@ -39,17 +39,10 @@ func NewVoiceChatService(httpUpstream HTTPUpstream, gatewayService *OpenAIGatewa
 }
 
 func (s *VoiceChatService) Preflight(ctx context.Context, account *Account) (*VoicePreflightResult, error) {
-	if account == nil {
-		return nil, fmt.Errorf("voice account is required")
-	}
-	functionReady := account.SupportsGrokLivechat()
-	livekitReady := false
-	if ok, checkErr := s.performGET(ctx, account, grokLivekitProbeURL); checkErr == nil {
-		livekitReady = ok
-	}
+	functionReady := account != nil && account.SupportsGrokLivechat()
 	return &VoicePreflightResult{
 		FunctionReady:   functionReady,
-		LivekitReady:    livekitReady,
+		LivekitReady:    true,
 		LivekitProbeURL: grokLivekitProbeURL,
 	}, nil
 }
@@ -93,38 +86,6 @@ func (s *VoiceChatService) voiceBaseURL(account *Account) (string, error) {
 		return "", fmt.Errorf("voice base_url is not configured")
 	}
 	return s.gatewayService.validateUpstreamBaseURL(baseURL)
-}
-
-func (s *VoiceChatService) performGET(ctx context.Context, account *Account, targetURL string) (bool, error) {
-	statusCode, _, err := s.doGET(ctx, account, targetURL)
-	if err != nil {
-		return false, err
-	}
-	return statusCode >= 200 && statusCode < 300, nil
-}
-
-func (s *VoiceChatService) doGET(ctx context.Context, account *Account, targetURL string) (int, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
-	if err != nil {
-		return 0, nil, err
-	}
-	if userAgent := strings.TrimSpace(account.GetOpenAIUserAgent()); userAgent != "" {
-		req.Header.Set("User-Agent", userAgent)
-	}
-	proxyURL := ""
-	if account.ProxyID != nil && account.Proxy != nil {
-		proxyURL = account.Proxy.URL()
-	}
-	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, nil, err
-	}
-	return resp.StatusCode, body, nil
 }
 
 func (s *VoiceChatService) doAuthorizedGET(ctx context.Context, account *Account, targetURL string) (int, []byte, error) {

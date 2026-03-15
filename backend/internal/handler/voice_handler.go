@@ -58,15 +58,24 @@ func (h *VoiceHandler) Preflight(c *gin.Context) {
 		response.BadRequest(c, "api_key is required")
 		return
 	}
-	apiKey, subscription, account, err := h.resolveVoiceRequest(ctx, c, apiKeyValue)
+	apiKey, subscription, err := h.resolveVoiceKey(ctx, c, apiKeyValue)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
+	account, accountErr := h.gatewayService.SelectAccountForModel(ctx, apiKey.GroupID, "", service.OpenAIModelGrokLivechat)
+	if accountErr != nil {
+		response.ErrorFrom(c, accountErr)
+		return
+	}
+	functionReady := account != nil
 	check, err := h.voiceService.Preflight(ctx, account)
 	if err != nil {
 		response.InternalError(c, err.Error())
 		return
+	}
+	if !functionReady {
+		check.FunctionReady = false
 	}
 	basePrice := h.lookupVoiceSinglePrice(account)
 	response.Success(c, gin.H{
@@ -144,41 +153,49 @@ func (h *VoiceHandler) CreateSession(c *gin.Context) {
 }
 
 func (h *VoiceHandler) resolveVoiceRequest(ctx context.Context, c *gin.Context, apiKeyValue string) (*service.APIKey, *service.UserSubscription, *service.Account, error) {
-	subject, ok := middleware2.GetAuthSubjectFromContext(c)
-	if !ok {
-		return nil, nil, nil, service.ErrInsufficientPerms
-	}
-	apiKeyValue = strings.TrimSpace(apiKeyValue)
-	if apiKeyValue == "" {
-		return nil, nil, nil, service.ErrAPIKeyNotFound
-	}
-	apiKey, err := h.apiKeyService.GetByKey(ctx, apiKeyValue)
+	apiKey, subscription, err := h.resolveVoiceKey(ctx, c, apiKeyValue)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-	if apiKey.UserID != subject.UserID {
-		return nil, nil, nil, service.ErrInsufficientPerms
-	}
-	if !apiKey.IsActive() || apiKey.IsExpired() || apiKey.IsQuotaExhausted() {
-		return nil, nil, nil, service.ErrAPIKeyQuotaExhausted
-	}
-	var subscription *service.UserSubscription
-	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && h.subscriptionService != nil {
-		subscription, err = h.subscriptionService.GetActiveSubscription(ctx, apiKey.User.ID, apiKey.Group.ID)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-	}
-	if h.billingCacheService != nil {
-		if err := h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
-			return nil, nil, nil, err
-		}
 	}
 	account, err := h.gatewayService.SelectAccountForModel(ctx, apiKey.GroupID, "", service.OpenAIModelGrokLivechat)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	return apiKey, subscription, account, nil
+}
+
+func (h *VoiceHandler) resolveVoiceKey(ctx context.Context, c *gin.Context, apiKeyValue string) (*service.APIKey, *service.UserSubscription, error) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		return nil, nil, service.ErrInsufficientPerms
+	}
+	apiKeyValue = strings.TrimSpace(apiKeyValue)
+	if apiKeyValue == "" {
+		return nil, nil, service.ErrAPIKeyNotFound
+	}
+	apiKey, err := h.apiKeyService.GetByKey(ctx, apiKeyValue)
+	if err != nil {
+		return nil, nil, err
+	}
+	if apiKey.UserID != subject.UserID {
+		return nil, nil, service.ErrInsufficientPerms
+	}
+	if !apiKey.IsActive() || apiKey.IsExpired() || apiKey.IsQuotaExhausted() {
+		return nil, nil, service.ErrAPIKeyQuotaExhausted
+	}
+	var subscription *service.UserSubscription
+	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && h.subscriptionService != nil {
+		subscription, err = h.subscriptionService.GetActiveSubscription(ctx, apiKey.User.ID, apiKey.Group.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	if h.billingCacheService != nil {
+		if err := h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+			return nil, nil, err
+		}
+	}
+	return apiKey, subscription, nil
 }
 
 func (h *VoiceHandler) lookupVoiceSinglePrice(account *service.Account) float64 {

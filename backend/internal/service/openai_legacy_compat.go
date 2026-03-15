@@ -261,7 +261,54 @@ func normalizeOpenAICompatibilityPayload(payload map[string]any) bool {
 		}
 	}
 
+	if normalizeOpenAITools(payload) {
+		changed = true
+	}
+
 	return changed
+}
+
+func normalizeOpenAITools(payload map[string]any) bool {
+	toolsRaw, ok := payload["tools"].([]any)
+	if !ok {
+		return false
+	}
+	cleaned := make([]any, 0, len(toolsRaw))
+	for _, tool := range toolsRaw {
+		toolMap, ok := tool.(map[string]any)
+		if !ok {
+			continue
+		}
+		toolType, _ := toolMap["type"].(string)
+		if strings.EqualFold(strings.TrimSpace(toolType), "function") {
+			functionMap, ok := toolMap["function"].(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := functionMap["name"].(string)
+			if strings.TrimSpace(name) == "" {
+				continue
+			}
+			cleaned = append(cleaned, map[string]any{
+				"type":     "function",
+				"function": functionMap,
+			})
+			continue
+		}
+		cleaned = append(cleaned, toolMap)
+	}
+	if len(cleaned) == 0 {
+		delete(payload, "tools")
+		if _, exists := payload["tool_choice"]; exists {
+			delete(payload, "tool_choice")
+		}
+		return true
+	}
+	if len(cleaned) == len(toolsRaw) {
+		return false
+	}
+	payload["tools"] = cleaned
+	return true
 }
 
 // coerceOpenAIInputToItems converts legacy string input into Responses-compatible

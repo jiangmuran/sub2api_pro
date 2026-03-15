@@ -425,7 +425,7 @@ const loadModels = async () => {
     if (!imageModel.value && imageModelOptions.value.length > 0) {
       imageModel.value = imageModelOptions.value[0].value
     }
-    const pricing = await usageAPI.getModelPricingPreview(models.value.map((item) => item.id))
+    const pricing = await usageAPI.getModelPricingPreview(models.value.map((item) => item.id), apiKeyInput.value.trim())
     pricingMap.value = Object.fromEntries((pricing.models || []).map((item) => [item.model, item]))
   } catch (error: any) {
     appStore.showError(error.message || t('modelTest.models.fetchFailed'))

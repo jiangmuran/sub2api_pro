@@ -258,8 +258,8 @@ export async function getDashboardApiKeysUsage(
   return data
 }
 
-export async function getModelPricingPreview(models: string[]): Promise<ModelPricingPreviewResponse> {
-  const { data } = await apiClient.post<ModelPricingPreviewResponse>('/usage/model-pricing', { models })
+export async function getModelPricingPreview(models: string[], apiKey?: string): Promise<ModelPricingPreviewResponse> {
+  const { data } = await apiClient.post<ModelPricingPreviewResponse>('/usage/model-pricing', { models, api_key: apiKey })
   return data
 }
 
