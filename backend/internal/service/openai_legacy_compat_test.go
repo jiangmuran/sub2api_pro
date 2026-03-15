@@ -519,3 +519,111 @@ func TestConvertOpenAILegacyResponseToResponses_CompletionsInputOutputUsage(t *t
 	require.Equal(t, int64(11), gjson.GetBytes(converted, "usage.input_tokens").Int())
 	require.Equal(t, int64(13), gjson.GetBytes(converted, "usage.output_tokens").Int())
 }
+
+func TestLooksLikePollutedOpenAIOutput(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "OpenAI explicit error message",
+			input:    "An error occurred while processing your request",
+			expected: true,
+		},
+		{
+			name:     "OpenAI help center with request ID",
+			input:    "For more information visit help.openai.com with request id: abc123",
+			expected: true,
+		},
+		{
+			name:     "Pasted error with both help and request ID",
+			input:    "Pasted error: help.openai.com request_id: xyz789",
+			expected: true,
+		},
+		{
+			name:     "Normal response with request_id field (domestic API)",
+			input:    "This is a normal response with request_id in metadata",
+			expected: false, // Should NOT be detected as polluted
+		},
+		{
+			name:     "Normal JSON with request_id field",
+			input:    `{"result": "success", "request_id": "req_12345", "data": "some data"}`,
+			expected: false, // Should NOT be detected as polluted
+		},
+		{
+			name:     "Help center link only (no request ID)",
+			input:    "Visit help.openai.com for documentation",
+			expected: false,
+		},
+		{
+			name:     "Request ID only (no help center)",
+			input:    "Processing request_id: req_abc123",
+			expected: false,
+		},
+		{
+			name:     "Pasted prefix with request ID only (no help center)",
+			input:    "Pasted content with request_id: xyz",
+			expected: false, // Changed: now requires both help center AND request ID
+		},
+		{
+			name:     "Empty string",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "Whitespace only",
+			input:    "   \n\t  ",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := looksLikePollutedOpenAIOutput(tt.input)
+			require.Equal(t, tt.expected, result, "Input: %q", tt.input)
+		})
+	}
+}
+
+func TestSanitizeOpenAIOutputText_DomesticAPICompatibility(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectedOutput string
+		expectedChange bool
+	}{
+		{
+			name:           "Normal text with request_id metadata",
+			input:          "Response content request_id: req_123",
+			expectedOutput: "Response content request_id: req_123",
+			expectedChange: false, // Should not be sanitized
+		},
+		{
+			name:           "JSON response with request_id field",
+			input:          `{"text": "Hello", "request_id": "req_456"}`,
+			expectedOutput: `{"text": "Hello", "request_id": "req_456"}`,
+			expectedChange: false,
+		},
+		{
+			name:           "OpenAI error with explicit phrase should be sanitized",
+			input:          "An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req-abc123 in your message.",
+			expectedOutput: "",
+			expectedChange: true, // Full OpenAI error pattern gets cleaned
+		},
+		{
+			name:           "Partial OpenAI error (just the phrase)",
+			input:          "An error occurred while processing your request",
+			expectedOutput: "An error occurred while processing your request",
+			expectedChange: false, // Only the exact phrase triggers pollution detection, but sanitizeUpstreamErrorMessage doesn't remove it unless it's the full pattern
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output, changed := sanitizeOpenAIOutputText(tt.input)
+			require.Equal(t, tt.expectedOutput, output, "Output mismatch")
+			require.Equal(t, tt.expectedChange, changed, "Change flag mismatch")
+		})
+	}
+}

@@ -1115,7 +1115,10 @@ func extractResponsesOutputText(body []byte) string {
 	if v := gjson.GetBytes(body, "output_text"); v.Exists() {
 		text := strings.TrimSpace(v.String())
 		if sanitized, changed := sanitizeOpenAIOutputText(text); changed {
-			text = sanitized
+			// Only replace if sanitized text is not empty (avoid clearing valid content)
+			if strings.TrimSpace(sanitized) != "" {
+				text = sanitized
+			}
 		}
 		return strings.TrimSpace(text)
 	}
@@ -1142,7 +1145,10 @@ func extractResponsesOutputText(body []byte) string {
 				continue
 			}
 			if sanitized, changed := sanitizeOpenAIOutputText(text); changed {
-				text = sanitized
+				// Only replace if sanitized text is not empty (avoid clearing valid content)
+				if strings.TrimSpace(sanitized) != "" {
+					text = sanitized
+				}
 			}
 			if strings.TrimSpace(text) == "" {
 				continue
@@ -1179,17 +1185,24 @@ func looksLikePollutedOpenAIOutput(text string) bool {
 	if lower == "" {
 		return false
 	}
+	// Only detect OpenAI's specific error messages to avoid false positives with domestic APIs
 	hasErrorPhrase := strings.Contains(lower, "an error occurred while processing your request")
 	hasHelpCenter := strings.Contains(lower, "help.openai.com")
 	hasRequestID := strings.Contains(lower, "request id") || strings.Contains(lower, "request_id")
 	hasPastedPrefix := strings.HasPrefix(lower, "pasted") || strings.HasPrefix(lower, "[pasted]")
+
+	// Case 1: Explicit OpenAI error message
 	if hasErrorPhrase {
 		return true
 	}
+	// Case 2: OpenAI help center link with request ID (both must be present)
+	// This is more strict to avoid false positives with APIs that include request_id in normal responses
 	if hasHelpCenter && hasRequestID {
 		return true
 	}
-	if hasPastedPrefix && (hasHelpCenter || hasRequestID) {
+	// Case 3: Pasted error format with both help center AND request ID
+	// Changed from OR to AND to be more conservative
+	if hasPastedPrefix && hasHelpCenter && hasRequestID {
 		return true
 	}
 	return false
