@@ -65,11 +65,6 @@
             </div>
 
             <div>
-              <label class="input-label">{{ t('voiceChat.setup.personality') }}</label>
-              <Select v-model="selectedPersonality" :options="personalityOptions" value-key="value" label-key="label" />
-            </div>
-
-            <div>
               <div class="flex items-center justify-between">
                 <label class="input-label">{{ t('voiceChat.setup.speed') }}</label>
                 <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ speed.toFixed(1) }}x</span>
@@ -214,7 +209,6 @@ const browserConnectivity = ref<{ ok: boolean; checked: boolean; label: string; 
 const microphoneReady = ref(false)
 
 const selectedVoice = ref('shimmer')
-const selectedPersonality = ref('friendly')
 const speed = ref(1.0)
 
 const voiceOptions = [
@@ -223,12 +217,6 @@ const voiceOptions = [
   { value: 'shimmer', label: 'Shimmer' },
   { value: 'verse', label: 'Verse' }
 ]
-
-const personalityOptions = computed(() => [
-  { value: 'friendly', label: t('voiceChat.personality.friendly') },
-  { value: 'professional', label: t('voiceChat.personality.professional') },
-  { value: 'casual', label: t('voiceChat.personality.casual') }
-])
 
 const startingCall = ref(false)
 const roomConnected = ref(false)
@@ -411,7 +399,7 @@ const startConversation = async () => {
     const session = await voiceAPI.createSession({
       api_key: apiKeyInput.value.trim(),
       voice: selectedVoice.value,
-      personality: selectedPersonality.value,
+      personality: '',
       speed: speed.value
     })
     
