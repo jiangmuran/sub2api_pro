@@ -72,9 +72,9 @@
             <div>
               <div class="flex items-center justify-between">
                 <label class="input-label">{{ t('voiceChat.setup.speed') }}</label>
-                <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ speed.toFixed(1) }}x</span>
+                <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ Number(speed).toFixed(1) }}x</span>
               </div>
-              <input v-model="speed" type="range" min="0.8" max="1.4" step="0.1" class="mt-2 w-full accent-cyan-500" />
+              <input v-model.number="speed" type="range" min="0.8" max="1.4" step="0.1" class="mt-2 w-full accent-cyan-500" />
             </div>
 
             <!-- Status Checks -->
@@ -200,7 +200,7 @@
                 </div>
                 <div class="flex items-center justify-between">
                   <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.setup.speed') }}</span>
-                  <span class="font-medium text-gray-900 dark:text-white">{{ speed.toFixed(1) }}x</span>
+                  <span class="font-medium text-gray-900 dark:text-white">{{ Number(speed).toFixed(1) }}x</span>
                 </div>
                 <div class="flex items-center justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
                   <span class="text-gray-600 dark:text-gray-400">{{ t('voiceChat.call.network') }}</span>
