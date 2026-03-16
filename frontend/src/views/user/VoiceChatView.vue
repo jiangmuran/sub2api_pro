@@ -268,7 +268,7 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useClipboard } from '@/composables/useClipboard'
 import * as keysAPI from '@/api/keys'
-import * as groupsAPI from '@/api/admin/groups'
+import * as userGroupsAPI from '@/api/groups'
 import { voiceAPI } from '@/api/voice'
 import type { ApiKey, VoicePreflightResponse, Group } from '@/types'
 
@@ -427,9 +427,9 @@ const pushLog = (title: string, detail: string) => {
 const loadBootstrap = async () => {
   loadingBootstrap.value = true
   try {
-    const [fetchedKeysData, fetchedGroups] = await Promise.all([keysAPI.list(), groupsAPI.list()])
+    const [fetchedKeysData, fetchedGroups] = await Promise.all([keysAPI.list(), userGroupsAPI.getAvailable()])
     apiKeys.value = fetchedKeysData.items
-    groupOptions.value = fetchedGroups.items.map((g: Group) => ({ value: g.id, label: g.name }))
+    groupOptions.value = fetchedGroups.map((g: Group) => ({ value: g.id, label: g.name }))
   } catch (error: any) {
     appStore.showError(error.response?.data?.message || t('voiceChat.keyPanel.loadFailed'))
   } finally {
