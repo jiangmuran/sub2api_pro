@@ -1,11 +1,10 @@
-<script setup lang=\"ts\">
+<script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
 import { onMounted, watch } from 'vue'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import { resolveDocumentTitle } from '@/router/title'
-import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
-import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore } from '@/stores'
+import { useAppStore, useAuthStore, useSubscriptionStore } from '@/stores'
 import { getSetupStatus } from '@/api/setup'
 
 const router = useRouter()
@@ -54,21 +53,21 @@ watch(
     } else {
       // User logged out: clear data and stop polling
       subscriptionStore.clear()
+      subscriptionStore.stopPolling()
     }
   },
   { immediate: true }
 )
 
+// Initialize setup check
 onMounted(async () => {
-  // Check if setup is needed
-  try {
-    const status = await getSetupStatus()
-    if (status.needs_setup && route.path !== '/setup') {
-      router.replace('/setup')
-      return
+  // Check if setup is required and redirect if needed
+  const setupStatus = await getSetupStatus()
+  if (setupStatus.needs_setup) {
+    if (route.path !== '/setup') {
+      await router.replace('/setup')
     }
-  } catch {
-    // If setup endpoint fails, assume normal mode and continue
+    return
   }
 
   // Load public settings into appStore (will be cached for other components)
