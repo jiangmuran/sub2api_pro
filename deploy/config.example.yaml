@@ -73,10 +73,15 @@ run_mode: "standard"
 cors:
   # Allowed origins list. Leave empty to disable cross-origin requests.
   # 允许的来源列表。留空则禁用跨域请求。
+  # Example:
+  # allowed_origins:
+  #   - https://grokapi.ai.org.kg
+  #   - https://api.ai.org.kg
   allowed_origins: []
   # Allow credentials (cookies/authorization headers). Cannot be used with "*".
   # 允许携带凭证（cookies/授权头）。不能与 "*" 通配符同时使用。
   allow_credentials: true
+
 
 # =============================================================================
 # Security Configuration
