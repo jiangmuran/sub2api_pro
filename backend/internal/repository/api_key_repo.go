@@ -592,6 +592,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		SoraVideoPricePerRequest:        g.SoraVideoPricePerRequest,
 		SoraVideoPricePerRequestHD:      g.SoraVideoPricePerRequestHd,
 		SoraStorageQuotaBytes:           g.SoraStorageQuotaBytes,
+		VideoPricePerRequest:            g.VideoPricePerRequest,
+		VideoPricePerRequestHD:          g.VideoPricePerRequestHd,
 		DefaultValidityDays:             g.DefaultValidityDays,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,

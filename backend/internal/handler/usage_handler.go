@@ -40,17 +40,21 @@ type ModelPricingPreviewRequest struct {
 }
 
 type ModelPricingPreviewItem struct {
-	Model              string  `json:"model"`
-	InputPricePer1M    float64 `json:"input_price_per_1m"`
-	OutputPricePer1M   float64 `json:"output_price_per_1m"`
-	ImagePricePerImage float64 `json:"image_price_per_image"`
-	PricingAvailable   bool    `json:"pricing_available"`
+	Model                  string  `json:"model"`
+	InputPricePer1M        float64 `json:"input_price_per_1m"`
+	OutputPricePer1M       float64 `json:"output_price_per_1m"`
+	ImagePricePerImage     float64 `json:"image_price_per_image"`
+	VideoPricePerRequest   float64 `json:"video_price_per_request"`
+	VideoPricePerRequestHD float64 `json:"video_price_per_request_hd"`
+	PricingAvailable       bool    `json:"pricing_available"`
 }
 
 type manualModelPricing struct {
-	InputPricePer1M    float64
-	OutputPricePer1M   float64
-	ImagePricePerImage float64
+	InputPricePer1M        float64
+	OutputPricePer1M       float64
+	ImagePricePerImage     float64
+	VideoPricePerRequest   float64
+	VideoPricePerRequestHD float64
 }
 
 func lookupManualModelPricing(account *service.Account, model string) (manualModelPricing, bool) {
@@ -77,11 +81,13 @@ func lookupManualModelPricing(account *service.Account, model string) (manualMod
 		return manualModelPricing{}, false
 	}
 	pricing := manualModelPricing{
-		InputPricePer1M:    readFloat(entryMap["input_price_per_1m"]),
-		OutputPricePer1M:   readFloat(entryMap["output_price_per_1m"]),
-		ImagePricePerImage: readFloat(entryMap["image_price_per_image"]),
+		InputPricePer1M:        readFloat(entryMap["input_price_per_1m"]),
+		OutputPricePer1M:       readFloat(entryMap["output_price_per_1m"]),
+		ImagePricePerImage:     readFloat(entryMap["image_price_per_image"]),
+		VideoPricePerRequest:   readFloat(entryMap["video_price_per_request"]),
+		VideoPricePerRequestHD: readFloat(entryMap["video_price_per_request_hd"]),
 	}
-	if pricing.InputPricePer1M <= 0 && pricing.OutputPricePer1M <= 0 && pricing.ImagePricePerImage <= 0 {
+	if pricing.InputPricePer1M <= 0 && pricing.OutputPricePer1M <= 0 && pricing.ImagePricePerImage <= 0 && pricing.VideoPricePerRequest <= 0 && pricing.VideoPricePerRequestHD <= 0 {
 		return manualModelPricing{}, false
 	}
 	return pricing, true
@@ -161,7 +167,9 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 					item.InputPricePer1M = pricing.InputPricePer1M
 					item.OutputPricePer1M = pricing.OutputPricePer1M
 					item.ImagePricePerImage = pricing.ImagePricePerImage
-					item.PricingAvailable = pricing.InputPricePer1M > 0 || pricing.OutputPricePer1M > 0 || pricing.ImagePricePerImage > 0
+					item.VideoPricePerRequest = pricing.VideoPricePerRequest
+					item.VideoPricePerRequestHD = pricing.VideoPricePerRequestHD
+					item.PricingAvailable = pricing.InputPricePer1M > 0 || pricing.OutputPricePer1M > 0 || pricing.ImagePricePerImage > 0 || pricing.VideoPricePerRequest > 0 || pricing.VideoPricePerRequestHD > 0
 				}
 			}
 		}
@@ -171,7 +179,9 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 					item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000
 					item.OutputPricePer1M = pricing.OutputPricePerToken * 1_000_000
 					item.ImagePricePerImage = pricing.OutputPricePerImage
-					item.PricingAvailable = item.InputPricePer1M > 0 || item.OutputPricePer1M > 0 || item.ImagePricePerImage > 0
+					item.VideoPricePerRequest = pricing.VideoPricePerRequest
+					item.VideoPricePerRequestHD = pricing.VideoPricePerRequestHD
+					item.PricingAvailable = item.InputPricePer1M > 0 || item.OutputPricePer1M > 0 || item.ImagePricePerImage > 0 || item.VideoPricePerRequest > 0 || item.VideoPricePerRequestHD > 0
 				}
 			}
 		}

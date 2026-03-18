@@ -2281,6 +2281,7 @@ type AccountMutation struct {
 	overload_until            *time.Time
 	temp_unschedulable_until  *time.Time
 	temp_unschedulable_reason *string
+	never_suspend             *bool
 	session_window_start      *time.Time
 	session_window_end        *time.Time
 	session_window_status     *string
@@ -3702,6 +3703,42 @@ func (m *AccountMutation) ResetTempUnschedulableReason() {
 	delete(m.clearedFields, account.FieldTempUnschedulableReason)
 }
 
+// SetNeverSuspend sets the "never_suspend" field.
+func (m *AccountMutation) SetNeverSuspend(b bool) {
+	m.never_suspend = &b
+}
+
+// NeverSuspend returns the value of the "never_suspend" field in the mutation.
+func (m *AccountMutation) NeverSuspend() (r bool, exists bool) {
+	v := m.never_suspend
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNeverSuspend returns the old "never_suspend" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldNeverSuspend(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNeverSuspend is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNeverSuspend requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNeverSuspend: %w", err)
+	}
+	return oldValue.NeverSuspend, nil
+}
+
+// ResetNeverSuspend resets all changes to the "never_suspend" field.
+func (m *AccountMutation) ResetNeverSuspend() {
+	m.never_suspend = nil
+}
+
 // SetSessionWindowStart sets the "session_window_start" field.
 func (m *AccountMutation) SetSessionWindowStart(t time.Time) {
 	m.session_window_start = &t
@@ -4018,7 +4055,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 32)
+	fields := make([]string, 0, 33)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -4106,6 +4143,9 @@ func (m *AccountMutation) Fields() []string {
 	if m.temp_unschedulable_reason != nil {
 		fields = append(fields, account.FieldTempUnschedulableReason)
 	}
+	if m.never_suspend != nil {
+		fields = append(fields, account.FieldNeverSuspend)
+	}
 	if m.session_window_start != nil {
 		fields = append(fields, account.FieldSessionWindowStart)
 	}
@@ -4181,6 +4221,8 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.TempUnschedulableUntil()
 	case account.FieldTempUnschedulableReason:
 		return m.TempUnschedulableReason()
+	case account.FieldNeverSuspend:
+		return m.NeverSuspend()
 	case account.FieldSessionWindowStart:
 		return m.SessionWindowStart()
 	case account.FieldSessionWindowEnd:
@@ -4254,6 +4296,8 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTempUnschedulableUntil(ctx)
 	case account.FieldTempUnschedulableReason:
 		return m.OldTempUnschedulableReason(ctx)
+	case account.FieldNeverSuspend:
+		return m.OldNeverSuspend(ctx)
 	case account.FieldSessionWindowStart:
 		return m.OldSessionWindowStart(ctx)
 	case account.FieldSessionWindowEnd:
@@ -4471,6 +4515,13 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTempUnschedulableReason(v)
+		return nil
+	case account.FieldNeverSuspend:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNeverSuspend(v)
 		return nil
 	case account.FieldSessionWindowStart:
 		v, ok := value.(time.Time)
@@ -4784,6 +4835,9 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldTempUnschedulableReason:
 		m.ResetTempUnschedulableReason()
+		return nil
+	case account.FieldNeverSuspend:
+		m.ResetNeverSuspend()
 		return nil
 	case account.FieldSessionWindowStart:
 		m.ResetSessionWindowStart()
@@ -8437,6 +8491,10 @@ type GroupMutation struct {
 	addsora_video_price_per_request_hd      *float64
 	sora_storage_quota_bytes                *int64
 	addsora_storage_quota_bytes             *int64
+	video_price_per_request                 *float64
+	addvideo_price_per_request              *float64
+	video_price_per_request_hd              *float64
+	addvideo_price_per_request_hd           *float64
 	claude_code_only                        *bool
 	fallback_group_id                       *int64
 	addfallback_group_id                    *int64
@@ -9789,6 +9847,146 @@ func (m *GroupMutation) ResetSoraStorageQuotaBytes() {
 	m.addsora_storage_quota_bytes = nil
 }
 
+// SetVideoPricePerRequest sets the "video_price_per_request" field.
+func (m *GroupMutation) SetVideoPricePerRequest(f float64) {
+	m.video_price_per_request = &f
+	m.addvideo_price_per_request = nil
+}
+
+// VideoPricePerRequest returns the value of the "video_price_per_request" field in the mutation.
+func (m *GroupMutation) VideoPricePerRequest() (r float64, exists bool) {
+	v := m.video_price_per_request
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVideoPricePerRequest returns the old "video_price_per_request" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldVideoPricePerRequest(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVideoPricePerRequest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVideoPricePerRequest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVideoPricePerRequest: %w", err)
+	}
+	return oldValue.VideoPricePerRequest, nil
+}
+
+// AddVideoPricePerRequest adds f to the "video_price_per_request" field.
+func (m *GroupMutation) AddVideoPricePerRequest(f float64) {
+	if m.addvideo_price_per_request != nil {
+		*m.addvideo_price_per_request += f
+	} else {
+		m.addvideo_price_per_request = &f
+	}
+}
+
+// AddedVideoPricePerRequest returns the value that was added to the "video_price_per_request" field in this mutation.
+func (m *GroupMutation) AddedVideoPricePerRequest() (r float64, exists bool) {
+	v := m.addvideo_price_per_request
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearVideoPricePerRequest clears the value of the "video_price_per_request" field.
+func (m *GroupMutation) ClearVideoPricePerRequest() {
+	m.video_price_per_request = nil
+	m.addvideo_price_per_request = nil
+	m.clearedFields[group.FieldVideoPricePerRequest] = struct{}{}
+}
+
+// VideoPricePerRequestCleared returns if the "video_price_per_request" field was cleared in this mutation.
+func (m *GroupMutation) VideoPricePerRequestCleared() bool {
+	_, ok := m.clearedFields[group.FieldVideoPricePerRequest]
+	return ok
+}
+
+// ResetVideoPricePerRequest resets all changes to the "video_price_per_request" field.
+func (m *GroupMutation) ResetVideoPricePerRequest() {
+	m.video_price_per_request = nil
+	m.addvideo_price_per_request = nil
+	delete(m.clearedFields, group.FieldVideoPricePerRequest)
+}
+
+// SetVideoPricePerRequestHd sets the "video_price_per_request_hd" field.
+func (m *GroupMutation) SetVideoPricePerRequestHd(f float64) {
+	m.video_price_per_request_hd = &f
+	m.addvideo_price_per_request_hd = nil
+}
+
+// VideoPricePerRequestHd returns the value of the "video_price_per_request_hd" field in the mutation.
+func (m *GroupMutation) VideoPricePerRequestHd() (r float64, exists bool) {
+	v := m.video_price_per_request_hd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVideoPricePerRequestHd returns the old "video_price_per_request_hd" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldVideoPricePerRequestHd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVideoPricePerRequestHd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVideoPricePerRequestHd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVideoPricePerRequestHd: %w", err)
+	}
+	return oldValue.VideoPricePerRequestHd, nil
+}
+
+// AddVideoPricePerRequestHd adds f to the "video_price_per_request_hd" field.
+func (m *GroupMutation) AddVideoPricePerRequestHd(f float64) {
+	if m.addvideo_price_per_request_hd != nil {
+		*m.addvideo_price_per_request_hd += f
+	} else {
+		m.addvideo_price_per_request_hd = &f
+	}
+}
+
+// AddedVideoPricePerRequestHd returns the value that was added to the "video_price_per_request_hd" field in this mutation.
+func (m *GroupMutation) AddedVideoPricePerRequestHd() (r float64, exists bool) {
+	v := m.addvideo_price_per_request_hd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearVideoPricePerRequestHd clears the value of the "video_price_per_request_hd" field.
+func (m *GroupMutation) ClearVideoPricePerRequestHd() {
+	m.video_price_per_request_hd = nil
+	m.addvideo_price_per_request_hd = nil
+	m.clearedFields[group.FieldVideoPricePerRequestHd] = struct{}{}
+}
+
+// VideoPricePerRequestHdCleared returns if the "video_price_per_request_hd" field was cleared in this mutation.
+func (m *GroupMutation) VideoPricePerRequestHdCleared() bool {
+	_, ok := m.clearedFields[group.FieldVideoPricePerRequestHd]
+	return ok
+}
+
+// ResetVideoPricePerRequestHd resets all changes to the "video_price_per_request_hd" field.
+func (m *GroupMutation) ResetVideoPricePerRequestHd() {
+	m.video_price_per_request_hd = nil
+	m.addvideo_price_per_request_hd = nil
+	delete(m.clearedFields, group.FieldVideoPricePerRequestHd)
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (m *GroupMutation) SetClaudeCodeOnly(b bool) {
 	m.claude_code_only = &b
@@ -10551,7 +10749,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 30)
+	fields := make([]string, 0, 32)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -10617,6 +10815,12 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.sora_storage_quota_bytes != nil {
 		fields = append(fields, group.FieldSoraStorageQuotaBytes)
+	}
+	if m.video_price_per_request != nil {
+		fields = append(fields, group.FieldVideoPricePerRequest)
+	}
+	if m.video_price_per_request_hd != nil {
+		fields = append(fields, group.FieldVideoPricePerRequestHd)
 	}
 	if m.claude_code_only != nil {
 		fields = append(fields, group.FieldClaudeCodeOnly)
@@ -10694,6 +10898,10 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.SoraVideoPricePerRequestHd()
 	case group.FieldSoraStorageQuotaBytes:
 		return m.SoraStorageQuotaBytes()
+	case group.FieldVideoPricePerRequest:
+		return m.VideoPricePerRequest()
+	case group.FieldVideoPricePerRequestHd:
+		return m.VideoPricePerRequestHd()
 	case group.FieldClaudeCodeOnly:
 		return m.ClaudeCodeOnly()
 	case group.FieldFallbackGroupID:
@@ -10763,6 +10971,10 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldSoraVideoPricePerRequestHd(ctx)
 	case group.FieldSoraStorageQuotaBytes:
 		return m.OldSoraStorageQuotaBytes(ctx)
+	case group.FieldVideoPricePerRequest:
+		return m.OldVideoPricePerRequest(ctx)
+	case group.FieldVideoPricePerRequestHd:
+		return m.OldVideoPricePerRequestHd(ctx)
 	case group.FieldClaudeCodeOnly:
 		return m.OldClaudeCodeOnly(ctx)
 	case group.FieldFallbackGroupID:
@@ -10942,6 +11154,20 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSoraStorageQuotaBytes(v)
 		return nil
+	case group.FieldVideoPricePerRequest:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVideoPricePerRequest(v)
+		return nil
+	case group.FieldVideoPricePerRequestHd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVideoPricePerRequestHd(v)
+		return nil
 	case group.FieldClaudeCodeOnly:
 		v, ok := value.(bool)
 		if !ok {
@@ -11045,6 +11271,12 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addsora_storage_quota_bytes != nil {
 		fields = append(fields, group.FieldSoraStorageQuotaBytes)
 	}
+	if m.addvideo_price_per_request != nil {
+		fields = append(fields, group.FieldVideoPricePerRequest)
+	}
+	if m.addvideo_price_per_request_hd != nil {
+		fields = append(fields, group.FieldVideoPricePerRequestHd)
+	}
 	if m.addfallback_group_id != nil {
 		fields = append(fields, group.FieldFallbackGroupID)
 	}
@@ -11088,6 +11320,10 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedSoraVideoPricePerRequestHd()
 	case group.FieldSoraStorageQuotaBytes:
 		return m.AddedSoraStorageQuotaBytes()
+	case group.FieldVideoPricePerRequest:
+		return m.AddedVideoPricePerRequest()
+	case group.FieldVideoPricePerRequestHd:
+		return m.AddedVideoPricePerRequestHd()
 	case group.FieldFallbackGroupID:
 		return m.AddedFallbackGroupID()
 	case group.FieldFallbackGroupIDOnInvalidRequest:
@@ -11194,6 +11430,20 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddSoraStorageQuotaBytes(v)
 		return nil
+	case group.FieldVideoPricePerRequest:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVideoPricePerRequest(v)
+		return nil
+	case group.FieldVideoPricePerRequestHd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVideoPricePerRequestHd(v)
+		return nil
 	case group.FieldFallbackGroupID:
 		v, ok := value.(int64)
 		if !ok {
@@ -11259,6 +11509,12 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldSoraVideoPricePerRequestHd) {
 		fields = append(fields, group.FieldSoraVideoPricePerRequestHd)
 	}
+	if m.FieldCleared(group.FieldVideoPricePerRequest) {
+		fields = append(fields, group.FieldVideoPricePerRequest)
+	}
+	if m.FieldCleared(group.FieldVideoPricePerRequestHd) {
+		fields = append(fields, group.FieldVideoPricePerRequestHd)
+	}
 	if m.FieldCleared(group.FieldFallbackGroupID) {
 		fields = append(fields, group.FieldFallbackGroupID)
 	}
@@ -11317,6 +11573,12 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldSoraVideoPricePerRequestHd:
 		m.ClearSoraVideoPricePerRequestHd()
+		return nil
+	case group.FieldVideoPricePerRequest:
+		m.ClearVideoPricePerRequest()
+		return nil
+	case group.FieldVideoPricePerRequestHd:
+		m.ClearVideoPricePerRequestHd()
 		return nil
 	case group.FieldFallbackGroupID:
 		m.ClearFallbackGroupID()
@@ -11400,6 +11662,12 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldSoraStorageQuotaBytes:
 		m.ResetSoraStorageQuotaBytes()
+		return nil
+	case group.FieldVideoPricePerRequest:
+		m.ResetVideoPricePerRequest()
+		return nil
+	case group.FieldVideoPricePerRequestHd:
+		m.ResetVideoPricePerRequestHd()
 		return nil
 	case group.FieldClaudeCodeOnly:
 		m.ResetClaudeCodeOnly()

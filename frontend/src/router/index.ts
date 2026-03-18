@@ -38,6 +38,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/chat',
+    name: 'PublicChat',
+    component: () => import('@/views/public/ChatView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Chat'
+    }
+  },
+  {
     path: '/legal/terms',
     name: 'LegalTerms',
     component: () => import('@/views/legal/TermsView.vue'),

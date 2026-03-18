@@ -532,6 +532,38 @@
               />
             </div>
           </div>
+          <div class="mt-4">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('admin.groups.videoPricing.title') }}
+            </label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {{ t('admin.groups.videoPricing.description') }}
+            </p>
+            <div class="mt-2 grid grid-cols-2 gap-3">
+              <div>
+                <label class="input-label">{{ t('admin.groups.videoPricing.standard') }}</label>
+                <input
+                  v-model.number="createForm.video_price_per_request"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  class="input"
+                  placeholder="0.10"
+                />
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.groups.videoPricing.hd') }}</label>
+                <input
+                  v-model.number="createForm.video_price_per_request_hd"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  class="input"
+                  placeholder="0.20"
+                />
+              </div>
+            </div>
+          </div>
           <div class="mt-3">
             <label class="input-label">{{ t('admin.groups.soraPricing.storageQuota') }}</label>
             <div class="flex items-center gap-2">
@@ -1229,6 +1261,38 @@
               />
             </div>
           </div>
+          <div class="mt-4">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('admin.groups.videoPricing.title') }}
+            </label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {{ t('admin.groups.videoPricing.description') }}
+            </p>
+            <div class="mt-2 grid grid-cols-2 gap-3">
+              <div>
+                <label class="input-label">{{ t('admin.groups.videoPricing.standard') }}</label>
+                <input
+                  v-model.number="editForm.video_price_per_request"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  class="input"
+                  placeholder="0.10"
+                />
+              </div>
+              <div>
+                <label class="input-label">{{ t('admin.groups.videoPricing.hd') }}</label>
+                <input
+                  v-model.number="editForm.video_price_per_request_hd"
+                  type="number"
+                  step="0.001"
+                  min="0"
+                  class="input"
+                  placeholder="0.20"
+                />
+              </div>
+            </div>
+          </div>
           <div class="mt-3">
             <label class="input-label">{{ t('admin.groups.soraPricing.storageQuota') }}</label>
             <div class="flex items-center gap-2">
@@ -1916,6 +1980,8 @@ const createForm = reactive({
   sora_video_price_per_request: null as number | null,
   sora_video_price_per_request_hd: null as number | null,
   sora_storage_quota_gb: null as number | null,
+  video_price_per_request: null as number | null,
+  video_price_per_request_hd: null as number | null,
   // Claude Code 客户端限制（仅 anthropic 平台使用）
   claude_code_only: false,
   fallback_group_id: null as number | null,
@@ -2157,6 +2223,8 @@ const editForm = reactive({
   sora_video_price_per_request: null as number | null,
   sora_video_price_per_request_hd: null as number | null,
   sora_storage_quota_gb: null as number | null,
+  video_price_per_request: null as number | null,
+  video_price_per_request_hd: null as number | null,
   // Claude Code 客户端限制（仅 anthropic 平台使用）
   claude_code_only: false,
   fallback_group_id: null as number | null,
@@ -2256,6 +2324,8 @@ const closeCreateModal = () => {
   createForm.sora_image_price_540 = null
   createForm.sora_video_price_per_request = null
   createForm.sora_video_price_per_request_hd = null
+  createForm.video_price_per_request = null
+  createForm.video_price_per_request_hd = null
   createForm.sora_storage_quota_gb = null
   createForm.claude_code_only = false
   createForm.fallback_group_id = null
@@ -2316,6 +2386,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.sora_image_price_540 = group.sora_image_price_540
   editForm.sora_video_price_per_request = group.sora_video_price_per_request
   editForm.sora_video_price_per_request_hd = group.sora_video_price_per_request_hd
+  editForm.video_price_per_request = group.video_price_per_request
+  editForm.video_price_per_request_hd = group.video_price_per_request_hd
   editForm.sora_storage_quota_gb = group.sora_storage_quota_bytes ? Number((group.sora_storage_quota_bytes / (1024 * 1024 * 1024)).toFixed(2)) : null
   editForm.claude_code_only = group.claude_code_only || false
   editForm.fallback_group_id = group.fallback_group_id

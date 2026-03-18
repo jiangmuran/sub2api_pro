@@ -513,3 +513,53 @@ func TestCorrectToolParameters(t *testing.T) {
 		})
 	}
 }
+
+// TestCorrectToolCallsInSSEData_PartialJSON 测试处理 Grok 等模型返回的不完整 JSON chunk
+func TestCorrectToolCallsInSSEData_PartialJSON(t *testing.T) {
+	corrector := NewCodexToolCorrector()
+
+	tests := []struct {
+		name            string
+		input           string
+		expectCorrected bool
+		description     string
+	}{
+		{
+			name:            "partial_json_with_tool_calls_start",
+			input:           `{"choices":[{"delta":{"tool_calls":[{"function":{"name":"apply_patch"`,
+			expectCorrected: true,
+			description:     "不完整的 JSON，但包含 apply_patch 工具名称，应该被修正",
+		},
+		{
+			name:            "partial_json_tool_calls_incomplete_array",
+			input:           `{"tool_calls":[{"function":{"name":"list_files","arguments":"`,
+			expectCorrected: true,
+			description:     "不完整的 JSON，但可以识别 list_files，应该被修正为 glob",
+		},
+		{
+			name:            "partial_json_without_tool_name",
+			input:           `{"choices":[{"delta":{"content":"hel`,
+			expectCorrected: false,
+			description:     "不完整的 JSON，不包含工具调用，不应修正",
+		},
+		{
+			name:            "partial_json_nested_tool_call",
+			input:           `{"id":"chatcmpl-123","choices":[{"message":{"tool_calls":[{"function":{"name":"search_files"`,
+			expectCorrected: true,
+			description:     "嵌套的不完整 JSON，包含 search_files，应该被修正为 grep",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Logf("Testing: %s", tt.description)
+			
+			_, corrected := corrector.CorrectToolCallsInSSEData(tt.input)
+
+			if corrected != tt.expectCorrected {
+				t.Errorf("Expected corrected=%v, got %v for input: %s", tt.expectCorrected, corrected, tt.input)
+			}
+		})
+	}
+}
+

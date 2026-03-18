@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"sort"
 	"strconv"
@@ -216,6 +217,8 @@ type OpenAIForwardResult struct {
 	EstimatedOutputTokens int
 	ImageCount            int
 	ImageSize             string
+	VideoCount            int
+	VideoQuality          string // "standard" or "high"
 	MediaType             string
 }
 
@@ -1492,14 +1495,34 @@ func (s *OpenAIGatewayService) ForwardImageGeneration(ctx context.Context, c *gi
 
 func (s *OpenAIGatewayService) shouldFailoverUpstreamError(statusCode int) bool {
 	switch statusCode {
-	case 401, 402, 403, 429, 529:
+	case 401, 402: // Authentication errors - likely bad credentials, trigger failover
 		return true
+	case 429: // Rate limit - temporary, but trigger failover to switch to another account
+		return true
+	case 529: // Overloaded - temporary, trigger failover
+		return true
+	// NOTE: 403 Forbidden is often temporary (token rotation, rate limit by IP, etc.)
+	// We should NOT trigger failover for 403 to avoid marking too many accounts as unavailable
+	// The retry mechanism will handle transient 403 errors
+	case 403:
+		return false
 	default:
+		// 5xx errors except 502/503/504 which are handled by retry
+		// 502/503/504 will be retried, if still failing after retries, then failover
 		return statusCode >= 500
 	}
 }
 
 func (s *OpenAIGatewayService) handleFailoverSideEffects(ctx context.Context, resp *http.Response, account *Account) {
+	// Skip marking account as unavailable if never_suspend is enabled
+	if account.NeverSuspend {
+		logger.FromContext(ctx).Info("Account has never_suspend enabled, skipping failover marking",
+			zap.Int64("account_id", account.ID),
+			zap.Int("status_code", resp.StatusCode),
+		)
+		return
+	}
+
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
 }
@@ -3829,6 +3852,29 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			}
 		}
 		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, imageConfig, multiplier)
+	} else if result.VideoCount > 0 {
+		// 视频按次计费，使用与图片相同的计费逻辑
+		var imageConfig *ImagePriceConfig
+		if apiKey.Group != nil {
+			imageConfig = &ImagePriceConfig{
+				Price1K: apiKey.Group.ImagePrice1K,
+				Price2K: apiKey.Group.ImagePrice2K,
+				Price4K: apiKey.Group.ImagePrice4K,
+			}
+		}
+		if imageConfig == nil {
+			imageConfig = &ImagePriceConfig{}
+		}
+		// 查找手动定价：先尝试 image_price_per_image，再尝试视频专用字段
+		if imageConfig.PricePerImage == nil {
+			if manual := lookupOpenAIAccountStoredImagePricing(account, result.Model); manual > 0 {
+				imageConfig.PricePerImage = &manual
+			} else if manual := lookupOpenAIAccountStoredVideoPricing(account, result.Model, result.VideoQuality); manual > 0 {
+				imageConfig.PricePerImage = &manual
+			}
+		}
+		// 使用图片计费函数，传入视频数量作为图片数量
+		cost = s.billingService.CalculateImageCost(result.Model, "video", result.VideoCount, imageConfig, multiplier)
 	} else {
 		tokens := UsageTokens{
 			InputTokens:         actualInputTokens,
@@ -4471,12 +4517,114 @@ func lookupOpenAIAccountStoredImagePricing(account *Account, model string) float
 	return 0
 }
 
+func lookupOpenAIAccountStoredVideoPricing(account *Account, model string, quality string) float64 {
+	if account == nil || len(account.Extra) == 0 {
+		return 0
+	}
+	rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+	if !ok {
+		return 0
+	}
+	pricingMap, ok := rawPricing.(map[string]any)
+	if !ok {
+		return 0
+	}
+	model = strings.TrimSpace(model)
+	entry, ok := pricingMap[model]
+	if !ok {
+		entry, ok = pricingMap[strings.ToLower(model)]
+	}
+	if !ok {
+		return 0
+	}
+	entryMap, ok := entry.(map[string]any)
+	if !ok {
+		return 0
+	}
+
+	// 根据质量选择对应的定价字段
+	fieldName := "video_price_per_request"
+	if quality == "high" {
+		fieldName = "video_price_per_request_hd"
+	}
+
+	value, ok := entryMap[fieldName]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case float64:
+		if typed > 0 {
+			return typed
+		}
+	case int:
+		if typed > 0 {
+			return float64(typed)
+		}
+	case int64:
+		if typed > 0 {
+			return float64(typed)
+		}
+	}
+	return 0
+}
+
 func countGeneratedImages(body []byte) int {
 	data := gjson.GetBytes(body, "data")
 	if data.Exists() && data.IsArray() {
 		return len(data.Array())
 	}
 	return 0
+}
+
+// transformVideoResponseToOpenAIFormat transforms Grok video API response to OpenAI standard format
+// Input format (Grok):
+//
+//	{
+//	  "id": "video_3b4325581c8d447e91ecda61",
+//	  "object": "video",
+//	  "created_at": 1773759941,
+//	  "url": "https://..."
+//	}
+//
+// Output format (OpenAI standard):
+//
+//	{
+//	  "created": 1773759941,
+//	  "data": [{"url": "https://..."}]
+//	}
+func transformVideoResponseToOpenAIFormat(grokResponse []byte) []byte {
+	// Check if response is already in OpenAI format (has "data" array)
+	if gjson.GetBytes(grokResponse, "data").Exists() {
+		return grokResponse
+	}
+
+	// Extract fields from Grok format
+	url := gjson.GetBytes(grokResponse, "url").String()
+	if url == "" {
+		return nil
+	}
+
+	createdAt := gjson.GetBytes(grokResponse, "created_at").Int()
+	if createdAt == 0 {
+		createdAt = time.Now().Unix()
+	}
+
+	// Build OpenAI standard format
+	standardResponse := map[string]interface{}{
+		"created": createdAt,
+		"data": []map[string]interface{}{
+			{
+				"url": url,
+			},
+		},
+	}
+
+	result, err := json.Marshal(standardResponse)
+	if err != nil {
+		return nil
+	}
+	return result
 }
 
 func normalizeOpenAIImageSize(size string) string {
@@ -4746,4 +4894,328 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 		// Only store known effort levels for now to keep UI consistent.
 		return ""
 	}
+}
+
+// ForwardImageEdits forwards image edit request to upstream OpenAI-compatible API
+func (s *OpenAIGatewayService) ForwardImageEdits(ctx context.Context, c *gin.Context, account *Account) (*OpenAIForwardResult, error) {
+	start := time.Now()
+
+	// Parse multipart form to extract model and prompt for billing (only once)
+	if err := c.Request.ParseMultipartForm(32 << 20); err != nil { // 32MB max memory
+		return nil, fmt.Errorf("parse multipart form: %w", err)
+	}
+
+	model := c.Request.FormValue("model")
+	prompt := c.Request.FormValue("prompt")
+	nStr := c.Request.FormValue("n")
+	size := c.Request.FormValue("size")
+
+	// Build target URL
+	targetURL := buildOpenAIEndpointURL("https://api.openai.com", "images/edits")
+	if baseURL := strings.TrimSpace(account.GetOpenAIBaseURL()); baseURL != "" {
+		validatedURL, validateErr := s.validateUpstreamBaseURL(baseURL)
+		if validateErr != nil {
+			return nil, validateErr
+		}
+		targetURL = buildOpenAIEndpointURL(validatedURL, "images/edits")
+	}
+
+	// Prepare multipart request body (build once, reuse for retries)
+	var requestBodyBytes bytes.Buffer
+	writer := multipart.NewWriter(&requestBodyBytes)
+
+	// Copy all form fields
+	for key, values := range c.Request.MultipartForm.Value {
+		for _, value := range values {
+			_ = writer.WriteField(key, value)
+		}
+	}
+
+	// Copy all uploaded files
+	for key, fileHeaders := range c.Request.MultipartForm.File {
+		for _, fileHeader := range fileHeaders {
+			file, err := fileHeader.Open()
+			if err != nil {
+				return nil, fmt.Errorf("open uploaded file: %w", err)
+			}
+			part, err := writer.CreateFormFile(key, fileHeader.Filename)
+			if err != nil {
+				file.Close()
+				return nil, fmt.Errorf("create form file: %w", err)
+			}
+			if _, err := io.Copy(part, file); err != nil {
+				file.Close()
+				return nil, fmt.Errorf("copy file content: %w", err)
+			}
+			file.Close()
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("close multipart writer: %w", err)
+	}
+
+	contentType := writer.FormDataContentType()
+	bodyBytes := requestBodyBytes.Bytes()
+
+	// Retry configuration: max 3 attempts with exponential backoff
+	maxRetries := 2 // total 3 attempts (1 initial + 2 retries)
+	retryDelays := []time.Duration{2 * time.Second, 5 * time.Second}
+
+	var lastErr error
+	var resp *http.Response
+	var respBody []byte
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Wait before retry
+			delay := retryDelays[attempt-1]
+			logger.FromContext(ctx).Warn("Retrying image edit request",
+				zap.Int("attempt", attempt+1),
+				zap.Int("max_attempts", maxRetries+1),
+				zap.Float64("delay_seconds", delay.Seconds()),
+				zap.Error(lastErr),
+			)
+			time.Sleep(delay)
+		}
+
+		token, _, err := s.GetAccessToken(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("authorization", "Bearer "+token)
+		req.Header.Set("content-type", contentType)
+
+		// Copy allowed headers
+		for key, values := range c.Request.Header {
+			lowerKey := strings.ToLower(key)
+			if openaiAllowedHeaders[lowerKey] {
+				for _, value := range values {
+					req.Header.Add(key, value)
+				}
+			}
+		}
+
+		proxyURL := ""
+		if account.ProxyID != nil && account.Proxy != nil {
+			proxyURL = account.Proxy.URL()
+		}
+
+		resp, err = s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+		if err != nil {
+			lastErr = fmt.Errorf("upstream request failed: %w", err)
+			if attempt < maxRetries {
+				continue // retry
+			}
+			return nil, lastErr
+		}
+
+		maxBytes := resolveUpstreamResponseReadLimit(s.cfg)
+		respBody, err = readUpstreamResponseBodyLimited(resp.Body, maxBytes)
+		_ = resp.Body.Close()
+
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetries {
+				continue // retry
+			}
+			return nil, lastErr
+		}
+
+		// Check if we should retry based on status code
+		shouldRetry := false
+		if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
+			shouldRetry = true
+			lastErr = fmt.Errorf("upstream returned %d (transient error)", resp.StatusCode)
+		}
+
+		if shouldRetry && attempt < maxRetries {
+			continue // retry
+		}
+
+		// Either success or non-retryable error, break the loop
+		break
+	}
+
+	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	c.Status(resp.StatusCode)
+	_, _ = c.Writer.Write(respBody)
+
+	// Handle non-2xx responses (after retries exhausted)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+			s.handleFailoverSideEffects(ctx, resp, account)
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
+		}
+		return nil, fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody))))
+	}
+
+	// Parse n parameter for image count
+	imageCount := 1
+	if nStr != "" {
+		if n, err := strconv.Atoi(nStr); err == nil && n > 0 {
+			imageCount = n
+		}
+	}
+
+	// Count from response if available
+	if count := countGeneratedImages(respBody); count > 0 {
+		imageCount = count
+	}
+
+	result := &OpenAIForwardResult{
+		RequestID:            strings.TrimSpace(resp.Header.Get("x-request-id")),
+		Model:                model,
+		Stream:               false,
+		Duration:             time.Since(start),
+		EstimatedInputTokens: len(prompt) / 4, // rough estimate
+		ImageCount:           imageCount,
+		ImageSize:            normalizeOpenAIImageSize(size),
+		MediaType:            "image",
+	}
+	return result, nil
+}
+
+// ForwardVideoGeneration forwards video generation request to upstream OpenAI-compatible API
+// Implements retry logic for transient errors (502, 503, 504)
+func (s *OpenAIGatewayService) ForwardVideoGeneration(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+	start := time.Now()
+
+	// Retry configuration: max 3 attempts with exponential backoff
+	maxRetries := 2 // total 3 attempts (1 initial + 2 retries)
+	retryDelays := []time.Duration{2 * time.Second, 5 * time.Second}
+
+	var lastErr error
+	var resp *http.Response
+	var respBody []byte
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Wait before retry
+			delay := retryDelays[attempt-1]
+			logger.FromContext(ctx).Warn("Retrying video generation request",
+				zap.Int("attempt", attempt+1),
+				zap.Int("max_attempts", maxRetries+1),
+				zap.Float64("delay_seconds", delay.Seconds()),
+				zap.Error(lastErr),
+			)
+			time.Sleep(delay)
+		}
+
+		token, _, err := s.GetAccessToken(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+
+		targetURL := buildOpenAIEndpointURL("https://api.openai.com", "videos")
+		if baseURL := strings.TrimSpace(account.GetOpenAIBaseURL()); baseURL != "" {
+			validatedURL, validateErr := s.validateUpstreamBaseURL(baseURL)
+			if validateErr != nil {
+				return nil, validateErr
+			}
+			targetURL = buildOpenAIEndpointURL(validatedURL, "videos")
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("authorization", "Bearer "+token)
+		for key, values := range c.Request.Header {
+			lowerKey := strings.ToLower(key)
+			if openaiAllowedHeaders[lowerKey] {
+				for _, value := range values {
+					req.Header.Add(key, value)
+				}
+			}
+		}
+		req.Header.Set("content-type", "application/json")
+
+		proxyURL := ""
+		if account.ProxyID != nil && account.Proxy != nil {
+			proxyURL = account.Proxy.URL()
+		}
+
+		resp, err = s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+		if err != nil {
+			lastErr = fmt.Errorf("upstream request failed: %w", err)
+			if attempt < maxRetries {
+				continue // retry
+			}
+			return nil, lastErr
+		}
+
+		maxBytes := resolveUpstreamResponseReadLimit(s.cfg)
+		respBody, err = readUpstreamResponseBodyLimited(resp.Body, maxBytes)
+		_ = resp.Body.Close()
+
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetries {
+				continue // retry
+			}
+			return nil, lastErr
+		}
+
+		// Check if we should retry based on status code
+		shouldRetry := false
+		if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
+			shouldRetry = true
+			lastErr = fmt.Errorf("upstream returned %d (transient error)", resp.StatusCode)
+		}
+
+		if shouldRetry && attempt < maxRetries {
+			continue // retry
+		}
+
+		// Either success or non-retryable error, break the loop
+		break
+	}
+
+	// Handle non-2xx responses (after retries exhausted)
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+		c.Status(resp.StatusCode)
+		_, _ = c.Writer.Write(respBody)
+		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+			s.handleFailoverSideEffects(ctx, resp, account)
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
+		}
+		return nil, fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody))))
+	}
+
+	// Extract video metadata from request
+	quality := strings.TrimSpace(gjson.GetBytes(body, "quality").String())
+	if quality == "" {
+		quality = "standard"
+	}
+
+	// Transform Grok video response to OpenAI standard format
+	transformedBody := transformVideoResponseToOpenAIFormat(respBody)
+	if transformedBody == nil {
+		// Fallback to original response if transformation fails
+		logger.FromContext(ctx).Warn("Failed to transform Grok video response, using original format")
+		transformedBody = respBody
+	}
+
+	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+	c.Status(resp.StatusCode)
+	_, _ = c.Writer.Write(transformedBody)
+
+	result := &OpenAIForwardResult{
+		RequestID:            strings.TrimSpace(resp.Header.Get("x-request-id")),
+		Model:                strings.TrimSpace(gjson.GetBytes(body, "model").String()),
+		Stream:               false,
+		Duration:             time.Since(start),
+		EstimatedInputTokens: estimateOpenAIRequestTokens(body),
+		VideoCount:           1,
+		VideoQuality:         quality, // "standard" or "high"
+		MediaType:            "video",
+	}
+	return result, nil
 }

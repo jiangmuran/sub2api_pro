@@ -689,6 +689,33 @@
         <p class="input-hint">{{ t('admin.accounts.expiresAtHint') }}</p>
       </div>
 
+      <!-- 永不暂停开关 -->
+      <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.neverSuspend') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.neverSuspendHint') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="form.never_suspend = !form.never_suspend"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              form.never_suspend ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                form.never_suspend ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <!-- OpenAI 自动透传开关（OAuth/API Key） -->
       <div
         v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'apikey')"
@@ -1476,7 +1503,8 @@ const form = reactive({
   rate_multiplier: 1,
   status: 'active' as 'active' | 'inactive',
   group_ids: [] as number[],
-  expires_at: null as number | null
+  expires_at: null as number | null,
+  never_suspend: false
 })
 
 const statusOptions = computed(() => [
@@ -1510,6 +1538,7 @@ watch(
       form.status = newAccount.status as 'active' | 'inactive'
       form.group_ids = newAccount.group_ids || []
       form.expires_at = newAccount.expires_at ?? null
+      form.never_suspend = newAccount.never_suspend ?? false
 
       // Load intercept warmup requests setting (applies to all account types)
       const credentials = newAccount.credentials as Record<string, unknown> | undefined

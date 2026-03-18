@@ -190,6 +190,11 @@ func TempUnschedulableReason(v string) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldTempUnschedulableReason, v))
 }
 
+// NeverSuspend applies equality check predicate on the "never_suspend" field. It's identical to NeverSuspendEQ.
+func NeverSuspend(v bool) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldNeverSuspend, v))
+}
+
 // SessionWindowStart applies equality check predicate on the "session_window_start" field. It's identical to SessionWindowStartEQ.
 func SessionWindowStart(v time.Time) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldSessionWindowStart, v))
@@ -1568,6 +1573,16 @@ func TempUnschedulableReasonEqualFold(v string) predicate.Account {
 // TempUnschedulableReasonContainsFold applies the ContainsFold predicate on the "temp_unschedulable_reason" field.
 func TempUnschedulableReasonContainsFold(v string) predicate.Account {
 	return predicate.Account(sql.FieldContainsFold(FieldTempUnschedulableReason, v))
+}
+
+// NeverSuspendEQ applies the EQ predicate on the "never_suspend" field.
+func NeverSuspendEQ(v bool) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldNeverSuspend, v))
+}
+
+// NeverSuspendNEQ applies the NEQ predicate on the "never_suspend" field.
+func NeverSuspendNEQ(v bool) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldNeverSuspend, v))
 }
 
 // SessionWindowStartEQ applies the EQ predicate on the "session_window_start" field.

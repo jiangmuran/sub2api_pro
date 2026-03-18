@@ -1594,6 +1594,12 @@ export default {
         storageQuota: 'Storage Quota',
         storageQuotaHint: 'In GB, set the Sora storage quota for users in this group. 0 means use system default'
       },
+      videoPricing: {
+        title: 'General Video Pricing',
+        description: 'Configure per-request pricing for Grok and other video generation models. Leave empty to use default pricing.',
+        standard: 'Standard Video ($)',
+        hd: 'HD Video ($)'
+      },
       claudeCode: {
         title: 'Claude Code Client Restriction',
         tooltip: 'When enabled, this group only allows official Claude Code clients. Non-Claude Code requests will be rejected or fallback to the specified group.',
@@ -2248,6 +2254,8 @@ export default {
       billingRateMultiplierHint: '>=0, 0 means free. Affects account billing only',
       expiresAt: 'Expires At',
       expiresAtHint: 'Leave empty for no expiration',
+      neverSuspend: 'Never Suspend',
+      neverSuspendHint: 'When enabled, this account will not be marked as unavailable on upstream 502/503/504 errors and will continue scheduling',
       higherPriorityFirst: 'Lower value means higher priority',
       mixedScheduling: 'Use in /v1/messages',
       mixedSchedulingHint: 'Enable to participate in Anthropic/Gemini group scheduling',

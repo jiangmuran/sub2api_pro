@@ -52,6 +52,8 @@ type ModelPricing struct {
 	InputPricePerToken         float64 // 每token输入价格 (USD)
 	OutputPricePerToken        float64 // 每token输出价格 (USD)
 	OutputPricePerImage        float64 // 每张图片价格 (USD)
+	VideoPricePerRequest       float64 // 视频生成标准质量单次价格 (USD)
+	VideoPricePerRequestHD     float64 // 视频生成高清质量单次价格 (USD)
 	CacheCreationPricePerToken float64 // 缓存创建每token价格 (USD)
 	CacheReadPricePerToken     float64 // 缓存读取每token价格 (USD)
 	CacheCreation5mPrice       float64 // 5分钟缓存创建每token价格 (USD)
@@ -277,6 +279,8 @@ func (s *BillingService) GetPreviewModelPricing(model string) *ModelPricing {
 				InputPricePerToken:         pricing.InputCostPerToken,
 				OutputPricePerToken:        pricing.OutputCostPerToken,
 				OutputPricePerImage:        pricing.OutputCostPerImage,
+				VideoPricePerRequest:       pricing.VideoPricePerRequest,
+				VideoPricePerRequestHD:     pricing.VideoPricePerRequestHD,
 				CacheCreationPricePerToken: pricing.CacheCreationInputTokenCost,
 				CacheReadPricePerToken:     pricing.CacheReadInputTokenCost,
 				CacheCreation5mPrice:       price5m,
@@ -601,6 +605,12 @@ type ImagePriceConfig struct {
 	PricePerImage *float64 // 单张价格（优先于尺寸价格）
 }
 
+// VideoPriceConfig 通用视频生成计费配置（用于 Grok 等 OpenAI 兼容平台）
+type VideoPriceConfig struct {
+	PricePerRequest   *float64 // 标准质量单次请求价格
+	PricePerRequestHD *float64 // 高清质量单次请求价格
+}
+
 // SoraPriceConfig Sora 按次计费配置
 type SoraPriceConfig struct {
 	ImagePrice360          *float64
@@ -659,6 +669,58 @@ func (s *BillingService) CalculateSoraImageCost(imageSize string, imageCount int
 	}
 
 	totalCost := unitPrice * float64(imageCount)
+	if rateMultiplier <= 0 {
+		rateMultiplier = 1.0
+	}
+	actualCost := totalCost * rateMultiplier
+
+	return &CostBreakdown{
+		TotalCost:  totalCost,
+		ActualCost: actualCost,
+	}
+}
+
+// CalculateVideoCost 计算通用视频生成费用（用于 Grok 等 OpenAI 兼容平台）
+// model: 请求的模型名称
+// quality: 视频质量 "standard" 或 "high"
+// videoCount: 生成的视频数量（通常为 1）
+// groupConfig: 分组配置的价格（可能为 nil，表示使用默认值）
+// rateMultiplier: 费率倍数
+func (s *BillingService) CalculateVideoCost(model string, quality string, videoCount int, groupConfig *VideoPriceConfig, rateMultiplier float64) *CostBreakdown {
+	if videoCount <= 0 {
+		return &CostBreakdown{}
+	}
+
+	unitPrice := 0.0
+	if groupConfig != nil {
+		if quality == "high" && groupConfig.PricePerRequestHD != nil {
+			unitPrice = *groupConfig.PricePerRequestHD
+		} else if groupConfig.PricePerRequest != nil {
+			unitPrice = *groupConfig.PricePerRequest
+		}
+	}
+
+	// 如果未配置价格，尝试从 LiteLLM 获取默认价格
+	if unitPrice <= 0 {
+		// 为 grok-imagine-1.0-video 等模型设置默认价格
+		modelLower := strings.ToLower(model)
+		if strings.Contains(modelLower, "grok") && strings.Contains(modelLower, "video") {
+			if quality == "high" {
+				unitPrice = 0.20 // 默认高清价格
+			} else {
+				unitPrice = 0.10 // 默认标准价格
+			}
+		} else {
+			// 其他模型的兜底价格
+			if quality == "high" {
+				unitPrice = 0.15
+			} else {
+				unitPrice = 0.08
+			}
+		}
+	}
+
+	totalCost := unitPrice * float64(videoCount)
 	if rateMultiplier <= 0 {
 		rateMultiplier = 1.0
 	}

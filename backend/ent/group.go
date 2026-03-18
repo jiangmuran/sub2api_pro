@@ -62,6 +62,10 @@ type Group struct {
 	SoraVideoPricePerRequestHd *float64 `json:"sora_video_price_per_request_hd,omitempty"`
 	// SoraStorageQuotaBytes holds the value of the "sora_storage_quota_bytes" field.
 	SoraStorageQuotaBytes int64 `json:"sora_storage_quota_bytes,omitempty"`
+	// 视频生成单次请求价格（标准质量）
+	VideoPricePerRequest *float64 `json:"video_price_per_request,omitempty"`
+	// 视频生成单次请求价格（高清质量）
+	VideoPricePerRequestHd *float64 `json:"video_price_per_request_hd,omitempty"`
 	// 是否仅允许 Claude Code 客户端
 	ClaudeCodeOnly bool `json:"claude_code_only,omitempty"`
 	// 非 Claude Code 请求降级使用的分组 ID
@@ -188,7 +192,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case group.FieldIsExclusive, group.FieldClaudeCodeOnly, group.FieldModelRoutingEnabled, group.FieldMcpXMLInject:
 			values[i] = new(sql.NullBool)
-		case group.FieldRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldSoraImagePrice360, group.FieldSoraImagePrice540, group.FieldSoraVideoPricePerRequest, group.FieldSoraVideoPricePerRequestHd:
+		case group.FieldRateMultiplier, group.FieldDailyLimitUsd, group.FieldWeeklyLimitUsd, group.FieldMonthlyLimitUsd, group.FieldImagePrice1k, group.FieldImagePrice2k, group.FieldImagePrice4k, group.FieldSoraImagePrice360, group.FieldSoraImagePrice540, group.FieldSoraVideoPricePerRequest, group.FieldSoraVideoPricePerRequestHd, group.FieldVideoPricePerRequest, group.FieldVideoPricePerRequestHd:
 			values[i] = new(sql.NullFloat64)
 		case group.FieldID, group.FieldDefaultValidityDays, group.FieldSoraStorageQuotaBytes, group.FieldFallbackGroupID, group.FieldFallbackGroupIDOnInvalidRequest, group.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
@@ -360,6 +364,20 @@ func (_m *Group) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field sora_storage_quota_bytes", values[i])
 			} else if value.Valid {
 				_m.SoraStorageQuotaBytes = value.Int64
+			}
+		case group.FieldVideoPricePerRequest:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field video_price_per_request", values[i])
+			} else if value.Valid {
+				_m.VideoPricePerRequest = new(float64)
+				*_m.VideoPricePerRequest = value.Float64
+			}
+		case group.FieldVideoPricePerRequestHd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field video_price_per_request_hd", values[i])
+			} else if value.Valid {
+				_m.VideoPricePerRequestHd = new(float64)
+				*_m.VideoPricePerRequestHd = value.Float64
 			}
 		case group.FieldClaudeCodeOnly:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -580,6 +598,16 @@ func (_m *Group) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sora_storage_quota_bytes=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SoraStorageQuotaBytes))
+	builder.WriteString(", ")
+	if v := _m.VideoPricePerRequest; v != nil {
+		builder.WriteString("video_price_per_request=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.VideoPricePerRequestHd; v != nil {
+		builder.WriteString("video_price_per_request_hd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("claude_code_only=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ClaudeCodeOnly))

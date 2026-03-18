@@ -53,6 +53,8 @@ func (r *groupRepository) Create(ctx context.Context, groupIn *service.Group) er
 		SetNillableSoraImagePrice540(groupIn.SoraImagePrice540).
 		SetNillableSoraVideoPricePerRequest(groupIn.SoraVideoPricePerRequest).
 		SetNillableSoraVideoPricePerRequestHd(groupIn.SoraVideoPricePerRequestHD).
+		SetNillableVideoPricePerRequest(groupIn.VideoPricePerRequest).
+		SetNillableVideoPricePerRequestHd(groupIn.VideoPricePerRequestHD).
 		SetDefaultValidityDays(groupIn.DefaultValidityDays).
 		SetClaudeCodeOnly(groupIn.ClaudeCodeOnly).
 		SetNillableFallbackGroupID(groupIn.FallbackGroupID).
@@ -121,6 +123,8 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetNillableSoraImagePrice540(groupIn.SoraImagePrice540).
 		SetNillableSoraVideoPricePerRequest(groupIn.SoraVideoPricePerRequest).
 		SetNillableSoraVideoPricePerRequestHd(groupIn.SoraVideoPricePerRequestHD).
+		SetNillableVideoPricePerRequest(groupIn.VideoPricePerRequest).
+		SetNillableVideoPricePerRequestHd(groupIn.VideoPricePerRequestHD).
 		SetDefaultValidityDays(groupIn.DefaultValidityDays).
 		SetClaudeCodeOnly(groupIn.ClaudeCodeOnly).
 		SetModelRoutingEnabled(groupIn.ModelRoutingEnabled).

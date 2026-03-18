@@ -38,7 +38,8 @@ type Account struct {
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 
-	Schedulable bool
+	Schedulable  bool
+	NeverSuspend bool
 
 	RateLimitedAt    *time.Time
 	RateLimitResetAt *time.Time
@@ -680,6 +681,10 @@ func isKnownOpenAIModelID(model string) bool {
 		"text-moderation-",
 		"whisper-",
 		"tts-",
+		"dall-e-",
+		// Note: "grok-" removed - grok models require explicit model_mapping
+		// as they are only supported by specific accounts with grok API access
+		"sora-", // Sora video models
 	}
 	for _, prefix := range officialPrefixes {
 		if strings.HasPrefix(model, prefix) {

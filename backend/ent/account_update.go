@@ -511,6 +511,20 @@ func (_u *AccountUpdate) ClearTempUnschedulableReason() *AccountUpdate {
 	return _u
 }
 
+// SetNeverSuspend sets the "never_suspend" field.
+func (_u *AccountUpdate) SetNeverSuspend(v bool) *AccountUpdate {
+	_u.mutation.SetNeverSuspend(v)
+	return _u
+}
+
+// SetNillableNeverSuspend sets the "never_suspend" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableNeverSuspend(v *bool) *AccountUpdate {
+	if v != nil {
+		_u.SetNeverSuspend(*v)
+	}
+	return _u
+}
+
 // SetSessionWindowStart sets the "session_window_start" field.
 func (_u *AccountUpdate) SetSessionWindowStart(v time.Time) *AccountUpdate {
 	_u.mutation.SetSessionWindowStart(v)
@@ -879,6 +893,9 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.TempUnschedulableReasonCleared() {
 		_spec.ClearField(account.FieldTempUnschedulableReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.NeverSuspend(); ok {
+		_spec.SetField(account.FieldNeverSuspend, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.SessionWindowStart(); ok {
 		_spec.SetField(account.FieldSessionWindowStart, field.TypeTime, value)
@@ -1529,6 +1546,20 @@ func (_u *AccountUpdateOne) ClearTempUnschedulableReason() *AccountUpdateOne {
 	return _u
 }
 
+// SetNeverSuspend sets the "never_suspend" field.
+func (_u *AccountUpdateOne) SetNeverSuspend(v bool) *AccountUpdateOne {
+	_u.mutation.SetNeverSuspend(v)
+	return _u
+}
+
+// SetNillableNeverSuspend sets the "never_suspend" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableNeverSuspend(v *bool) *AccountUpdateOne {
+	if v != nil {
+		_u.SetNeverSuspend(*v)
+	}
+	return _u
+}
+
 // SetSessionWindowStart sets the "session_window_start" field.
 func (_u *AccountUpdateOne) SetSessionWindowStart(v time.Time) *AccountUpdateOne {
 	_u.mutation.SetSessionWindowStart(v)
@@ -1927,6 +1958,9 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if _u.mutation.TempUnschedulableReasonCleared() {
 		_spec.ClearField(account.FieldTempUnschedulableReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.NeverSuspend(); ok {
+		_spec.SetField(account.FieldNeverSuspend, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.SessionWindowStart(); ok {
 		_spec.SetField(account.FieldSessionWindowStart, field.TypeTime, value)

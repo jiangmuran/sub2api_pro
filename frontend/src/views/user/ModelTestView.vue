@@ -145,7 +145,7 @@
                     <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.standardOutput') }}</th>
                     <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.actualInput') }}</th>
                     <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.actualOutput') }}</th>
-                    <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">{{ t('modelTest.pricing.imagePrice') }}</th>
+                    <th class="px-3 py-2 text-right font-medium text-gray-500 dark:text-gray-400">图片/视频单次价格</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
@@ -194,6 +194,122 @@
               <a v-for="(image, index) in generatedImages" :key="`${image}-${index}`" :href="image" target="_blank" rel="noreferrer" class="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
                 <img :src="image" :alt="`generated-${index}`" class="aspect-square w-full object-cover" />
               </a>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div class="flex-1">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">图片编辑</h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">上传图片并使用 AI 进行编辑</p>
+              </div>
+              <div class="flex w-full gap-3 lg:w-[420px]">
+                <Select v-model="imageEditModel" class="flex-1" :options="imageEditModelOptions" value-key="value" label-key="label" placeholder="选择编辑模型" />
+                <Select v-model="imageEditSize" class="w-[140px]" :options="imageSizeOptions" value-key="value" label-key="label" />
+              </div>
+            </div>
+
+            <div class="mt-4 space-y-3">
+              <div>
+                <label class="input-label">上传图片</label>
+                <input ref="imageEditFileInput" type="file" accept="image/*" class="input" @change="handleImageEditFileChange" />
+              </div>
+              <textarea v-model="imageEditPrompt" rows="3" class="input" placeholder="描述你想对图片做什么修改，例如：提高清晰度、改变风格、添加元素等..." />
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">支持 PNG, JPG, WEBP 格式</div>
+                <button type="button" class="btn btn-primary" :disabled="editingImage || !apiKeyInput.trim() || !imageEditModel || !imageEditPrompt.trim() || !imageEditFile" @click="editImage">
+                  {{ editingImage ? '编辑中...' : '开始编辑' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div v-if="editedImages.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
+                暂无编辑结果
+              </div>
+              <a v-for="(image, index) in editedImages" :key="`edited-${image}-${index}`" :href="image" target="_blank" rel="noreferrer" class="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
+                <img :src="image" :alt="`edited-${index}`" class="aspect-square w-full object-cover" />
+              </a>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div class="flex-1">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">视频生成</h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">使用 AI 生成视频内容</p>
+              </div>
+              <div class="flex w-full gap-3 lg:w-[480px]">
+                <Select v-model="videoModel" class="flex-1" :options="videoModelOptions" value-key="value" label-key="label" placeholder="选择视频模型" />
+                <Select v-model="videoSize" class="w-[140px]" :options="videoSizeOptions" value-key="value" label-key="label" />
+                <Select v-model="videoQuality" class="w-[110px]" :options="videoQualityOptions" value-key="value" label-key="label" />
+              </div>
+            </div>
+
+            <div class="mt-4 space-y-3">
+              <textarea v-model="videoPrompt" rows="3" class="input" placeholder="描述你想生成的视频内容，例如：霓虹雨夜街头，慢镜头追拍..." />
+              
+              <!-- Reference Image Upload -->
+              <div>
+                <label class="input-label">参考图（可选）</label>
+                <div v-if="!videoReferenceImage" class="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    id="video-reference-upload"
+                    @change="handleVideoReferenceImageUpload"
+                  />
+                  <label
+                    for="video-reference-upload"
+                    class="flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-sm text-gray-600 transition hover:border-primary-400 hover:bg-primary-50 dark:border-dark-600 dark:bg-dark-900/30 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:bg-primary-950/30"
+                  >
+                    <Icon name="upload" size="sm" class="mr-2" />
+                    点击上传参考图（支持 JPG/PNG，最大 10MB）
+                  </label>
+                </div>
+                <div v-else class="relative overflow-hidden rounded-xl border border-gray-200 dark:border-dark-600">
+                  <img :src="videoReferenceImage" alt="Reference" class="w-full" />
+                  <button
+                    type="button"
+                    @click="removeVideoReferenceImage"
+                    class="absolute right-2 top-2 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white shadow-lg transition hover:bg-red-600"
+                  >
+                    移除
+                  </button>
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  上传参考图可以让 AI 根据图片内容生成相关视频
+                </p>
+              </div>
+
+              <div class="flex items-center gap-4">
+                <div class="flex-1">
+                  <label class="input-label">视频时长（秒）</label>
+                  <input v-model.number="videoSeconds" type="number" min="6" max="30" class="input" />
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 pt-6">
+                  6-30 秒
+                  <span v-if="videoSeconds > 12" class="block text-yellow-600 dark:text-yellow-400 mt-1">
+                    ⏱️ {{ videoSeconds }}秒视频需要等待 {{ Math.ceil(videoSeconds / 6 * 0.5) }}-{{ Math.ceil(videoSeconds / 6) }} 分钟
+                  </span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-xs text-gray-500 dark:text-gray-400">{{ videoProgress || '等待生成...' }}</div>
+                <button type="button" class="btn btn-primary" :disabled="generatingVideo || !apiKeyInput.trim() || !videoModel || !videoPrompt.trim()" @click="generateVideo">
+                  {{ generatingVideo ? '生成中...' : '生成视频' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <div v-if="generatedVideos.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
+                暂无生成结果
+              </div>
+              <div v-for="(video, index) in generatedVideos" :key="`video-${video}-${index}`" class="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
+                <video :src="video" controls class="w-full" />
+              </div>
             </div>
           </div>
 
@@ -263,6 +379,8 @@ import Icon from '@/components/icons/Icon.vue'
 import { keysAPI, usageAPI, userGroupsAPI } from '@/api'
 import { useAppStore } from '@/stores/app'
 import { useClipboard } from '@/composables/useClipboard'
+import { useImageEditAPI } from '@/composables/useImageEditAPI'
+import { useVideoAPI } from '@/composables/useVideoAPI'
 import type { ApiKey, Group, ModelPricingPreviewItem } from '@/types'
 
 type LiveModel = { id: string; display_name?: string }
@@ -272,12 +390,16 @@ type ImageGenerationResponse = { data?: Array<{ url?: string }> }
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
+const { editImage: editImageAPI } = useImageEditAPI()
+const { generateVideo: generateVideoAPI, progress: videoProgress } = useVideoAPI()
 
 const loadingBootstrap = ref(false)
 const loadingModels = ref(false)
 const generatingKey = ref(false)
 const sending = ref(false)
 const generatingImage = ref(false)
+const editingImage = ref(false)
+const generatingVideo = ref(false)
 
 const apiKeys = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
@@ -295,6 +417,24 @@ const imageModel = ref('')
 const imagePrompt = ref('')
 const imageSize = ref('1024x1024')
 const generatedImages = ref<string[]>([])
+
+// Image edit states
+const imageEditModel = ref('')
+const imageEditPrompt = ref('')
+const imageEditSize = ref('1024x1024')
+const imageEditFile = ref<File | null>(null)
+const imageEditFileInput = ref<HTMLInputElement | null>(null)
+const editedImages = ref<string[]>([])
+
+// Video generation states
+const videoModel = ref('')
+const videoPrompt = ref('')
+const videoSize = ref('1280x720')
+const videoQuality = ref<'standard' | 'high'>('standard')
+const videoSeconds = ref(6)
+const generatedVideos = ref<string[]>([])
+const videoReferenceImage = ref<string | null>(null)
+const videoReferenceImageFile = ref<File | null>(null)
 
 const apiKeyOptions = computed(() => apiKeys.value.map((key) => ({ value: key.id, label: `${key.name} · ${maskKey(key.key)}` })))
 const groupOptions = computed(() => groups.value.map((group) => ({ value: group.id, label: `${group.name} · ${effectiveRateForGroup(group.id).toFixed(2)}x` })))
@@ -314,6 +454,31 @@ const imageSizeOptions = [
   { value: '1024x1024', label: '1024x1024' },
   { value: '1792x1024', label: '1792x1024' },
   { value: '1024x1792', label: '1024x1792' }
+]
+
+const imageEditModelOptions = computed(() =>
+  models.value
+    .filter((model) => /(imagine.*edit|edit|grok.*edit)/i.test(model.id))
+    .map((model) => ({ value: model.id, label: model.display_name || model.id }))
+)
+
+const videoModelOptions = computed(() =>
+  models.value
+    .filter((model) => /(video|sora|grok.*video)/i.test(model.id))
+    .map((model) => ({ value: model.id, label: model.display_name || model.id }))
+)
+
+const videoSizeOptions = [
+  { value: '1280x720', label: '1280x720 (16:9)' },
+  { value: '720x1280', label: '720x1280 (9:16)' },
+  { value: '1792x1024', label: '1792x1024 (宽屏)' },
+  { value: '1024x1792', label: '1024x1792 (竖屏)' },
+  { value: '1024x1024', label: '1024x1024 (方形)' }
+]
+
+const videoQualityOptions = [
+  { value: 'standard', label: '标准 (480p)' },
+  { value: 'high', label: '高清 (720p)' }
 ]
 
 const effectiveRateForGroup = (groupId?: number | null) => {
@@ -339,12 +504,16 @@ const pricedModels = computed(() =>
     const standardInputPrice = pricing?.input_price_per_1m || 0
     const standardOutputPrice = pricing?.output_price_per_1m || 0
     const imagePricePerImage = pricing?.image_price_per_image || 0
+    const videoPricePerRequest = pricing?.video_price_per_request || 0
+    const videoPricePerRequestHD = pricing?.video_price_per_request_hd || 0
     return {
       ...model,
       pricingAvailable: pricing?.pricing_available || false,
       standardInputPrice,
       standardOutputPrice,
       imagePricePerImage,
+      videoPricePerRequest,
+      videoPricePerRequestHD,
       actualInputPrice: standardInputPrice * effectiveRate.value,
       actualOutputPrice: standardOutputPrice * effectiveRate.value
     }
@@ -520,6 +689,103 @@ const generateImage = async () => {
   }
 }
 
+const handleImageEditFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    imageEditFile.value = target.files[0]
+  }
+}
+
+const editImage = async () => {
+  const prompt = imageEditPrompt.value.trim()
+  if (!prompt || !imageEditModel.value || !apiKeyInput.value.trim() || !imageEditFile.value) return
+  editingImage.value = true
+  try {
+    const result = await editImageAPI({
+      apiKey: apiKeyInput.value.trim(),
+      model: imageEditModel.value,
+      prompt,
+      image: imageEditFile.value,
+      n: 1,
+      size: imageEditSize.value,
+      response_format: 'url'
+    })
+    editedImages.value = (result.data || []).map((item) => item.url || '').filter(Boolean)
+    if (editedImages.value.length === 0) {
+      throw new Error('图片编辑失败')
+    }
+    appStore.showSuccess('图片编辑成功')
+  } catch (error: any) {
+    appStore.showError(error.message || '图片编辑失败')
+  } finally {
+    editingImage.value = false
+  }
+}
+
+const handleVideoReferenceImageUpload = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    appStore.showError('请上传图片文件')
+    return
+  }
+
+  // Validate file size (max 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    appStore.showError('图片文件不能超过 10MB')
+    return
+  }
+
+  videoReferenceImageFile.value = file
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    videoReferenceImage.value = e.target?.result as string
+  }
+  reader.readAsDataURL(file)
+}
+
+const removeVideoReferenceImage = () => {
+  videoReferenceImage.value = null
+  videoReferenceImageFile.value = null
+}
+
+const generateVideo = async () => {
+  const prompt = videoPrompt.value.trim()
+  if (!prompt || !videoModel.value || !apiKeyInput.value.trim()) return
+  generatingVideo.value = true
+  try {
+    const params: any = {
+      apiKey: apiKeyInput.value.trim(),
+      model: videoModel.value,
+      prompt,
+      size: videoSize.value,
+      seconds: videoSeconds.value,
+      quality: videoQuality.value
+    }
+
+    // Add reference image if uploaded
+    if (videoReferenceImage.value) {
+      params.image_reference = {
+        image_url: videoReferenceImage.value
+      }
+    }
+
+    const result = await generateVideoAPI(params)
+    generatedVideos.value = (result.data || []).map((item) => item.url || '').filter(Boolean)
+    if (generatedVideos.value.length === 0) {
+      throw new Error('视频生成失败')
+    }
+    appStore.showSuccess('视频生成成功')
+  } catch (error: any) {
+    appStore.showError(error.message || '视频生成失败')
+  } finally {
+    generatingVideo.value = false
+  }
+}
+
 const formatPrice = (value: number, available: boolean) => (available ? `$${value.toFixed(2)}` : '--')
 
 watch(selectedGroupId, () => {
@@ -531,6 +797,18 @@ watch(selectedGroupId, () => {
 watch(imageModelOptions, (options) => {
   if (!imageModel.value && options.length > 0) {
     imageModel.value = options[0].value
+  }
+})
+
+watch(imageEditModelOptions, (options) => {
+  if (!imageEditModel.value && options.length > 0) {
+    imageEditModel.value = options[0].value
+  }
+})
+
+watch(videoModelOptions, (options) => {
+  if (!videoModel.value && options.length > 0) {
+    videoModel.value = options[0].value
   }
 })
 

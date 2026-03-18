@@ -391,6 +391,20 @@ func (_c *AccountCreate) SetNillableTempUnschedulableReason(v *string) *AccountC
 	return _c
 }
 
+// SetNeverSuspend sets the "never_suspend" field.
+func (_c *AccountCreate) SetNeverSuspend(v bool) *AccountCreate {
+	_c.mutation.SetNeverSuspend(v)
+	return _c
+}
+
+// SetNillableNeverSuspend sets the "never_suspend" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableNeverSuspend(v *bool) *AccountCreate {
+	if v != nil {
+		_c.SetNeverSuspend(*v)
+	}
+	return _c
+}
+
 // SetSessionWindowStart sets the "session_window_start" field.
 func (_c *AccountCreate) SetSessionWindowStart(v time.Time) *AccountCreate {
 	_c.mutation.SetSessionWindowStart(v)
@@ -565,6 +579,10 @@ func (_c *AccountCreate) defaults() error {
 		v := account.DefaultSchedulable
 		_c.mutation.SetSchedulable(v)
 	}
+	if _, ok := _c.mutation.NeverSuspend(); !ok {
+		v := account.DefaultNeverSuspend
+		_c.mutation.SetNeverSuspend(v)
+	}
 	return nil
 }
 
@@ -639,6 +657,9 @@ func (_c *AccountCreate) check() error {
 	}
 	if _, ok := _c.mutation.Schedulable(); !ok {
 		return &ValidationError{Name: "schedulable", err: errors.New(`ent: missing required field "Account.schedulable"`)}
+	}
+	if _, ok := _c.mutation.NeverSuspend(); !ok {
+		return &ValidationError{Name: "never_suspend", err: errors.New(`ent: missing required field "Account.never_suspend"`)}
 	}
 	if v, ok := _c.mutation.SessionWindowStatus(); ok {
 		if err := account.SessionWindowStatusValidator(v); err != nil {
@@ -783,6 +804,10 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TempUnschedulableReason(); ok {
 		_spec.SetField(account.FieldTempUnschedulableReason, field.TypeString, value)
 		_node.TempUnschedulableReason = &value
+	}
+	if value, ok := _c.mutation.NeverSuspend(); ok {
+		_spec.SetField(account.FieldNeverSuspend, field.TypeBool, value)
+		_node.NeverSuspend = value
 	}
 	if value, ok := _c.mutation.SessionWindowStart(); ok {
 		_spec.SetField(account.FieldSessionWindowStart, field.TypeTime, value)
@@ -1342,6 +1367,18 @@ func (u *AccountUpsert) UpdateTempUnschedulableReason() *AccountUpsert {
 // ClearTempUnschedulableReason clears the value of the "temp_unschedulable_reason" field.
 func (u *AccountUpsert) ClearTempUnschedulableReason() *AccountUpsert {
 	u.SetNull(account.FieldTempUnschedulableReason)
+	return u
+}
+
+// SetNeverSuspend sets the "never_suspend" field.
+func (u *AccountUpsert) SetNeverSuspend(v bool) *AccountUpsert {
+	u.Set(account.FieldNeverSuspend, v)
+	return u
+}
+
+// UpdateNeverSuspend sets the "never_suspend" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateNeverSuspend() *AccountUpsert {
+	u.SetExcluded(account.FieldNeverSuspend)
 	return u
 }
 
@@ -1959,6 +1996,20 @@ func (u *AccountUpsertOne) UpdateTempUnschedulableReason() *AccountUpsertOne {
 func (u *AccountUpsertOne) ClearTempUnschedulableReason() *AccountUpsertOne {
 	return u.Update(func(s *AccountUpsert) {
 		s.ClearTempUnschedulableReason()
+	})
+}
+
+// SetNeverSuspend sets the "never_suspend" field.
+func (u *AccountUpsertOne) SetNeverSuspend(v bool) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetNeverSuspend(v)
+	})
+}
+
+// UpdateNeverSuspend sets the "never_suspend" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateNeverSuspend() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateNeverSuspend()
 	})
 }
 
@@ -2751,6 +2802,20 @@ func (u *AccountUpsertBulk) UpdateTempUnschedulableReason() *AccountUpsertBulk {
 func (u *AccountUpsertBulk) ClearTempUnschedulableReason() *AccountUpsertBulk {
 	return u.Update(func(s *AccountUpsert) {
 		s.ClearTempUnschedulableReason()
+	})
+}
+
+// SetNeverSuspend sets the "never_suspend" field.
+func (u *AccountUpsertBulk) SetNeverSuspend(v bool) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetNeverSuspend(v)
+	})
+}
+
+// UpdateNeverSuspend sets the "never_suspend" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateNeverSuspend() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateNeverSuspend()
 	})
 }
 

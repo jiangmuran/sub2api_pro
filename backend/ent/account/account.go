@@ -73,6 +73,8 @@ const (
 	FieldTempUnschedulableUntil = "temp_unschedulable_until"
 	// FieldTempUnschedulableReason holds the string denoting the temp_unschedulable_reason field in the database.
 	FieldTempUnschedulableReason = "temp_unschedulable_reason"
+	// FieldNeverSuspend holds the string denoting the never_suspend field in the database.
+	FieldNeverSuspend = "never_suspend"
 	// FieldSessionWindowStart holds the string denoting the session_window_start field in the database.
 	FieldSessionWindowStart = "session_window_start"
 	// FieldSessionWindowEnd holds the string denoting the session_window_end field in the database.
@@ -149,6 +151,7 @@ var Columns = []string{
 	FieldOverloadUntil,
 	FieldTempUnschedulableUntil,
 	FieldTempUnschedulableReason,
+	FieldNeverSuspend,
 	FieldSessionWindowStart,
 	FieldSessionWindowEnd,
 	FieldSessionWindowStatus,
@@ -214,6 +217,8 @@ var (
 	DefaultAutoPauseOnExpired bool
 	// DefaultSchedulable holds the default value on creation for the "schedulable" field.
 	DefaultSchedulable bool
+	// DefaultNeverSuspend holds the default value on creation for the "never_suspend" field.
+	DefaultNeverSuspend bool
 	// SessionWindowStatusValidator is a validator for the "session_window_status" field. It is called by the builders before save.
 	SessionWindowStatusValidator func(string) error
 )
@@ -359,6 +364,11 @@ func ByTempUnschedulableUntil(opts ...sql.OrderTermOption) OrderOption {
 // ByTempUnschedulableReason orders the results by the temp_unschedulable_reason field.
 func ByTempUnschedulableReason(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTempUnschedulableReason, opts...).ToFunc()
+}
+
+// ByNeverSuspend orders the results by the never_suspend field.
+func ByNeverSuspend(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNeverSuspend, opts...).ToFunc()
 }
 
 // BySessionWindowStart orders the results by the session_window_start field.

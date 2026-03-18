@@ -82,10 +82,9 @@ func (c *CodexToolCorrector) CorrectToolCallsInSSEBytes(data []byte) ([]byte, bo
 	if !mayContainToolCallPayload(data) {
 		return data, false
 	}
-	if !gjson.ValidBytes(data) {
-		// 不是有效 JSON，直接返回原数据
-		return data, false
-	}
+	// NOTE: 放宽 JSON 验证以兼容 Grok 等模型的分片 SSE chunk。
+	// gjson 对不完整 JSON 有良好的容错性，可以从部分数据中提取有效字段。
+	// 如果数据既不是完整 JSON 也不包含任何可解析的工具调用字段，后续 gjson.GetBytes 会返回空结果，不会造成副作用。
 
 	updated := data
 	corrected := false
@@ -142,18 +141,41 @@ func mayContainToolCallPayload(data []byte) bool {
 // correctToolCallsArrayAtPath 修正指定路径下 tool_calls 数组中的工具名称。
 func (c *CodexToolCorrector) correctToolCallsArrayAtPath(data []byte, toolCallsPath string) ([]byte, bool) {
 	count := int(gjson.GetBytes(data, toolCallsPath+".#").Int())
+
+	// 如果无法获取数组长度（不完整 JSON），尝试固定索引（兼容 Grok 等模型的分片 SSE）
+	// 大多数流式响应单个 chunk 包含的 tool_call 数量有限，尝试前 10 个索引即可覆盖绝大部分场景
+	maxAttempts := count
 	if count <= 0 {
-		return data, false
+		maxAttempts = 10
 	}
+
 	updated := data
 	corrected := false
-	for i := 0; i < count; i++ {
+	foundAny := false
+
+	for i := 0; i < maxAttempts; i++ {
 		functionPath := toolCallsPath + "." + strconv.Itoa(i) + ".function"
+		// 先检查该索引是否存在
+		if !gjson.GetBytes(updated, functionPath+".name").Exists() {
+			// 如果已知数组长度且当前索引不存在，可以提前退出
+			if count > 0 {
+				break
+			}
+			// 对于不完整 JSON，继续尝试下一个索引（允许跳跃）
+			continue
+		}
+		foundAny = true
 		if next, changed := c.correctFunctionAtPath(updated, functionPath); changed {
 			updated = next
 			corrected = true
 		}
 	}
+
+	// 如果既没找到任何元素，也没有有效数组长度，说明路径不存在
+	if !foundAny && count <= 0 {
+		return data, false
+	}
+
 	return updated, corrected
 }
 

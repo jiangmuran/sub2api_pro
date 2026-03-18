@@ -36,7 +36,9 @@ type LiteLLMModelPricing struct {
 	LiteLLMProvider                     string  `json:"litellm_provider"`
 	Mode                                string  `json:"mode"`
 	SupportsPromptCaching               bool    `json:"supports_prompt_caching"`
-	OutputCostPerImage                  float64 `json:"output_cost_per_image"` // 图片生成模型每张图片价格
+	OutputCostPerImage                  float64 `json:"output_cost_per_image"`      // 图片生成模型每张图片价格
+	VideoPricePerRequest                float64 `json:"video_price_per_request"`    // 视频生成标准质量单次价格
+	VideoPricePerRequestHD              float64 `json:"video_price_per_request_hd"` // 视频生成高清质量单次价格
 }
 
 // PricingRemoteClient 远程价格数据获取接口
@@ -56,6 +58,8 @@ type LiteLLMRawEntry struct {
 	Mode                                string   `json:"mode"`
 	SupportsPromptCaching               bool     `json:"supports_prompt_caching"`
 	OutputCostPerImage                  *float64 `json:"output_cost_per_image"`
+	VideoPricePerRequest                *float64 `json:"video_price_per_request"`
+	VideoPricePerRequestHD              *float64 `json:"video_price_per_request_hd"`
 }
 
 // PricingService 动态价格服务
@@ -329,6 +333,12 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		}
 		if entry.OutputCostPerImage != nil {
 			pricing.OutputCostPerImage = *entry.OutputCostPerImage
+		}
+		if entry.VideoPricePerRequest != nil {
+			pricing.VideoPricePerRequest = *entry.VideoPricePerRequest
+		}
+		if entry.VideoPricePerRequestHD != nil {
+			pricing.VideoPricePerRequestHD = *entry.VideoPricePerRequestHD
 		}
 
 		result[modelName] = pricing

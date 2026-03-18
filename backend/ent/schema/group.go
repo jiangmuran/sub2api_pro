@@ -109,6 +109,18 @@ func (Group) Fields() []ent.Field {
 		field.Int64("sora_storage_quota_bytes").
 			Default(0),
 
+		// 通用视频生成计费配置（用于 Grok 等 OpenAI 兼容平台）
+		field.Float("video_price_per_request").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Comment("视频生成单次请求价格（标准质量）"),
+		field.Float("video_price_per_request_hd").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Comment("视频生成单次请求价格（高清质量）"),
+
 		// Claude Code 客户端限制 (added by migration 029)
 		field.Bool("claude_code_only").
 			Default(false).

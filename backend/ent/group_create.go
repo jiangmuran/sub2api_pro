@@ -328,6 +328,34 @@ func (_c *GroupCreate) SetNillableSoraStorageQuotaBytes(v *int64) *GroupCreate {
 	return _c
 }
 
+// SetVideoPricePerRequest sets the "video_price_per_request" field.
+func (_c *GroupCreate) SetVideoPricePerRequest(v float64) *GroupCreate {
+	_c.mutation.SetVideoPricePerRequest(v)
+	return _c
+}
+
+// SetNillableVideoPricePerRequest sets the "video_price_per_request" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableVideoPricePerRequest(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetVideoPricePerRequest(*v)
+	}
+	return _c
+}
+
+// SetVideoPricePerRequestHd sets the "video_price_per_request_hd" field.
+func (_c *GroupCreate) SetVideoPricePerRequestHd(v float64) *GroupCreate {
+	_c.mutation.SetVideoPricePerRequestHd(v)
+	return _c
+}
+
+// SetNillableVideoPricePerRequestHd sets the "video_price_per_request_hd" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableVideoPricePerRequestHd(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetVideoPricePerRequestHd(*v)
+	}
+	return _c
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (_c *GroupCreate) SetClaudeCodeOnly(v bool) *GroupCreate {
 	_c.mutation.SetClaudeCodeOnly(v)
@@ -797,6 +825,14 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SoraStorageQuotaBytes(); ok {
 		_spec.SetField(group.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
 		_node.SoraStorageQuotaBytes = value
+	}
+	if value, ok := _c.mutation.VideoPricePerRequest(); ok {
+		_spec.SetField(group.FieldVideoPricePerRequest, field.TypeFloat64, value)
+		_node.VideoPricePerRequest = &value
+	}
+	if value, ok := _c.mutation.VideoPricePerRequestHd(); ok {
+		_spec.SetField(group.FieldVideoPricePerRequestHd, field.TypeFloat64, value)
+		_node.VideoPricePerRequestHd = &value
 	}
 	if value, ok := _c.mutation.ClaudeCodeOnly(); ok {
 		_spec.SetField(group.FieldClaudeCodeOnly, field.TypeBool, value)
@@ -1385,6 +1421,54 @@ func (u *GroupUpsert) UpdateSoraStorageQuotaBytes() *GroupUpsert {
 // AddSoraStorageQuotaBytes adds v to the "sora_storage_quota_bytes" field.
 func (u *GroupUpsert) AddSoraStorageQuotaBytes(v int64) *GroupUpsert {
 	u.Add(group.FieldSoraStorageQuotaBytes, v)
+	return u
+}
+
+// SetVideoPricePerRequest sets the "video_price_per_request" field.
+func (u *GroupUpsert) SetVideoPricePerRequest(v float64) *GroupUpsert {
+	u.Set(group.FieldVideoPricePerRequest, v)
+	return u
+}
+
+// UpdateVideoPricePerRequest sets the "video_price_per_request" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateVideoPricePerRequest() *GroupUpsert {
+	u.SetExcluded(group.FieldVideoPricePerRequest)
+	return u
+}
+
+// AddVideoPricePerRequest adds v to the "video_price_per_request" field.
+func (u *GroupUpsert) AddVideoPricePerRequest(v float64) *GroupUpsert {
+	u.Add(group.FieldVideoPricePerRequest, v)
+	return u
+}
+
+// ClearVideoPricePerRequest clears the value of the "video_price_per_request" field.
+func (u *GroupUpsert) ClearVideoPricePerRequest() *GroupUpsert {
+	u.SetNull(group.FieldVideoPricePerRequest)
+	return u
+}
+
+// SetVideoPricePerRequestHd sets the "video_price_per_request_hd" field.
+func (u *GroupUpsert) SetVideoPricePerRequestHd(v float64) *GroupUpsert {
+	u.Set(group.FieldVideoPricePerRequestHd, v)
+	return u
+}
+
+// UpdateVideoPricePerRequestHd sets the "video_price_per_request_hd" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateVideoPricePerRequestHd() *GroupUpsert {
+	u.SetExcluded(group.FieldVideoPricePerRequestHd)
+	return u
+}
+
+// AddVideoPricePerRequestHd adds v to the "video_price_per_request_hd" field.
+func (u *GroupUpsert) AddVideoPricePerRequestHd(v float64) *GroupUpsert {
+	u.Add(group.FieldVideoPricePerRequestHd, v)
+	return u
+}
+
+// ClearVideoPricePerRequestHd clears the value of the "video_price_per_request_hd" field.
+func (u *GroupUpsert) ClearVideoPricePerRequestHd() *GroupUpsert {
+	u.SetNull(group.FieldVideoPricePerRequestHd)
 	return u
 }
 
@@ -2031,6 +2115,62 @@ func (u *GroupUpsertOne) AddSoraStorageQuotaBytes(v int64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateSoraStorageQuotaBytes() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSoraStorageQuotaBytes()
+	})
+}
+
+// SetVideoPricePerRequest sets the "video_price_per_request" field.
+func (u *GroupUpsertOne) SetVideoPricePerRequest(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetVideoPricePerRequest(v)
+	})
+}
+
+// AddVideoPricePerRequest adds v to the "video_price_per_request" field.
+func (u *GroupUpsertOne) AddVideoPricePerRequest(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddVideoPricePerRequest(v)
+	})
+}
+
+// UpdateVideoPricePerRequest sets the "video_price_per_request" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateVideoPricePerRequest() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateVideoPricePerRequest()
+	})
+}
+
+// ClearVideoPricePerRequest clears the value of the "video_price_per_request" field.
+func (u *GroupUpsertOne) ClearVideoPricePerRequest() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearVideoPricePerRequest()
+	})
+}
+
+// SetVideoPricePerRequestHd sets the "video_price_per_request_hd" field.
+func (u *GroupUpsertOne) SetVideoPricePerRequestHd(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetVideoPricePerRequestHd(v)
+	})
+}
+
+// AddVideoPricePerRequestHd adds v to the "video_price_per_request_hd" field.
+func (u *GroupUpsertOne) AddVideoPricePerRequestHd(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddVideoPricePerRequestHd(v)
+	})
+}
+
+// UpdateVideoPricePerRequestHd sets the "video_price_per_request_hd" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateVideoPricePerRequestHd() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateVideoPricePerRequestHd()
+	})
+}
+
+// ClearVideoPricePerRequestHd clears the value of the "video_price_per_request_hd" field.
+func (u *GroupUpsertOne) ClearVideoPricePerRequestHd() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearVideoPricePerRequestHd()
 	})
 }
 
@@ -2865,6 +3005,62 @@ func (u *GroupUpsertBulk) AddSoraStorageQuotaBytes(v int64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateSoraStorageQuotaBytes() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateSoraStorageQuotaBytes()
+	})
+}
+
+// SetVideoPricePerRequest sets the "video_price_per_request" field.
+func (u *GroupUpsertBulk) SetVideoPricePerRequest(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetVideoPricePerRequest(v)
+	})
+}
+
+// AddVideoPricePerRequest adds v to the "video_price_per_request" field.
+func (u *GroupUpsertBulk) AddVideoPricePerRequest(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddVideoPricePerRequest(v)
+	})
+}
+
+// UpdateVideoPricePerRequest sets the "video_price_per_request" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateVideoPricePerRequest() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateVideoPricePerRequest()
+	})
+}
+
+// ClearVideoPricePerRequest clears the value of the "video_price_per_request" field.
+func (u *GroupUpsertBulk) ClearVideoPricePerRequest() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearVideoPricePerRequest()
+	})
+}
+
+// SetVideoPricePerRequestHd sets the "video_price_per_request_hd" field.
+func (u *GroupUpsertBulk) SetVideoPricePerRequestHd(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetVideoPricePerRequestHd(v)
+	})
+}
+
+// AddVideoPricePerRequestHd adds v to the "video_price_per_request_hd" field.
+func (u *GroupUpsertBulk) AddVideoPricePerRequestHd(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddVideoPricePerRequestHd(v)
+	})
+}
+
+// UpdateVideoPricePerRequestHd sets the "video_price_per_request_hd" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateVideoPricePerRequestHd() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateVideoPricePerRequestHd()
+	})
+}
+
+// ClearVideoPricePerRequestHd clears the value of the "video_price_per_request_hd" field.
+func (u *GroupUpsertBulk) ClearVideoPricePerRequestHd() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearVideoPricePerRequestHd()
 	})
 }
 

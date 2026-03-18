@@ -35,6 +35,10 @@ type Group struct {
 	// Sora 存储配额
 	SoraStorageQuotaBytes int64
 
+	// 通用视频生成计费配置（用于 Grok 等 OpenAI 兼容平台）
+	VideoPricePerRequest   *float64
+	VideoPricePerRequestHD *float64
+
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool
 	FallbackGroupID *int64

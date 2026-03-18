@@ -200,6 +200,14 @@ func (Account) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 
+		// never_suspend: 永不暂停标记
+		// 当设置为 true 时，该账号不会因为上游错误（502/503/504等）被标记为不可用
+		// 适用于稳定的、高优先级的账号，确保它们始终保持在调度池中
+		// 注意：即使开启此选项，账号仍会响应 rate limit 等正常的限流机制
+		field.Bool("never_suspend").
+			Default(false).
+			Comment("If true, account will never be suspended/marked unavailable on upstream errors"),
+
 		// session_window_*: 会话窗口相关字段
 		// 用于管理某些需要会话时间窗口的 API（如 Claude Pro）
 		field.Time("session_window_start").

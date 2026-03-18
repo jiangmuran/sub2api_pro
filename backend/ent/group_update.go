@@ -484,6 +484,60 @@ func (_u *GroupUpdate) AddSoraStorageQuotaBytes(v int64) *GroupUpdate {
 	return _u
 }
 
+// SetVideoPricePerRequest sets the "video_price_per_request" field.
+func (_u *GroupUpdate) SetVideoPricePerRequest(v float64) *GroupUpdate {
+	_u.mutation.ResetVideoPricePerRequest()
+	_u.mutation.SetVideoPricePerRequest(v)
+	return _u
+}
+
+// SetNillableVideoPricePerRequest sets the "video_price_per_request" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableVideoPricePerRequest(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetVideoPricePerRequest(*v)
+	}
+	return _u
+}
+
+// AddVideoPricePerRequest adds value to the "video_price_per_request" field.
+func (_u *GroupUpdate) AddVideoPricePerRequest(v float64) *GroupUpdate {
+	_u.mutation.AddVideoPricePerRequest(v)
+	return _u
+}
+
+// ClearVideoPricePerRequest clears the value of the "video_price_per_request" field.
+func (_u *GroupUpdate) ClearVideoPricePerRequest() *GroupUpdate {
+	_u.mutation.ClearVideoPricePerRequest()
+	return _u
+}
+
+// SetVideoPricePerRequestHd sets the "video_price_per_request_hd" field.
+func (_u *GroupUpdate) SetVideoPricePerRequestHd(v float64) *GroupUpdate {
+	_u.mutation.ResetVideoPricePerRequestHd()
+	_u.mutation.SetVideoPricePerRequestHd(v)
+	return _u
+}
+
+// SetNillableVideoPricePerRequestHd sets the "video_price_per_request_hd" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableVideoPricePerRequestHd(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetVideoPricePerRequestHd(*v)
+	}
+	return _u
+}
+
+// AddVideoPricePerRequestHd adds value to the "video_price_per_request_hd" field.
+func (_u *GroupUpdate) AddVideoPricePerRequestHd(v float64) *GroupUpdate {
+	_u.mutation.AddVideoPricePerRequestHd(v)
+	return _u
+}
+
+// ClearVideoPricePerRequestHd clears the value of the "video_price_per_request_hd" field.
+func (_u *GroupUpdate) ClearVideoPricePerRequestHd() *GroupUpdate {
+	_u.mutation.ClearVideoPricePerRequestHd()
+	return _u
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (_u *GroupUpdate) SetClaudeCodeOnly(v bool) *GroupUpdate {
 	_u.mutation.SetClaudeCodeOnly(v)
@@ -1062,6 +1116,24 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedSoraStorageQuotaBytes(); ok {
 		_spec.AddField(group.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.VideoPricePerRequest(); ok {
+		_spec.SetField(group.FieldVideoPricePerRequest, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedVideoPricePerRequest(); ok {
+		_spec.AddField(group.FieldVideoPricePerRequest, field.TypeFloat64, value)
+	}
+	if _u.mutation.VideoPricePerRequestCleared() {
+		_spec.ClearField(group.FieldVideoPricePerRequest, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.VideoPricePerRequestHd(); ok {
+		_spec.SetField(group.FieldVideoPricePerRequestHd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedVideoPricePerRequestHd(); ok {
+		_spec.AddField(group.FieldVideoPricePerRequestHd, field.TypeFloat64, value)
+	}
+	if _u.mutation.VideoPricePerRequestHdCleared() {
+		_spec.ClearField(group.FieldVideoPricePerRequestHd, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.ClaudeCodeOnly(); ok {
 		_spec.SetField(group.FieldClaudeCodeOnly, field.TypeBool, value)
@@ -1873,6 +1945,60 @@ func (_u *GroupUpdateOne) AddSoraStorageQuotaBytes(v int64) *GroupUpdateOne {
 	return _u
 }
 
+// SetVideoPricePerRequest sets the "video_price_per_request" field.
+func (_u *GroupUpdateOne) SetVideoPricePerRequest(v float64) *GroupUpdateOne {
+	_u.mutation.ResetVideoPricePerRequest()
+	_u.mutation.SetVideoPricePerRequest(v)
+	return _u
+}
+
+// SetNillableVideoPricePerRequest sets the "video_price_per_request" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableVideoPricePerRequest(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetVideoPricePerRequest(*v)
+	}
+	return _u
+}
+
+// AddVideoPricePerRequest adds value to the "video_price_per_request" field.
+func (_u *GroupUpdateOne) AddVideoPricePerRequest(v float64) *GroupUpdateOne {
+	_u.mutation.AddVideoPricePerRequest(v)
+	return _u
+}
+
+// ClearVideoPricePerRequest clears the value of the "video_price_per_request" field.
+func (_u *GroupUpdateOne) ClearVideoPricePerRequest() *GroupUpdateOne {
+	_u.mutation.ClearVideoPricePerRequest()
+	return _u
+}
+
+// SetVideoPricePerRequestHd sets the "video_price_per_request_hd" field.
+func (_u *GroupUpdateOne) SetVideoPricePerRequestHd(v float64) *GroupUpdateOne {
+	_u.mutation.ResetVideoPricePerRequestHd()
+	_u.mutation.SetVideoPricePerRequestHd(v)
+	return _u
+}
+
+// SetNillableVideoPricePerRequestHd sets the "video_price_per_request_hd" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableVideoPricePerRequestHd(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetVideoPricePerRequestHd(*v)
+	}
+	return _u
+}
+
+// AddVideoPricePerRequestHd adds value to the "video_price_per_request_hd" field.
+func (_u *GroupUpdateOne) AddVideoPricePerRequestHd(v float64) *GroupUpdateOne {
+	_u.mutation.AddVideoPricePerRequestHd(v)
+	return _u
+}
+
+// ClearVideoPricePerRequestHd clears the value of the "video_price_per_request_hd" field.
+func (_u *GroupUpdateOne) ClearVideoPricePerRequestHd() *GroupUpdateOne {
+	_u.mutation.ClearVideoPricePerRequestHd()
+	return _u
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (_u *GroupUpdateOne) SetClaudeCodeOnly(v bool) *GroupUpdateOne {
 	_u.mutation.SetClaudeCodeOnly(v)
@@ -2481,6 +2607,24 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedSoraStorageQuotaBytes(); ok {
 		_spec.AddField(group.FieldSoraStorageQuotaBytes, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.VideoPricePerRequest(); ok {
+		_spec.SetField(group.FieldVideoPricePerRequest, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedVideoPricePerRequest(); ok {
+		_spec.AddField(group.FieldVideoPricePerRequest, field.TypeFloat64, value)
+	}
+	if _u.mutation.VideoPricePerRequestCleared() {
+		_spec.ClearField(group.FieldVideoPricePerRequest, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.VideoPricePerRequestHd(); ok {
+		_spec.SetField(group.FieldVideoPricePerRequestHd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedVideoPricePerRequestHd(); ok {
+		_spec.AddField(group.FieldVideoPricePerRequestHd, field.TypeFloat64, value)
+	}
+	if _u.mutation.VideoPricePerRequestHdCleared() {
+		_spec.ClearField(group.FieldVideoPricePerRequestHd, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.ClaudeCodeOnly(); ok {
 		_spec.SetField(group.FieldClaudeCodeOnly, field.TypeBool, value)

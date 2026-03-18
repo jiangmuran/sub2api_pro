@@ -1708,6 +1708,12 @@ export default {
         storageQuota: '存储配额',
         storageQuotaHint: '单位 GB，设置该分组用户的 Sora 存储配额上限，0 表示使用系统默认'
       },
+      videoPricing: {
+        title: '通用视频定价',
+        description: '配置 Grok 等视频生成模型的按次收费价格，留空则使用默认价格',
+        standard: '标准视频 ($)',
+        hd: '高清视频 ($)'
+      },
       claudeCode: {
         title: 'Claude Code 客户端限制',
         tooltip:
@@ -2414,6 +2420,8 @@ export default {
       billingRateMultiplierHint: '>=0，0 表示该账号计费为 0；仅影响账号计费口径',
       expiresAt: '过期时间',
       expiresAtHint: '留空表示不过期',
+      neverSuspend: '永不暂停',
+      neverSuspendHint: '开启后，上游返回 502/503/504 等错误时，该账号不会被标记为不可用，继续参与调度',
       higherPriorityFirst: '数值越小优先级越高',
       mixedScheduling: '在 /v1/messages 中使用',
       mixedSchedulingHint: '启用后可参与 Anthropic/Gemini 分组的调度',

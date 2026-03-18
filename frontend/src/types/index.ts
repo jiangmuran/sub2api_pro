@@ -381,6 +381,9 @@ export interface Group {
   sora_video_price_per_request_hd: number | null
   // Sora 存储配额（字节）
   sora_storage_quota_bytes: number
+  // 通用视频定价（Grok 等）
+  video_price_per_request: number | null
+  video_price_per_request_hd: number | null
   // Claude Code 客户端限制
   claude_code_only: boolean
   fallback_group_id: number | null
@@ -467,6 +470,8 @@ export interface ModelPricingPreviewItem {
   input_price_per_1m: number
   output_price_per_1m: number
   image_price_per_image: number
+  video_price_per_request: number
+  video_price_per_request_hd: number
   pricing_available: boolean
 }
 
@@ -712,6 +717,7 @@ export interface Account {
   overload_until: string | null
   temp_unschedulable_until: string | null
   temp_unschedulable_reason: string | null
+  never_suspend: boolean
 
   // Session window fields (5-hour window)
   session_window_start: string | null

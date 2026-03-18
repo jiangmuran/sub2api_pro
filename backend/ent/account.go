@@ -77,6 +77,8 @@ type Account struct {
 	TempUnschedulableUntil *time.Time `json:"temp_unschedulable_until,omitempty"`
 	// TempUnschedulableReason holds the value of the "temp_unschedulable_reason" field.
 	TempUnschedulableReason *string `json:"temp_unschedulable_reason,omitempty"`
+	// If true, account will never be suspended/marked unavailable on upstream errors
+	NeverSuspend bool `json:"never_suspend,omitempty"`
 	// SessionWindowStart holds the value of the "session_window_start" field.
 	SessionWindowStart *time.Time `json:"session_window_start,omitempty"`
 	// SessionWindowEnd holds the value of the "session_window_end" field.
@@ -149,7 +151,7 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case account.FieldCredentials, account.FieldExtra:
 			values[i] = new([]byte)
-		case account.FieldAutoPauseOnExpired, account.FieldSchedulable:
+		case account.FieldAutoPauseOnExpired, account.FieldSchedulable, account.FieldNeverSuspend:
 			values[i] = new(sql.NullBool)
 		case account.FieldRateMultiplier:
 			values[i] = new(sql.NullFloat64)
@@ -372,6 +374,12 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 				_m.TempUnschedulableReason = new(string)
 				*_m.TempUnschedulableReason = value.String
 			}
+		case account.FieldNeverSuspend:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field never_suspend", values[i])
+			} else if value.Valid {
+				_m.NeverSuspend = value.Bool
+			}
 		case account.FieldSessionWindowStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field session_window_start", values[i])
@@ -563,6 +571,9 @@ func (_m *Account) String() string {
 		builder.WriteString("temp_unschedulable_reason=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("never_suspend=")
+	builder.WriteString(fmt.Sprintf("%v", _m.NeverSuspend))
 	builder.WriteString(", ")
 	if v := _m.SessionWindowStart; v != nil {
 		builder.WriteString("session_window_start=")

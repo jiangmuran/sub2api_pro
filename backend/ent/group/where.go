@@ -165,6 +165,16 @@ func SoraStorageQuotaBytes(v int64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldSoraStorageQuotaBytes, v))
 }
 
+// VideoPricePerRequest applies equality check predicate on the "video_price_per_request" field. It's identical to VideoPricePerRequestEQ.
+func VideoPricePerRequest(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldVideoPricePerRequest, v))
+}
+
+// VideoPricePerRequestHd applies equality check predicate on the "video_price_per_request_hd" field. It's identical to VideoPricePerRequestHdEQ.
+func VideoPricePerRequestHd(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldVideoPricePerRequestHd, v))
+}
+
 // ClaudeCodeOnly applies equality check predicate on the "claude_code_only" field. It's identical to ClaudeCodeOnlyEQ.
 func ClaudeCodeOnly(v bool) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldClaudeCodeOnly, v))
@@ -1288,6 +1298,106 @@ func SoraStorageQuotaBytesLT(v int64) predicate.Group {
 // SoraStorageQuotaBytesLTE applies the LTE predicate on the "sora_storage_quota_bytes" field.
 func SoraStorageQuotaBytesLTE(v int64) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldSoraStorageQuotaBytes, v))
+}
+
+// VideoPricePerRequestEQ applies the EQ predicate on the "video_price_per_request" field.
+func VideoPricePerRequestEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldVideoPricePerRequest, v))
+}
+
+// VideoPricePerRequestNEQ applies the NEQ predicate on the "video_price_per_request" field.
+func VideoPricePerRequestNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldVideoPricePerRequest, v))
+}
+
+// VideoPricePerRequestIn applies the In predicate on the "video_price_per_request" field.
+func VideoPricePerRequestIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldVideoPricePerRequest, vs...))
+}
+
+// VideoPricePerRequestNotIn applies the NotIn predicate on the "video_price_per_request" field.
+func VideoPricePerRequestNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldVideoPricePerRequest, vs...))
+}
+
+// VideoPricePerRequestGT applies the GT predicate on the "video_price_per_request" field.
+func VideoPricePerRequestGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldVideoPricePerRequest, v))
+}
+
+// VideoPricePerRequestGTE applies the GTE predicate on the "video_price_per_request" field.
+func VideoPricePerRequestGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldVideoPricePerRequest, v))
+}
+
+// VideoPricePerRequestLT applies the LT predicate on the "video_price_per_request" field.
+func VideoPricePerRequestLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldVideoPricePerRequest, v))
+}
+
+// VideoPricePerRequestLTE applies the LTE predicate on the "video_price_per_request" field.
+func VideoPricePerRequestLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldVideoPricePerRequest, v))
+}
+
+// VideoPricePerRequestIsNil applies the IsNil predicate on the "video_price_per_request" field.
+func VideoPricePerRequestIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldVideoPricePerRequest))
+}
+
+// VideoPricePerRequestNotNil applies the NotNil predicate on the "video_price_per_request" field.
+func VideoPricePerRequestNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldVideoPricePerRequest))
+}
+
+// VideoPricePerRequestHdEQ applies the EQ predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldVideoPricePerRequestHd, v))
+}
+
+// VideoPricePerRequestHdNEQ applies the NEQ predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldVideoPricePerRequestHd, v))
+}
+
+// VideoPricePerRequestHdIn applies the In predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldVideoPricePerRequestHd, vs...))
+}
+
+// VideoPricePerRequestHdNotIn applies the NotIn predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldVideoPricePerRequestHd, vs...))
+}
+
+// VideoPricePerRequestHdGT applies the GT predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldVideoPricePerRequestHd, v))
+}
+
+// VideoPricePerRequestHdGTE applies the GTE predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldVideoPricePerRequestHd, v))
+}
+
+// VideoPricePerRequestHdLT applies the LT predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldVideoPricePerRequestHd, v))
+}
+
+// VideoPricePerRequestHdLTE applies the LTE predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldVideoPricePerRequestHd, v))
+}
+
+// VideoPricePerRequestHdIsNil applies the IsNil predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldVideoPricePerRequestHd))
+}
+
+// VideoPricePerRequestHdNotNil applies the NotNil predicate on the "video_price_per_request_hd" field.
+func VideoPricePerRequestHdNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldVideoPricePerRequestHd))
 }
 
 // ClaudeCodeOnlyEQ applies the EQ predicate on the "claude_code_only" field.
