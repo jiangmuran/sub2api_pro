@@ -122,6 +122,51 @@
               </button>
             </div>
           </section>
+
+          <section class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">生成历史</h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">最近的提示词记录</p>
+              </div>
+              <button type="button" class="btn btn-secondary text-xs" @click="clearHistory">
+                清空
+              </button>
+            </div>
+
+            <div class="mt-4 max-h-[240px] space-y-2 overflow-y-auto">
+              <div v-if="promptHistory.length === 0" class="rounded-xl border border-dashed border-gray-300 px-4 py-6 text-center text-xs text-gray-500 dark:border-dark-600 dark:text-gray-400">
+                暂无历史记录
+              </div>
+              <button
+                v-for="(item, index) in promptHistory"
+                :key="`history-${index}`"
+                type="button"
+                @click="applyHistoryItem(item)"
+                class="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left text-xs transition hover:border-primary-500 hover:bg-primary-50 dark:border-dark-600 dark:bg-dark-900/30 dark:hover:border-primary-500 dark:hover:bg-primary-950/30"
+              >
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0 flex-1">
+                    <div class="mb-1 flex items-center gap-2">
+                      <span class="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                        {{ item.type === 'image' ? '图片' : item.type === 'video' ? '视频' : '编辑' }}
+                      </span>
+                      <span class="text-[10px] text-gray-400">{{ formatHistoryTime(item.timestamp) }}</span>
+                    </div>
+                    <div class="line-clamp-2 text-gray-700 dark:text-gray-300">{{ item.prompt }}</div>
+                    <div v-if="item.model" class="mt-1 text-[10px] text-gray-400">{{ item.model }}</div>
+                  </div>
+                  <button
+                    type="button"
+                    @click.stop="removeHistoryItem(index)"
+                    class="rounded p-1 text-gray-400 hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/50"
+                  >
+                    <Icon name="x" size="xs" />
+                  </button>
+                </div>
+              </button>
+            </div>
+          </section>
         </aside>
 
         <section class="space-y-6">
@@ -179,8 +224,44 @@
 
             <div class="mt-4 space-y-3">
               <textarea v-model="imagePrompt" rows="3" class="input" :placeholder="t('modelTest.image.placeholder')" />
+              
+              <!-- 风格标签 -->
+              <div>
+                <label class="input-label">风格标签（点击追加到提示词）</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="style in imageStyles"
+                    :key="style"
+                    type="button"
+                    @click="appendToImagePrompt(style)"
+                    class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-primary-500 hover:bg-primary-50 hover:text-primary-700 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300 dark:hover:border-primary-500 dark:hover:bg-primary-950/50 dark:hover:text-primary-400"
+                  >
+                    {{ style }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- 示例提示词 -->
+              <div>
+                <label class="input-label">快捷模板（点击替换提示词）</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="example in imageExamples"
+                    :key="example"
+                    type="button"
+                    @click="imagePrompt = example"
+                    class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-primary-500 hover:bg-primary-50 hover:text-primary-700 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300 dark:hover:border-primary-500 dark:hover:bg-primary-950/50 dark:hover:text-primary-400"
+                  >
+                    {{ example.split('，')[0] }}...
+                  </button>
+                </div>
+              </div>
+              
               <div class="flex items-center justify-between gap-3">
-                <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('modelTest.image.hint') }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  <span v-if="estimatedImageCost > 0">预计费用：${{ estimatedImageCost.toFixed(4) }}</span>
+                  <span v-else>{{ t('modelTest.image.hint') }}</span>
+                </div>
                 <button type="button" class="btn btn-primary" :disabled="generatingImage || !apiKeyInput.trim() || !imageModel || !imagePrompt.trim()" @click="generateImage">
                   {{ generatingImage ? t('common.loading') + '...' : t('modelTest.image.generate') }}
                 </button>
@@ -191,9 +272,20 @@
               <div v-if="generatedImages.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
                 {{ t('modelTest.image.empty') }}
               </div>
-              <a v-for="(image, index) in generatedImages" :key="`${image}-${index}`" :href="image" target="_blank" rel="noreferrer" class="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
+              <div v-for="(image, index) in generatedImages" :key="`${image}-${index}`" class="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
                 <img :src="image" :alt="`generated-${index}`" class="aspect-square w-full object-cover" />
-              </a>
+                <div class="absolute inset-x-0 bottom-0 flex gap-1 bg-gradient-to-t from-black/80 to-transparent p-3 opacity-0 transition group-hover:opacity-100">
+                  <button type="button" @click="downloadImage(image, `generated-${index}.png`)" class="flex-1 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 transition hover:bg-white">
+                    下载
+                  </button>
+                  <button type="button" @click="copyImageUrl(image)" class="flex-1 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 transition hover:bg-white">
+                    复制
+                  </button>
+                  <button type="button" @click="removeGeneratedImage(index)" class="rounded-lg bg-red-500/90 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-500">
+                    删除
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -210,13 +302,77 @@
             </div>
 
             <div class="mt-4 space-y-3">
+              <!-- 图片上传区域（支持拖拽） -->
               <div>
                 <label class="input-label">上传图片</label>
-                <input ref="imageEditFileInput" type="file" accept="image/*" class="input" @change="handleImageEditFileChange" />
+                <div
+                  v-if="!imageEditPreview"
+                  @drop.prevent="handleImageEditDrop"
+                  @dragover.prevent="imageEditDragover = true"
+                  @dragleave.prevent="imageEditDragover = false"
+                  :class="[
+                    'relative overflow-hidden rounded-xl border-2 border-dashed transition',
+                    imageEditDragover
+                      ? 'border-primary-500 bg-primary-50 dark:border-primary-400 dark:bg-primary-950/30'
+                      : 'border-gray-300 bg-gray-50 dark:border-dark-600 dark:bg-dark-900/30'
+                  ]"
+                >
+                  <input
+                    ref="imageEditFileInput"
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    @change="handleImageEditFileChange"
+                  />
+                  <button
+                    type="button"
+                    @click="imageEditFileInput?.click()"
+                    class="flex w-full cursor-pointer items-center justify-center px-4 py-8 text-sm text-gray-600 dark:text-gray-400"
+                  >
+                    <Icon name="upload" size="sm" class="mr-2" />
+                    点击或拖拽上传图片（支持 PNG, JPG, WEBP，最大 10MB）
+                  </button>
+                </div>
+                <div v-else class="relative overflow-hidden rounded-xl border border-gray-200 dark:border-dark-600">
+                  <img :src="imageEditPreview" alt="Preview" class="w-full" />
+                  <button
+                    type="button"
+                    @click="clearImageEditPreview"
+                    class="absolute right-2 top-2 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white shadow-lg transition hover:bg-red-600"
+                  >
+                    重新选择
+                  </button>
+                </div>
               </div>
-              <textarea v-model="imageEditPrompt" rows="3" class="input" placeholder="描述你想对图片做什么修改，例如：提高清晰度、改变风格、添加元素等..." />
+
+              <!-- 常用编辑任务快捷按钮 -->
+              <div>
+                <label class="input-label">编辑任务</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="task in imageEditTasks"
+                    :key="task"
+                    type="button"
+                    @click="imageEditPrompt = task"
+                    :class="[
+                      'rounded-lg border px-3 py-2 text-xs font-medium transition',
+                      imageEditPrompt === task
+                        ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-400'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-primary-400 hover:bg-primary-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300 dark:hover:border-primary-500'
+                    ]"
+                  >
+                    {{ task }}
+                  </button>
+                </div>
+              </div>
+
+              <textarea v-model="imageEditPrompt" rows="3" class="input" placeholder="描述你想对图片做什么修改，或使用上方快捷任务..." />
+              
               <div class="flex items-center justify-between gap-3">
-                <div class="text-xs text-gray-500 dark:text-gray-400">支持 PNG, JPG, WEBP 格式</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  <span v-if="estimatedEditCost > 0">预计费用：${{ estimatedEditCost.toFixed(4) }}</span>
+                  <span v-else>等待输入...</span>
+                </div>
                 <button type="button" class="btn btn-primary" :disabled="editingImage || !apiKeyInput.trim() || !imageEditModel || !imageEditPrompt.trim() || !imageEditFile" @click="editImage">
                   {{ editingImage ? '编辑中...' : '开始编辑' }}
                 </button>
@@ -227,9 +383,20 @@
               <div v-if="editedImages.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
                 暂无编辑结果
               </div>
-              <a v-for="(image, index) in editedImages" :key="`edited-${image}-${index}`" :href="image" target="_blank" rel="noreferrer" class="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
+              <div v-for="(image, index) in editedImages" :key="`edited-${image}-${index}`" class="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
                 <img :src="image" :alt="`edited-${index}`" class="aspect-square w-full object-cover" />
-              </a>
+                <div class="absolute inset-x-0 bottom-0 flex gap-1 bg-gradient-to-t from-black/80 to-transparent p-3 opacity-0 transition group-hover:opacity-100">
+                  <button type="button" @click="downloadImage(image, `edited-${index}.png`)" class="flex-1 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 transition hover:bg-white">
+                    下载
+                  </button>
+                  <button type="button" @click="copyImageUrl(image)" class="flex-1 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 transition hover:bg-white">
+                    复制
+                  </button>
+                  <button type="button" @click="removeEditedImage(index)" class="rounded-lg bg-red-500/90 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-500">
+                    删除
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -247,7 +414,39 @@
             </div>
 
             <div class="mt-4 space-y-3">
-              <textarea v-model="videoPrompt" rows="3" class="input" placeholder="描述你想生成的视频内容，例如：霓虹雨夜街头，慢镜头追拍..." />
+              <!-- 场景模板 -->
+              <div>
+                <label class="input-label">场景模板（点击替换提示词）</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="scene in videoScenes"
+                    :key="scene.prompt"
+                    type="button"
+                    @click="videoPrompt = scene.prompt"
+                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:border-primary-500 hover:bg-primary-50 hover:text-primary-700 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300 dark:hover:border-primary-500 dark:hover:bg-primary-950/50 dark:hover:text-primary-400"
+                  >
+                    {{ scene.name }}
+                  </button>
+                </div>
+              </div>
+
+              <textarea v-model="videoPrompt" rows="3" class="input" placeholder="描述你想生成的视频内容，或使用上方场景模板..." />
+
+              <!-- 镜头运动选项 -->
+              <div>
+                <label class="input-label">镜头运动（点击追加到提示词）</label>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="camera in cameraMovements"
+                    :key="camera"
+                    type="button"
+                    @click="appendToVideoPrompt(camera)"
+                    class="rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-primary-500 hover:bg-primary-50 hover:text-primary-700 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300 dark:hover:border-primary-500 dark:hover:bg-primary-950/50 dark:hover:text-primary-400"
+                  >
+                    {{ camera }}
+                  </button>
+                </div>
+              </div>
               
               <!-- Reference Image Upload -->
               <div>
@@ -294,9 +493,20 @@
                     ⏱️ {{ videoSeconds }}秒视频需要等待 {{ Math.ceil(videoSeconds / 6 * 0.5) }}-{{ Math.ceil(videoSeconds / 6) }} 分钟
                   </span>
                 </div>
+                <div class="flex-1">
+                  <label class="input-label">快捷时长</label>
+                  <div class="flex gap-2">
+                    <button v-for="dur in [6, 12, 20, 30]" :key="dur" type="button" @click="videoSeconds = dur" :class="['flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition', videoSeconds === dur ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950/50 dark:text-primary-400' : 'border-gray-300 bg-white text-gray-700 hover:border-primary-400 hover:bg-primary-50 dark:border-dark-600 dark:bg-dark-700 dark:text-gray-300 dark:hover:border-primary-500']">
+                      {{dur}}s
+                    </button>
+                  </div>
+                </div>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <div class="text-xs text-gray-500 dark:text-gray-400">{{ videoProgress || '等待生成...' }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  <span v-if="estimatedVideoCost > 0">预计费用：${{ estimatedVideoCost.toFixed(4) }} · </span>
+                  {{ videoProgress || '等待生成...' }}
+                </div>
                 <button type="button" class="btn btn-primary" :disabled="generatingVideo || !apiKeyInput.trim() || !videoModel || !videoPrompt.trim()" @click="generateVideo">
                   {{ generatingVideo ? '生成中...' : '生成视频' }}
                 </button>
@@ -307,8 +517,19 @@
               <div v-if="generatedVideos.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
                 暂无生成结果
               </div>
-              <div v-for="(video, index) in generatedVideos" :key="`video-${video}-${index}`" class="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
+              <div v-for="(video, index) in generatedVideos" :key="`video-${video}-${index}`" class="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
                 <video :src="video" controls class="w-full" />
+                <div class="absolute inset-x-0 bottom-0 flex gap-1 bg-gradient-to-t from-black/80 to-transparent p-3 opacity-0 transition group-hover:opacity-100">
+                  <button type="button" @click="downloadVideo(video, `video-${index}.mp4`)" class="flex-1 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 transition hover:bg-white">
+                    下载
+                  </button>
+                  <button type="button" @click="copyVideoUrl(video)" class="flex-1 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-900 transition hover:bg-white">
+                    复制
+                  </button>
+                  <button type="button" @click="removeGeneratedVideo(index)" class="rounded-lg bg-red-500/90 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-500">
+                    删除
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -415,6 +636,62 @@ const chatMessages = ref<ChatMessage[]>([])
 const chatScrollRef = ref<HTMLElement | null>(null)
 const imageModel = ref('')
 const imagePrompt = ref('')
+const imageExamples = ref([
+  '赛博朋克城市夜景，霓虹灯光，下雨，电影级画质',
+  '可爱的橘猫，坐在窗台上，温暖阳光，4K高清',
+  '抽象艺术，色彩斑斓，流动感，现代艺术风格',
+  '神秘森林，晨雾缭绕，光线透过树叶，魔幻氛围',
+  '日式庭院，樱花盛开，池塘锦鲤，宁静和风',
+  '科幻太空站，星空背景，高科技设备，未来感'
+])
+
+const imageStyles = ref([
+  '写实照片风格',
+  '动漫插画风格',
+  '水彩画风格',
+  '油画风格',
+  '赛博朋克风格',
+  '梵高风格',
+  '吉卜力风格',
+  '极简主义',
+  '蒸汽波美学',
+  '3D渲染'
+])
+
+const imageEditTasks = ref([
+  '提高清晰度和分辨率',
+  '去除背景',
+  '修复图片瑕疵',
+  '改为动漫风格',
+  '改为油画风格',
+  '增强色彩饱和度',
+  '添加艺术效果',
+  '改变光线和氛围'
+])
+
+const videoScenes = ref([
+  { name: '🌃 都市夜景', prompt: '霓虹灯闪烁的城市夜景，雨后街道反光，车流穿梭，赛博朋克氛围' },
+  { name: '🌲 神秘森林', prompt: '清晨的神秘森林，阳光穿过树叶，晨雾缭绕，光束效果，魔幻氛围' },
+  { name: '🌊 海浪冲击', prompt: '海浪拍打礁石，水花四溅，夕阳余晖，慢动作拍摄' },
+  { name: '🚀 科幻场景', prompt: '未来科幻城市，飞行器穿梭，全息投影，高科技建筑，蓝紫色调' },
+  { name: '🏔️ 雪山延时', prompt: '雪山日出延时摄影，云海翻腾，金色阳光，壮丽景观' },
+  { name: '🎆 烟花绽放', prompt: '璀璨烟花在夜空绽放，色彩斑斓，慢镜头拍摄' },
+  { name: '☕ 咖啡特写', prompt: '咖啡倒入杯中特写，奶油花纹形成，蒸汽升腾，温暖色调' },
+  { name: '🌸 花朵绽放', prompt: '花朵绽放过程延时摄影，微距镜头，柔和光线，春天氛围' }
+])
+
+const cameraMovements = ref([
+  '推镜头（Dolly In）',
+  '拉镜头（Dolly Out）',
+  '横摇（Pan）',
+  '竖摇（Tilt）',
+  '环绕（Orbit）',
+  '升降（Crane）',
+  '跟随（Follow）',
+  '固定镜头（Static）',
+  '慢动作（Slow Motion）',
+  '延时摄影（Time-lapse）'
+])
 const imageSize = ref('1024x1024')
 const generatedImages = ref<string[]>([])
 
@@ -424,6 +701,8 @@ const imageEditPrompt = ref('')
 const imageEditSize = ref('1024x1024')
 const imageEditFile = ref<File | null>(null)
 const imageEditFileInput = ref<HTMLInputElement | null>(null)
+const imageEditPreview = ref<string | null>(null)
+const imageEditDragover = ref(false)
 const editedImages = ref<string[]>([])
 
 // Video generation states
@@ -435,6 +714,97 @@ const videoSeconds = ref(6)
 const generatedVideos = ref<string[]>([])
 const videoReferenceImage = ref<string | null>(null)
 const videoReferenceImageFile = ref<File | null>(null)
+
+// History
+type HistoryItem = {
+  type: 'image' | 'video' | 'edit'
+  prompt: string
+  model: string
+  timestamp: number
+  size?: string
+  quality?: string
+  seconds?: number
+}
+const promptHistory = ref<HistoryItem[]>([])
+const MAX_HISTORY = 20
+
+// Load history from localStorage
+const loadHistory = () => {
+  try {
+    const saved = localStorage.getItem('model-test-history')
+    if (saved) {
+      promptHistory.value = JSON.parse(saved)
+    }
+  } catch (error) {
+    console.error('Failed to load history:', error)
+  }
+}
+
+// Save history to localStorage
+const saveHistory = () => {
+  try {
+    localStorage.setItem('model-test-history', JSON.stringify(promptHistory.value))
+  } catch (error) {
+    console.error('Failed to save history:', error)
+  }
+}
+
+// Add to history
+const addToHistory = (item: HistoryItem) => {
+  promptHistory.value.unshift(item)
+  if (promptHistory.value.length > MAX_HISTORY) {
+    promptHistory.value = promptHistory.value.slice(0, MAX_HISTORY)
+  }
+  saveHistory()
+}
+
+// Format time
+const formatHistoryTime = (timestamp: number) => {
+  const now = Date.now()
+  const diff = now - timestamp
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+  
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  if (hours < 24) return `${hours}小时前`
+  if (days < 7) return `${days}天前`
+  return new Date(timestamp).toLocaleDateString('zh-CN')
+}
+
+// Apply history item
+const applyHistoryItem = (item: HistoryItem) => {
+  if (item.type === 'image') {
+    imagePrompt.value = item.prompt
+    if (item.model) imageModel.value = item.model
+    if (item.size) imageSize.value = item.size
+  } else if (item.type === 'video') {
+    videoPrompt.value = item.prompt
+    if (item.model) videoModel.value = item.model
+    if (item.size) videoSize.value = item.size
+    if (item.quality) videoQuality.value = item.quality as 'standard' | 'high'
+    if (item.seconds) videoSeconds.value = item.seconds
+  } else if (item.type === 'edit') {
+    imageEditPrompt.value = item.prompt
+    if (item.model) imageEditModel.value = item.model
+    if (item.size) imageEditSize.value = item.size
+  }
+  appStore.showSuccess('已应用历史记录')
+}
+
+// Clear history
+const clearHistory = () => {
+  promptHistory.value = []
+  saveHistory()
+  appStore.showSuccess('历史记录已清空')
+}
+
+// Remove history item
+const removeHistoryItem = (index: number) => {
+  promptHistory.value.splice(index, 1)
+  saveHistory()
+}
 
 const apiKeyOptions = computed(() => apiKeys.value.map((key) => ({ value: key.id, label: `${key.name} · ${maskKey(key.key)}` })))
 const groupOptions = computed(() => groups.value.map((group) => ({ value: group.id, label: `${group.name} · ${effectiveRateForGroup(group.id).toFixed(2)}x` })))
@@ -682,6 +1052,14 @@ const generateImage = async () => {
     if (generatedImages.value.length === 0) {
       throw new Error(t('modelTest.image.failed'))
     }
+    // Add to history
+    addToHistory({
+      type: 'image',
+      prompt,
+      model: imageModel.value,
+      size: imageSize.value,
+      timestamp: Date.now()
+    })
   } catch (error: any) {
     appStore.showError(error.message || t('modelTest.image.failed'))
   } finally {
@@ -692,7 +1070,13 @@ const generateImage = async () => {
 const handleImageEditFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
   if (target.files && target.files[0]) {
-    imageEditFile.value = target.files[0]
+    const file = target.files[0]
+    imageEditFile.value = file
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      imageEditPreview.value = e.target?.result as string
+    }
+    reader.readAsDataURL(file)
   }
 }
 
@@ -714,6 +1098,14 @@ const editImage = async () => {
     if (editedImages.value.length === 0) {
       throw new Error('图片编辑失败')
     }
+    // Add to history
+    addToHistory({
+      type: 'edit',
+      prompt,
+      model: imageEditModel.value,
+      size: imageEditSize.value,
+      timestamp: Date.now()
+    })
     appStore.showSuccess('图片编辑成功')
   } catch (error: any) {
     appStore.showError(error.message || '图片编辑失败')
@@ -778,6 +1170,16 @@ const generateVideo = async () => {
     if (generatedVideos.value.length === 0) {
       throw new Error('视频生成失败')
     }
+    // Add to history
+    addToHistory({
+      type: 'video',
+      prompt,
+      model: videoModel.value,
+      size: videoSize.value,
+      quality: videoQuality.value,
+      seconds: videoSeconds.value,
+      timestamp: Date.now()
+    })
     appStore.showSuccess('视频生成成功')
   } catch (error: any) {
     appStore.showError(error.message || '视频生成失败')
@@ -787,6 +1189,135 @@ const generateVideo = async () => {
 }
 
 const formatPrice = (value: number, available: boolean) => (available ? `$${value.toFixed(2)}` : '--')
+
+// Computed costs
+const estimatedImageCost = computed(() => {
+  if (!imageModel.value) return 0
+  const pricing = pricingMap.value[imageModel.value]
+  if (!pricing?.image_price_per_image) return 0
+  return pricing.image_price_per_image * effectiveRate.value
+})
+
+const estimatedEditCost = computed(() => {
+  if (!imageEditModel.value) return 0
+  const pricing = pricingMap.value[imageEditModel.value]
+  if (!pricing?.image_price_per_image) return 0
+  return pricing.image_price_per_image * effectiveRate.value
+})
+
+const estimatedVideoCost = computed(() => {
+  if (!videoModel.value) return 0
+  const pricing = pricingMap.value[videoModel.value]
+  if (!pricing) return 0
+  const basePrice = videoQuality.value === 'high' 
+    ? (pricing.video_price_per_request_hd || pricing.video_price_per_request || 0)
+    : (pricing.video_price_per_request || 0)
+  return basePrice * effectiveRate.value
+})
+
+// Helper functions for image/video operations
+const appendToImagePrompt = (style: string) => {
+  if (imagePrompt.value.trim()) {
+    imagePrompt.value += `，${style}`
+  } else {
+    imagePrompt.value = style
+  }
+}
+
+const appendToVideoPrompt = (movement: string) => {
+  if (videoPrompt.value.trim()) {
+    videoPrompt.value += `，${movement}`
+  } else {
+    videoPrompt.value = movement
+  }
+}
+
+const downloadImage = async (url: string, filename: string) => {
+  try {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    const blobUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+    appStore.showSuccess('下载成功')
+  } catch (error) {
+    appStore.showError('下载失败')
+  }
+}
+
+const downloadVideo = async (url: string, filename: string) => {
+  try {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    const blobUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+    appStore.showSuccess('下载成功')
+  } catch (error) {
+    appStore.showError('下载失败')
+  }
+}
+
+const copyImageUrl = async (url: string) => {
+  await copyToClipboard(url)
+  appStore.showSuccess('图片链接已复制')
+}
+
+const copyVideoUrl = async (url: string) => {
+  await copyToClipboard(url)
+  appStore.showSuccess('视频链接已复制')
+}
+
+const removeGeneratedImage = (index: number) => {
+  generatedImages.value.splice(index, 1)
+  appStore.showSuccess('已删除')
+}
+
+const removeEditedImage = (index: number) => {
+  editedImages.value.splice(index, 1)
+  appStore.showSuccess('已删除')
+}
+
+const removeGeneratedVideo = (index: number) => {
+  generatedVideos.value.splice(index, 1)
+  appStore.showSuccess('已删除')
+}
+
+const clearImageEditPreview = () => {
+  imageEditPreview.value = null
+  imageEditFile.value = null
+  if (imageEditFileInput.value) {
+    imageEditFileInput.value.value = ''
+  }
+}
+
+const handleImageEditDrop = (event: DragEvent) => {
+  imageEditDragover.value = false
+  const files = event.dataTransfer?.files
+  if (files && files.length > 0) {
+    const file = files[0]
+    if (file.type.startsWith('image/')) {
+      imageEditFile.value = file
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        imageEditPreview.value = e.target?.result as string
+      }
+      reader.readAsDataURL(file)
+    } else {
+      appStore.showError('请上传图片文件')
+    }
+  }
+}
 
 watch(selectedGroupId, () => {
   if (models.value.length > 0) {
@@ -814,5 +1345,6 @@ watch(videoModelOptions, (options) => {
 
 onMounted(() => {
   void loadBootstrap()
+  loadHistory()
 })
 </script>
