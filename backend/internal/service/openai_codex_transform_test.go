@@ -291,21 +291,40 @@ func TestApplyCodexOAuthTransform_CodexCLI_SuppliesDefaultWhenEmpty(t *testing.T
 	require.True(t, result.Modified)
 }
 
-func TestApplyCodexOAuthTransform_NonCodexCLI_PreservesUserInstructions(t *testing.T) {
-	// 非 Codex CLI 场景：新行为是保留用户原始 instructions，不再自动注入 Codex 指令
-	// 这避免了将 Codex CLI 专用提示词注入到普通聊天请求中，防止 AI 产生幻觉
+func TestApplyCodexOAuthTransform_NonCodexCLI_PlainGPTModelUsesGenericInstructions(t *testing.T) {
+	// 非 Codex CLI + 普通 GPT 模型（如 gpt-5.1）：
+	// 如果用户没有提供 instructions，补充通用的 instructions
+	// 避免注入 Codex 专用提示词，防止 AI 产生幻觉
 
 	reqBody := map[string]any{
-		"model":        "gpt-5.1",
-		"instructions": "user custom instructions",
+		"model": "gpt-5.1",
+		// 没有 instructions
 	}
 
-	_ = applyCodexOAuthTransform(reqBody, false) // isCodexCLI=false
+	result := applyCodexOAuthTransform(reqBody, false) // isCodexCLI=false
 
 	instructions, ok := reqBody["instructions"].(string)
 	require.True(t, ok)
-	// 新行为：保留用户的 instructions，不覆盖
-	require.Equal(t, "user custom instructions", instructions)
+	// 应该补充通用 instructions，不是 Codex 专用的
+	require.Equal(t, "You are a helpful assistant.", instructions)
+	require.True(t, result.Modified)
+}
+
+func TestApplyCodexOAuthTransform_NonCodexCLI_CodexModelGetsCodexInstructions(t *testing.T) {
+	// 非 Codex CLI + Codex 模型：仍然应该注入 Codex 专用 instructions
+
+	reqBody := map[string]any{
+		"model": "gpt-5.1-codex",
+		// 没有 instructions
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false) // isCodexCLI=false
+
+	instructions, ok := reqBody["instructions"].(string)
+	require.True(t, ok)
+	// Codex 模型应该得到 Codex 专用 instructions
+	require.Contains(t, instructions, "Codex")
+	require.True(t, result.Modified)
 }
 
 func TestIsInstructionsEmpty(t *testing.T) {

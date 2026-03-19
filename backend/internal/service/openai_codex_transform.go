@@ -122,8 +122,9 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTran
 		result.PromptCacheKey = strings.TrimSpace(v)
 	}
 
-	// instructions 处理逻辑：根据是否是 Codex CLI 分别调用不同方法
-	if applyInstructions(reqBody, isCodexCLI) {
+	// instructions 处理逻辑：根据是否是 Codex CLI 和模型类型分别调用不同方法
+	// 只有 Codex 模型才需要注入 instructions，普通模型（gpt-4, gpt-5.1等）不需要
+	if applyInstructionsForModel(reqBody, model, isCodexCLI) {
 		result.Modified = true
 	}
 
@@ -236,14 +237,67 @@ func GetCodexCLIInstructions() string {
 	return getCodexCLIInstructions()
 }
 
-// applyInstructions 处理 instructions 字段
+// isCodexModel 检查模型是否为 Codex 系列模型
+func isCodexModel(model string) bool {
+	if model == "" {
+		return false
+	}
+	modelLower := strings.ToLower(strings.TrimSpace(model))
+	return strings.Contains(modelLower, "codex")
+}
+
+// needsInstructions 检查模型是否需要 instructions 字段
+// GPT 系列模型（包括 Codex）都需要 instructions
+func needsInstructions(model string) bool {
+	if model == "" {
+		return false
+	}
+	modelLower := strings.ToLower(strings.TrimSpace(model))
+	// gpt-4, gpt-5.x, gpt-5.x-codex 等都需要 instructions
+	return strings.HasPrefix(modelLower, "gpt-")
+}
+
+// applyInstructionsForModel 根据模型类型和客户端类型处理 instructions 字段
+// 策略：
+// 1. Codex 模型 + Codex CLI: 补充 Codex 专用 instructions
+// 2. Codex 模型 + 非 Codex CLI: 补充 Codex 专用 instructions（保持兼容）
+// 3. 普通 GPT 模型: 仅在为空时补充通用 instructions，不使用 Codex 专用内容
+// 4. 其他模型: 不处理
+func applyInstructionsForModel(reqBody map[string]any, model string, isCodexCLI bool) bool {
+	// 不需要 instructions 的模型直接返回
+	if !needsInstructions(model) {
+		return false
+	}
+
+	// Codex 模型：使用 Codex 专用 instructions
+	if isCodexModel(model) {
+		if isCodexCLI {
+			return applyCodexCLIInstructions(reqBody)
+		}
+		return applyOpenCodeInstructions(reqBody)
+	}
+
+	// 普通 GPT 模型（如 gpt-4, gpt-5.1 等）：
+	// 如果用户已提供 instructions，保留；如果为空，提供一个通用的空白 instructions
+	if isInstructionsEmpty(reqBody) {
+		// 提供一个最小化的通用 instructions，避免上游报错
+		reqBody["instructions"] = "You are a helpful assistant."
+		return true
+	}
+
+	return false
+}
+
+// applyInstructions 处理 instructions 字段（兼容旧调用）
 // isCodexCLI=true: 仅补充缺失的 instructions（使用内置 Codex CLI 指令）
 // isCodexCLI=false: 优先使用内置 Codex CLI 指令覆盖
 func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
-	if isCodexCLI {
-		return applyCodexCLIInstructions(reqBody)
+	// 从 reqBody 中提取模型名
+	model := ""
+	if v, ok := reqBody["model"].(string); ok {
+		model = v
 	}
-	return applyOpenCodeInstructions(reqBody)
+	return applyInstructionsForModel(reqBody, model, isCodexCLI)
 }
 
 // applyCodexCLIInstructions 为 Codex CLI 请求补充缺失的 instructions
@@ -262,18 +316,26 @@ func applyCodexCLIInstructions(reqBody map[string]any) bool {
 	return false
 }
 
-// applyOpenCodeInstructions 为非 Codex CLI 请求处理 instructions 字段
-//
-// 历史行为已废弃：此函数曾会强制注入 Codex CLI 专用指令到普通聊天请求。
-// 这导致 AI 产生"自己是 Codex"的幻觉，影响用户体验。
-//
-// 新行为：对于非 Codex CLI 请求，不再自动注入任何 instructions。
-// 仅保留用户原始请求中明确携带的 instructions（如果有）。
-//
-// 注意：真实的 Codex CLI 请求会调用 applyCodexCLIInstructions()，不受此函数影响。
+// applyOpenCodeInstructions 为非 Codex CLI 的 Codex 模型请求应用内置 Codex CLI 指令
+// 注意：此函数仅在 Codex 模型上调用，由 applyInstructionsForModel 保证
 func applyOpenCodeInstructions(reqBody map[string]any) bool {
-	// 不再为非 Codex CLI 请求注入任何 instructions
-	// 保持用户原始请求不变
+	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
+	existingInstructions, _ := reqBody["instructions"].(string)
+	existingInstructions = strings.TrimSpace(existingInstructions)
+
+	if instructions != "" {
+		if existingInstructions != instructions {
+			reqBody["instructions"] = instructions
+			return true
+		}
+	} else if existingInstructions == "" {
+		codexInstructions := strings.TrimSpace(getCodexCLIInstructions())
+		if codexInstructions != "" {
+			reqBody["instructions"] = codexInstructions
+			return true
+		}
+	}
+
 	return false
 }
 

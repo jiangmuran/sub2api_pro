@@ -1668,13 +1668,22 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		patchDisabled = true
 	}
 
-	// 非透传模式下：对于普通用户请求，不注入任何 instructions。
-	// 仅当请求本身明确携带 instructions 时才保留。
-	// 这避免了将 Codex CLI 专用提示词注入到普通聊天请求中，
-	// 从而防止 AI 产生"自己是 Codex"的幻觉。
-	// 注意：真实的 Codex CLI 请求（isCodexCLI=true）不会走到这个分支。
-	//
-	// 历史逻辑已废弃：我们不再为非 Codex CLI 请求自动注入 GetOpenCodeInstructions()。
+	// 非透传模式下，为需要 instructions 的模型智能补充默认指令
+	// 策略：
+	// - Codex 模型（gpt-x.x-codex）：注入 Codex 专用 instructions
+	// - 普通 GPT 模型（gpt-4, gpt-5.1 等）：仅在为空时补充通用 instructions
+	// - 其他模型：不处理
+	// 这避免了将 Codex 专用提示词注入到普通 GPT 聊天请求中，防止 AI 产生幻觉。
+	if !isCodexCLI && isInstructionsEmpty(reqBody) {
+		// 使用映射后的模型名进行判断
+		modelToCheck := reqModel
+		if applyInstructionsForModel(reqBody, modelToCheck, isCodexCLI) {
+			bodyModified = true
+			if ins, ok := reqBody["instructions"].(string); ok {
+				markPatchSet("instructions", ins)
+			}
+		}
+	}
 
 	// 对所有请求执行模型映射（包含 Codex CLI）。
 	mappedModel := account.GetMappedModel(reqModel)
