@@ -262,26 +262,18 @@ func applyCodexCLIInstructions(reqBody map[string]any) bool {
 	return false
 }
 
-// applyOpenCodeInstructions 为非 Codex CLI 请求应用内置 Codex CLI 指令（兼容历史函数名）
-// 优先使用内置 Codex CLI 指令覆盖
+// applyOpenCodeInstructions 为非 Codex CLI 请求处理 instructions 字段
+//
+// 历史行为已废弃：此函数曾会强制注入 Codex CLI 专用指令到普通聊天请求。
+// 这导致 AI 产生"自己是 Codex"的幻觉，影响用户体验。
+//
+// 新行为：对于非 Codex CLI 请求，不再自动注入任何 instructions。
+// 仅保留用户原始请求中明确携带的 instructions（如果有）。
+//
+// 注意：真实的 Codex CLI 请求会调用 applyCodexCLIInstructions()，不受此函数影响。
 func applyOpenCodeInstructions(reqBody map[string]any) bool {
-	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
-	existingInstructions, _ := reqBody["instructions"].(string)
-	existingInstructions = strings.TrimSpace(existingInstructions)
-
-	if instructions != "" {
-		if existingInstructions != instructions {
-			reqBody["instructions"] = instructions
-			return true
-		}
-	} else if existingInstructions == "" {
-		codexInstructions := strings.TrimSpace(getCodexCLIInstructions())
-		if codexInstructions != "" {
-			reqBody["instructions"] = codexInstructions
-			return true
-		}
-	}
-
+	// 不再为非 Codex CLI 请求注入任何 instructions
+	// 保持用户原始请求不变
 	return false
 }
 
