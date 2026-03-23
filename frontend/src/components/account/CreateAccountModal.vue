@@ -1346,9 +1346,6 @@
 
       </div>
 
-      <!-- API Key 账号配额限制 -->
-      <QuotaLimitCard v-if="form.type === 'apikey'" v-model="editQuotaLimit" />
-
       <!-- OpenAI OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
       <div
         v-if="form.platform === 'openai' && accountCategory === 'oauth-based'"
