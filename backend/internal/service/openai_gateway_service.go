@@ -897,6 +897,22 @@ func isOpenAIInstructionsRequiredError(upstreamStatusCode int, upstreamMsg strin
 	return false
 }
 
+// ExtractSessionID extracts the raw session ID from headers or body without hashing.
+// Used by ForwardAsAnthropic to pass as prompt_cache_key for upstream cache.
+func (s *OpenAIGatewayService) ExtractSessionID(c *gin.Context, body []byte) string {
+	if c == nil {
+		return ""
+	}
+	sessionID := strings.TrimSpace(c.GetHeader("session_id"))
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(c.GetHeader("conversation_id"))
+	}
+	if sessionID == "" && len(body) > 0 {
+		sessionID = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
+	}
+	return sessionID
+}
+
 // GenerateSessionHash generates a sticky-session hash for OpenAI requests.
 //
 // Priority:
@@ -3896,6 +3912,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		multiplier = apiKey.Group.RateMultiplier
 	}
 
+	// Determine billing model (support Anthropic Messages path)
+	billingModel := result.Model
+	if result.BillingModel != "" {
+		billingModel = result.BillingModel
+	}
+
 	var cost *CostBreakdown
 	if result.ImageCount > 0 {
 		var imageConfig *ImagePriceConfig
@@ -3910,11 +3932,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			imageConfig = &ImagePriceConfig{}
 		}
 		if imageConfig.PricePerImage == nil {
-			if manual := lookupOpenAIAccountStoredImagePricing(account, result.Model); manual > 0 {
+			if manual := lookupOpenAIAccountStoredImagePricing(account, billingModel); manual > 0 {
 				imageConfig.PricePerImage = &manual
 			}
 		}
-		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, imageConfig, multiplier)
+		cost = s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, imageConfig, multiplier)
 	} else if result.VideoCount > 0 {
 		// 视频按次计费，使用与图片相同的计费逻辑
 		var imageConfig *ImagePriceConfig
@@ -3930,14 +3952,14 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 		// 查找手动定价：先尝试 image_price_per_image，再尝试视频专用字段
 		if imageConfig.PricePerImage == nil {
-			if manual := lookupOpenAIAccountStoredImagePricing(account, result.Model); manual > 0 {
+			if manual := lookupOpenAIAccountStoredImagePricing(account, billingModel); manual > 0 {
 				imageConfig.PricePerImage = &manual
-			} else if manual := lookupOpenAIAccountStoredVideoPricing(account, result.Model, result.VideoQuality); manual > 0 {
+			} else if manual := lookupOpenAIAccountStoredVideoPricing(account, billingModel, result.VideoQuality); manual > 0 {
 				imageConfig.PricePerImage = &manual
 			}
 		}
 		// 使用图片计费函数，传入视频数量作为图片数量
-		cost = s.billingService.CalculateImageCost(result.Model, "video", result.VideoCount, imageConfig, multiplier)
+		cost = s.billingService.CalculateImageCost(billingModel, "video", result.VideoCount, imageConfig, multiplier)
 	} else {
 		tokens := UsageTokens{
 			InputTokens:         actualInputTokens,
@@ -3946,7 +3968,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			CacheReadTokens:     result.Usage.CacheReadInputTokens,
 		}
 		var err error
-		cost, err = s.billingService.CalculateCost(result.Model, tokens, multiplier)
+		cost, err = s.billingService.CalculateCost(billingModel, tokens, multiplier)
 		if err != nil {
 			cost = &CostBreakdown{ActualCost: 0}
 		}
@@ -3967,7 +3989,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		APIKeyID:              apiKey.ID,
 		AccountID:             account.ID,
 		RequestID:             result.RequestID,
-		Model:                 result.Model,
+		Model:                 billingModel,
 		ReasoningEffort:       result.ReasoningEffort,
 		InputTokens:           actualInputTokens,
 		OutputTokens:          outputTokens,
