@@ -39,6 +39,8 @@
                 ? 'https://api.openai.com'
                 : account.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
+                  : account.platform === 'nano-banana'
+                    ? 'https://grsaiapi.com'
                   : account.platform === 'antigravity'
                     ? 'https://cloudcode-pa.googleapis.com'
                     : 'https://api.anthropic.com'
@@ -57,6 +59,8 @@
                 ? 'sk-proj-...'
                 : account.platform === 'gemini'
                   ? 'AIza...'
+                  : account.platform === 'nano-banana'
+                    ? 'nb-...'
                   : account.platform === 'antigravity'
                     ? 'sk-...'
                     : 'sk-ant-...'
@@ -1347,6 +1351,7 @@ const baseUrlHint = computed(() => {
   if (!props.account) return t('admin.accounts.baseUrlHint')
   if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
+  if (props.account.platform === 'nano-banana') return 'Nano Banana 节点地址，例如：https://grsaiapi.com'
   return t('admin.accounts.baseUrlHint')
 })
 
@@ -1484,6 +1489,7 @@ const tempUnschedPresets = computed(() => [
 const defaultBaseUrl = computed(() => {
   if (props.account?.platform === 'openai' || props.account?.platform === 'sora') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
+  if (props.account?.platform === 'nano-banana') return 'https://grsaiapi.com'
   return 'https://api.anthropic.com'
 })
 

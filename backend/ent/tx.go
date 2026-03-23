@@ -20,6 +20,12 @@ type Tx struct {
 	Account *AccountClient
 	// AccountGroup is the client for interacting with the AccountGroup builders.
 	AccountGroup *AccountGroupClient
+	// Activity is the client for interacting with the Activity builders.
+	Activity *ActivityClient
+	// ActivityParticipation is the client for interacting with the ActivityParticipation builders.
+	ActivityParticipation *ActivityParticipationClient
+	// ActivityReward is the client for interacting with the ActivityReward builders.
+	ActivityReward *ActivityRewardClient
 	// Announcement is the client for interacting with the Announcement builders.
 	Announcement *AnnouncementClient
 	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
@@ -190,6 +196,9 @@ func (tx *Tx) init() {
 	tx.APIKey = NewAPIKeyClient(tx.config)
 	tx.Account = NewAccountClient(tx.config)
 	tx.AccountGroup = NewAccountGroupClient(tx.config)
+	tx.Activity = NewActivityClient(tx.config)
+	tx.ActivityParticipation = NewActivityParticipationClient(tx.config)
+	tx.ActivityReward = NewActivityRewardClient(tx.config)
 	tx.Announcement = NewAnnouncementClient(tx.config)
 	tx.AnnouncementRead = NewAnnouncementReadClient(tx.config)
 	tx.ErrorPassthroughRule = NewErrorPassthroughRuleClient(tx.config)

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/activityparticipation"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -419,6 +420,21 @@ func (_u *UserUpdate) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserUpdate {
 	return _u.AddPromoCodeUsageIDs(ids...)
 }
 
+// AddActivityParticipationIDs adds the "activity_participations" edge to the ActivityParticipation entity by IDs.
+func (_u *UserUpdate) AddActivityParticipationIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddActivityParticipationIDs(ids...)
+	return _u
+}
+
+// AddActivityParticipations adds the "activity_participations" edges to the ActivityParticipation entity.
+func (_u *UserUpdate) AddActivityParticipations(v ...*ActivityParticipation) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddActivityParticipationIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -611,6 +627,27 @@ func (_u *UserUpdate) RemovePromoCodeUsages(v ...*PromoCodeUsage) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePromoCodeUsageIDs(ids...)
+}
+
+// ClearActivityParticipations clears all "activity_participations" edges to the ActivityParticipation entity.
+func (_u *UserUpdate) ClearActivityParticipations() *UserUpdate {
+	_u.mutation.ClearActivityParticipations()
+	return _u
+}
+
+// RemoveActivityParticipationIDs removes the "activity_participations" edge to ActivityParticipation entities by IDs.
+func (_u *UserUpdate) RemoveActivityParticipationIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemoveActivityParticipationIDs(ids...)
+	return _u
+}
+
+// RemoveActivityParticipations removes "activity_participations" edges to ActivityParticipation entities.
+func (_u *UserUpdate) RemoveActivityParticipations(v ...*ActivityParticipation) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveActivityParticipationIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1180,6 +1217,51 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.ActivityParticipationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ActivityParticipationsTable,
+			Columns: []string{user.ActivityParticipationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(activityparticipation.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedActivityParticipationsIDs(); len(nodes) > 0 && !_u.mutation.ActivityParticipationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ActivityParticipationsTable,
+			Columns: []string{user.ActivityParticipationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(activityparticipation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ActivityParticipationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ActivityParticipationsTable,
+			Columns: []string{user.ActivityParticipationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(activityparticipation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -1583,6 +1665,21 @@ func (_u *UserUpdateOne) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserUpdateOne
 	return _u.AddPromoCodeUsageIDs(ids...)
 }
 
+// AddActivityParticipationIDs adds the "activity_participations" edge to the ActivityParticipation entity by IDs.
+func (_u *UserUpdateOne) AddActivityParticipationIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddActivityParticipationIDs(ids...)
+	return _u
+}
+
+// AddActivityParticipations adds the "activity_participations" edges to the ActivityParticipation entity.
+func (_u *UserUpdateOne) AddActivityParticipations(v ...*ActivityParticipation) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddActivityParticipationIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -1775,6 +1872,27 @@ func (_u *UserUpdateOne) RemovePromoCodeUsages(v ...*PromoCodeUsage) *UserUpdate
 		ids[i] = v[i].ID
 	}
 	return _u.RemovePromoCodeUsageIDs(ids...)
+}
+
+// ClearActivityParticipations clears all "activity_participations" edges to the ActivityParticipation entity.
+func (_u *UserUpdateOne) ClearActivityParticipations() *UserUpdateOne {
+	_u.mutation.ClearActivityParticipations()
+	return _u
+}
+
+// RemoveActivityParticipationIDs removes the "activity_participations" edge to ActivityParticipation entities by IDs.
+func (_u *UserUpdateOne) RemoveActivityParticipationIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemoveActivityParticipationIDs(ids...)
+	return _u
+}
+
+// RemoveActivityParticipations removes "activity_participations" edges to ActivityParticipation entities.
+func (_u *UserUpdateOne) RemoveActivityParticipations(v ...*ActivityParticipation) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveActivityParticipationIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -2367,6 +2485,51 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(promocodeusage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ActivityParticipationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ActivityParticipationsTable,
+			Columns: []string{user.ActivityParticipationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(activityparticipation.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedActivityParticipationsIDs(); len(nodes) > 0 && !_u.mutation.ActivityParticipationsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ActivityParticipationsTable,
+			Columns: []string{user.ActivityParticipationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(activityparticipation.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ActivityParticipationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ActivityParticipationsTable,
+			Columns: []string{user.ActivityParticipationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(activityparticipation.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

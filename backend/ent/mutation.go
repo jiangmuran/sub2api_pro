@@ -14,6 +14,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/activity"
+	"github.com/Wei-Shaw/sub2api/ent/activityparticipation"
+	"github.com/Wei-Shaw/sub2api/ent/activityreward"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
@@ -49,6 +52,9 @@ const (
 	TypeAPIKey                  = "APIKey"
 	TypeAccount                 = "Account"
 	TypeAccountGroup            = "AccountGroup"
+	TypeActivity                = "Activity"
+	TypeActivityParticipation   = "ActivityParticipation"
+	TypeActivityReward          = "ActivityReward"
 	TypeAnnouncement            = "Announcement"
 	TypeAnnouncementRead        = "AnnouncementRead"
 	TypeErrorPassthroughRule    = "ErrorPassthroughRule"
@@ -5463,6 +5469,4289 @@ func (m *AccountGroupMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown AccountGroup edge %s", name)
+}
+
+// ActivityMutation represents an operation that mutates the Activity nodes in the graph.
+type ActivityMutation struct {
+	config
+	op                           Op
+	typ                          string
+	id                           *int64
+	name                         *string
+	description                  *string
+	icon                         *string
+	_type                        *activity.Type
+	status                       *activity.Status
+	sort_order                   *int
+	addsort_order                *int
+	starts_at                    *time.Time
+	ends_at                      *time.Time
+	visibility_rules             *map[string]interface{}
+	participation_config         *map[string]interface{}
+	activity_config              *map[string]interface{}
+	total_participations         *int64
+	addtotal_participations      *int64
+	total_rewards_distributed    *int64
+	addtotal_rewards_distributed *int64
+	created_by                   *string
+	created_at                   *time.Time
+	updated_at                   *time.Time
+	clearedFields                map[string]struct{}
+	rewards                      map[int64]struct{}
+	removedrewards               map[int64]struct{}
+	clearedrewards               bool
+	participations               map[int64]struct{}
+	removedparticipations        map[int64]struct{}
+	clearedparticipations        bool
+	done                         bool
+	oldValue                     func(context.Context) (*Activity, error)
+	predicates                   []predicate.Activity
+}
+
+var _ ent.Mutation = (*ActivityMutation)(nil)
+
+// activityOption allows management of the mutation configuration using functional options.
+type activityOption func(*ActivityMutation)
+
+// newActivityMutation creates new mutation for the Activity entity.
+func newActivityMutation(c config, op Op, opts ...activityOption) *ActivityMutation {
+	m := &ActivityMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeActivity,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withActivityID sets the ID field of the mutation.
+func withActivityID(id int64) activityOption {
+	return func(m *ActivityMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Activity
+		)
+		m.oldValue = func(ctx context.Context) (*Activity, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Activity.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withActivity sets the old Activity of the mutation.
+func withActivity(node *Activity) activityOption {
+	return func(m *ActivityMutation) {
+		m.oldValue = func(context.Context) (*Activity, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ActivityMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ActivityMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Activity entities.
+func (m *ActivityMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ActivityMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ActivityMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Activity.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetName sets the "name" field.
+func (m *ActivityMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *ActivityMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *ActivityMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *ActivityMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *ActivityMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *ActivityMutation) ResetDescription() {
+	m.description = nil
+}
+
+// SetIcon sets the "icon" field.
+func (m *ActivityMutation) SetIcon(s string) {
+	m.icon = &s
+}
+
+// Icon returns the value of the "icon" field in the mutation.
+func (m *ActivityMutation) Icon() (r string, exists bool) {
+	v := m.icon
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIcon returns the old "icon" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldIcon(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIcon is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIcon requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIcon: %w", err)
+	}
+	return oldValue.Icon, nil
+}
+
+// ResetIcon resets all changes to the "icon" field.
+func (m *ActivityMutation) ResetIcon() {
+	m.icon = nil
+}
+
+// SetType sets the "type" field.
+func (m *ActivityMutation) SetType(a activity.Type) {
+	m._type = &a
+}
+
+// GetType returns the value of the "type" field in the mutation.
+func (m *ActivityMutation) GetType() (r activity.Type, exists bool) {
+	v := m._type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldType returns the old "type" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldType(ctx context.Context) (v activity.Type, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldType: %w", err)
+	}
+	return oldValue.Type, nil
+}
+
+// ResetType resets all changes to the "type" field.
+func (m *ActivityMutation) ResetType() {
+	m._type = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ActivityMutation) SetStatus(a activity.Status) {
+	m.status = &a
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ActivityMutation) Status() (r activity.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldStatus(ctx context.Context) (v activity.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ActivityMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (m *ActivityMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *ActivityMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *ActivityMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *ActivityMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *ActivityMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
+// SetStartsAt sets the "starts_at" field.
+func (m *ActivityMutation) SetStartsAt(t time.Time) {
+	m.starts_at = &t
+}
+
+// StartsAt returns the value of the "starts_at" field in the mutation.
+func (m *ActivityMutation) StartsAt() (r time.Time, exists bool) {
+	v := m.starts_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartsAt returns the old "starts_at" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldStartsAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartsAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartsAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartsAt: %w", err)
+	}
+	return oldValue.StartsAt, nil
+}
+
+// ClearStartsAt clears the value of the "starts_at" field.
+func (m *ActivityMutation) ClearStartsAt() {
+	m.starts_at = nil
+	m.clearedFields[activity.FieldStartsAt] = struct{}{}
+}
+
+// StartsAtCleared returns if the "starts_at" field was cleared in this mutation.
+func (m *ActivityMutation) StartsAtCleared() bool {
+	_, ok := m.clearedFields[activity.FieldStartsAt]
+	return ok
+}
+
+// ResetStartsAt resets all changes to the "starts_at" field.
+func (m *ActivityMutation) ResetStartsAt() {
+	m.starts_at = nil
+	delete(m.clearedFields, activity.FieldStartsAt)
+}
+
+// SetEndsAt sets the "ends_at" field.
+func (m *ActivityMutation) SetEndsAt(t time.Time) {
+	m.ends_at = &t
+}
+
+// EndsAt returns the value of the "ends_at" field in the mutation.
+func (m *ActivityMutation) EndsAt() (r time.Time, exists bool) {
+	v := m.ends_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndsAt returns the old "ends_at" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldEndsAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndsAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndsAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndsAt: %w", err)
+	}
+	return oldValue.EndsAt, nil
+}
+
+// ClearEndsAt clears the value of the "ends_at" field.
+func (m *ActivityMutation) ClearEndsAt() {
+	m.ends_at = nil
+	m.clearedFields[activity.FieldEndsAt] = struct{}{}
+}
+
+// EndsAtCleared returns if the "ends_at" field was cleared in this mutation.
+func (m *ActivityMutation) EndsAtCleared() bool {
+	_, ok := m.clearedFields[activity.FieldEndsAt]
+	return ok
+}
+
+// ResetEndsAt resets all changes to the "ends_at" field.
+func (m *ActivityMutation) ResetEndsAt() {
+	m.ends_at = nil
+	delete(m.clearedFields, activity.FieldEndsAt)
+}
+
+// SetVisibilityRules sets the "visibility_rules" field.
+func (m *ActivityMutation) SetVisibilityRules(value map[string]interface{}) {
+	m.visibility_rules = &value
+}
+
+// VisibilityRules returns the value of the "visibility_rules" field in the mutation.
+func (m *ActivityMutation) VisibilityRules() (r map[string]interface{}, exists bool) {
+	v := m.visibility_rules
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVisibilityRules returns the old "visibility_rules" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldVisibilityRules(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVisibilityRules is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVisibilityRules requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVisibilityRules: %w", err)
+	}
+	return oldValue.VisibilityRules, nil
+}
+
+// ClearVisibilityRules clears the value of the "visibility_rules" field.
+func (m *ActivityMutation) ClearVisibilityRules() {
+	m.visibility_rules = nil
+	m.clearedFields[activity.FieldVisibilityRules] = struct{}{}
+}
+
+// VisibilityRulesCleared returns if the "visibility_rules" field was cleared in this mutation.
+func (m *ActivityMutation) VisibilityRulesCleared() bool {
+	_, ok := m.clearedFields[activity.FieldVisibilityRules]
+	return ok
+}
+
+// ResetVisibilityRules resets all changes to the "visibility_rules" field.
+func (m *ActivityMutation) ResetVisibilityRules() {
+	m.visibility_rules = nil
+	delete(m.clearedFields, activity.FieldVisibilityRules)
+}
+
+// SetParticipationConfig sets the "participation_config" field.
+func (m *ActivityMutation) SetParticipationConfig(value map[string]interface{}) {
+	m.participation_config = &value
+}
+
+// ParticipationConfig returns the value of the "participation_config" field in the mutation.
+func (m *ActivityMutation) ParticipationConfig() (r map[string]interface{}, exists bool) {
+	v := m.participation_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParticipationConfig returns the old "participation_config" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldParticipationConfig(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParticipationConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParticipationConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParticipationConfig: %w", err)
+	}
+	return oldValue.ParticipationConfig, nil
+}
+
+// ClearParticipationConfig clears the value of the "participation_config" field.
+func (m *ActivityMutation) ClearParticipationConfig() {
+	m.participation_config = nil
+	m.clearedFields[activity.FieldParticipationConfig] = struct{}{}
+}
+
+// ParticipationConfigCleared returns if the "participation_config" field was cleared in this mutation.
+func (m *ActivityMutation) ParticipationConfigCleared() bool {
+	_, ok := m.clearedFields[activity.FieldParticipationConfig]
+	return ok
+}
+
+// ResetParticipationConfig resets all changes to the "participation_config" field.
+func (m *ActivityMutation) ResetParticipationConfig() {
+	m.participation_config = nil
+	delete(m.clearedFields, activity.FieldParticipationConfig)
+}
+
+// SetActivityConfig sets the "activity_config" field.
+func (m *ActivityMutation) SetActivityConfig(value map[string]interface{}) {
+	m.activity_config = &value
+}
+
+// ActivityConfig returns the value of the "activity_config" field in the mutation.
+func (m *ActivityMutation) ActivityConfig() (r map[string]interface{}, exists bool) {
+	v := m.activity_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActivityConfig returns the old "activity_config" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldActivityConfig(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActivityConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActivityConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActivityConfig: %w", err)
+	}
+	return oldValue.ActivityConfig, nil
+}
+
+// ClearActivityConfig clears the value of the "activity_config" field.
+func (m *ActivityMutation) ClearActivityConfig() {
+	m.activity_config = nil
+	m.clearedFields[activity.FieldActivityConfig] = struct{}{}
+}
+
+// ActivityConfigCleared returns if the "activity_config" field was cleared in this mutation.
+func (m *ActivityMutation) ActivityConfigCleared() bool {
+	_, ok := m.clearedFields[activity.FieldActivityConfig]
+	return ok
+}
+
+// ResetActivityConfig resets all changes to the "activity_config" field.
+func (m *ActivityMutation) ResetActivityConfig() {
+	m.activity_config = nil
+	delete(m.clearedFields, activity.FieldActivityConfig)
+}
+
+// SetTotalParticipations sets the "total_participations" field.
+func (m *ActivityMutation) SetTotalParticipations(i int64) {
+	m.total_participations = &i
+	m.addtotal_participations = nil
+}
+
+// TotalParticipations returns the value of the "total_participations" field in the mutation.
+func (m *ActivityMutation) TotalParticipations() (r int64, exists bool) {
+	v := m.total_participations
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalParticipations returns the old "total_participations" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldTotalParticipations(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalParticipations is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalParticipations requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalParticipations: %w", err)
+	}
+	return oldValue.TotalParticipations, nil
+}
+
+// AddTotalParticipations adds i to the "total_participations" field.
+func (m *ActivityMutation) AddTotalParticipations(i int64) {
+	if m.addtotal_participations != nil {
+		*m.addtotal_participations += i
+	} else {
+		m.addtotal_participations = &i
+	}
+}
+
+// AddedTotalParticipations returns the value that was added to the "total_participations" field in this mutation.
+func (m *ActivityMutation) AddedTotalParticipations() (r int64, exists bool) {
+	v := m.addtotal_participations
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalParticipations resets all changes to the "total_participations" field.
+func (m *ActivityMutation) ResetTotalParticipations() {
+	m.total_participations = nil
+	m.addtotal_participations = nil
+}
+
+// SetTotalRewardsDistributed sets the "total_rewards_distributed" field.
+func (m *ActivityMutation) SetTotalRewardsDistributed(i int64) {
+	m.total_rewards_distributed = &i
+	m.addtotal_rewards_distributed = nil
+}
+
+// TotalRewardsDistributed returns the value of the "total_rewards_distributed" field in the mutation.
+func (m *ActivityMutation) TotalRewardsDistributed() (r int64, exists bool) {
+	v := m.total_rewards_distributed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalRewardsDistributed returns the old "total_rewards_distributed" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldTotalRewardsDistributed(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalRewardsDistributed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalRewardsDistributed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalRewardsDistributed: %w", err)
+	}
+	return oldValue.TotalRewardsDistributed, nil
+}
+
+// AddTotalRewardsDistributed adds i to the "total_rewards_distributed" field.
+func (m *ActivityMutation) AddTotalRewardsDistributed(i int64) {
+	if m.addtotal_rewards_distributed != nil {
+		*m.addtotal_rewards_distributed += i
+	} else {
+		m.addtotal_rewards_distributed = &i
+	}
+}
+
+// AddedTotalRewardsDistributed returns the value that was added to the "total_rewards_distributed" field in this mutation.
+func (m *ActivityMutation) AddedTotalRewardsDistributed() (r int64, exists bool) {
+	v := m.addtotal_rewards_distributed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalRewardsDistributed resets all changes to the "total_rewards_distributed" field.
+func (m *ActivityMutation) ResetTotalRewardsDistributed() {
+	m.total_rewards_distributed = nil
+	m.addtotal_rewards_distributed = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *ActivityMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *ActivityMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *ActivityMutation) ResetCreatedBy() {
+	m.created_by = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ActivityMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ActivityMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ActivityMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ActivityMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ActivityMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the Activity entity.
+// If the Activity object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ActivityMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// AddRewardIDs adds the "rewards" edge to the ActivityReward entity by ids.
+func (m *ActivityMutation) AddRewardIDs(ids ...int64) {
+	if m.rewards == nil {
+		m.rewards = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.rewards[ids[i]] = struct{}{}
+	}
+}
+
+// ClearRewards clears the "rewards" edge to the ActivityReward entity.
+func (m *ActivityMutation) ClearRewards() {
+	m.clearedrewards = true
+}
+
+// RewardsCleared reports if the "rewards" edge to the ActivityReward entity was cleared.
+func (m *ActivityMutation) RewardsCleared() bool {
+	return m.clearedrewards
+}
+
+// RemoveRewardIDs removes the "rewards" edge to the ActivityReward entity by IDs.
+func (m *ActivityMutation) RemoveRewardIDs(ids ...int64) {
+	if m.removedrewards == nil {
+		m.removedrewards = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.rewards, ids[i])
+		m.removedrewards[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedRewards returns the removed IDs of the "rewards" edge to the ActivityReward entity.
+func (m *ActivityMutation) RemovedRewardsIDs() (ids []int64) {
+	for id := range m.removedrewards {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RewardsIDs returns the "rewards" edge IDs in the mutation.
+func (m *ActivityMutation) RewardsIDs() (ids []int64) {
+	for id := range m.rewards {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetRewards resets all changes to the "rewards" edge.
+func (m *ActivityMutation) ResetRewards() {
+	m.rewards = nil
+	m.clearedrewards = false
+	m.removedrewards = nil
+}
+
+// AddParticipationIDs adds the "participations" edge to the ActivityParticipation entity by ids.
+func (m *ActivityMutation) AddParticipationIDs(ids ...int64) {
+	if m.participations == nil {
+		m.participations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.participations[ids[i]] = struct{}{}
+	}
+}
+
+// ClearParticipations clears the "participations" edge to the ActivityParticipation entity.
+func (m *ActivityMutation) ClearParticipations() {
+	m.clearedparticipations = true
+}
+
+// ParticipationsCleared reports if the "participations" edge to the ActivityParticipation entity was cleared.
+func (m *ActivityMutation) ParticipationsCleared() bool {
+	return m.clearedparticipations
+}
+
+// RemoveParticipationIDs removes the "participations" edge to the ActivityParticipation entity by IDs.
+func (m *ActivityMutation) RemoveParticipationIDs(ids ...int64) {
+	if m.removedparticipations == nil {
+		m.removedparticipations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.participations, ids[i])
+		m.removedparticipations[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedParticipations returns the removed IDs of the "participations" edge to the ActivityParticipation entity.
+func (m *ActivityMutation) RemovedParticipationsIDs() (ids []int64) {
+	for id := range m.removedparticipations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ParticipationsIDs returns the "participations" edge IDs in the mutation.
+func (m *ActivityMutation) ParticipationsIDs() (ids []int64) {
+	for id := range m.participations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetParticipations resets all changes to the "participations" edge.
+func (m *ActivityMutation) ResetParticipations() {
+	m.participations = nil
+	m.clearedparticipations = false
+	m.removedparticipations = nil
+}
+
+// Where appends a list predicates to the ActivityMutation builder.
+func (m *ActivityMutation) Where(ps ...predicate.Activity) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ActivityMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ActivityMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Activity, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ActivityMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ActivityMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Activity).
+func (m *ActivityMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ActivityMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.name != nil {
+		fields = append(fields, activity.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, activity.FieldDescription)
+	}
+	if m.icon != nil {
+		fields = append(fields, activity.FieldIcon)
+	}
+	if m._type != nil {
+		fields = append(fields, activity.FieldType)
+	}
+	if m.status != nil {
+		fields = append(fields, activity.FieldStatus)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, activity.FieldSortOrder)
+	}
+	if m.starts_at != nil {
+		fields = append(fields, activity.FieldStartsAt)
+	}
+	if m.ends_at != nil {
+		fields = append(fields, activity.FieldEndsAt)
+	}
+	if m.visibility_rules != nil {
+		fields = append(fields, activity.FieldVisibilityRules)
+	}
+	if m.participation_config != nil {
+		fields = append(fields, activity.FieldParticipationConfig)
+	}
+	if m.activity_config != nil {
+		fields = append(fields, activity.FieldActivityConfig)
+	}
+	if m.total_participations != nil {
+		fields = append(fields, activity.FieldTotalParticipations)
+	}
+	if m.total_rewards_distributed != nil {
+		fields = append(fields, activity.FieldTotalRewardsDistributed)
+	}
+	if m.created_by != nil {
+		fields = append(fields, activity.FieldCreatedBy)
+	}
+	if m.created_at != nil {
+		fields = append(fields, activity.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, activity.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ActivityMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case activity.FieldName:
+		return m.Name()
+	case activity.FieldDescription:
+		return m.Description()
+	case activity.FieldIcon:
+		return m.Icon()
+	case activity.FieldType:
+		return m.GetType()
+	case activity.FieldStatus:
+		return m.Status()
+	case activity.FieldSortOrder:
+		return m.SortOrder()
+	case activity.FieldStartsAt:
+		return m.StartsAt()
+	case activity.FieldEndsAt:
+		return m.EndsAt()
+	case activity.FieldVisibilityRules:
+		return m.VisibilityRules()
+	case activity.FieldParticipationConfig:
+		return m.ParticipationConfig()
+	case activity.FieldActivityConfig:
+		return m.ActivityConfig()
+	case activity.FieldTotalParticipations:
+		return m.TotalParticipations()
+	case activity.FieldTotalRewardsDistributed:
+		return m.TotalRewardsDistributed()
+	case activity.FieldCreatedBy:
+		return m.CreatedBy()
+	case activity.FieldCreatedAt:
+		return m.CreatedAt()
+	case activity.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ActivityMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case activity.FieldName:
+		return m.OldName(ctx)
+	case activity.FieldDescription:
+		return m.OldDescription(ctx)
+	case activity.FieldIcon:
+		return m.OldIcon(ctx)
+	case activity.FieldType:
+		return m.OldType(ctx)
+	case activity.FieldStatus:
+		return m.OldStatus(ctx)
+	case activity.FieldSortOrder:
+		return m.OldSortOrder(ctx)
+	case activity.FieldStartsAt:
+		return m.OldStartsAt(ctx)
+	case activity.FieldEndsAt:
+		return m.OldEndsAt(ctx)
+	case activity.FieldVisibilityRules:
+		return m.OldVisibilityRules(ctx)
+	case activity.FieldParticipationConfig:
+		return m.OldParticipationConfig(ctx)
+	case activity.FieldActivityConfig:
+		return m.OldActivityConfig(ctx)
+	case activity.FieldTotalParticipations:
+		return m.OldTotalParticipations(ctx)
+	case activity.FieldTotalRewardsDistributed:
+		return m.OldTotalRewardsDistributed(ctx)
+	case activity.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case activity.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case activity.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown Activity field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActivityMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case activity.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case activity.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case activity.FieldIcon:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIcon(v)
+		return nil
+	case activity.FieldType:
+		v, ok := value.(activity.Type)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetType(v)
+		return nil
+	case activity.FieldStatus:
+		v, ok := value.(activity.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case activity.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
+	case activity.FieldStartsAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartsAt(v)
+		return nil
+	case activity.FieldEndsAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndsAt(v)
+		return nil
+	case activity.FieldVisibilityRules:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVisibilityRules(v)
+		return nil
+	case activity.FieldParticipationConfig:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParticipationConfig(v)
+		return nil
+	case activity.FieldActivityConfig:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActivityConfig(v)
+		return nil
+	case activity.FieldTotalParticipations:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalParticipations(v)
+		return nil
+	case activity.FieldTotalRewardsDistributed:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalRewardsDistributed(v)
+		return nil
+	case activity.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case activity.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case activity.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Activity field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ActivityMutation) AddedFields() []string {
+	var fields []string
+	if m.addsort_order != nil {
+		fields = append(fields, activity.FieldSortOrder)
+	}
+	if m.addtotal_participations != nil {
+		fields = append(fields, activity.FieldTotalParticipations)
+	}
+	if m.addtotal_rewards_distributed != nil {
+		fields = append(fields, activity.FieldTotalRewardsDistributed)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ActivityMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case activity.FieldSortOrder:
+		return m.AddedSortOrder()
+	case activity.FieldTotalParticipations:
+		return m.AddedTotalParticipations()
+	case activity.FieldTotalRewardsDistributed:
+		return m.AddedTotalRewardsDistributed()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActivityMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case activity.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
+	case activity.FieldTotalParticipations:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalParticipations(v)
+		return nil
+	case activity.FieldTotalRewardsDistributed:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalRewardsDistributed(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Activity numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ActivityMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(activity.FieldStartsAt) {
+		fields = append(fields, activity.FieldStartsAt)
+	}
+	if m.FieldCleared(activity.FieldEndsAt) {
+		fields = append(fields, activity.FieldEndsAt)
+	}
+	if m.FieldCleared(activity.FieldVisibilityRules) {
+		fields = append(fields, activity.FieldVisibilityRules)
+	}
+	if m.FieldCleared(activity.FieldParticipationConfig) {
+		fields = append(fields, activity.FieldParticipationConfig)
+	}
+	if m.FieldCleared(activity.FieldActivityConfig) {
+		fields = append(fields, activity.FieldActivityConfig)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ActivityMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ActivityMutation) ClearField(name string) error {
+	switch name {
+	case activity.FieldStartsAt:
+		m.ClearStartsAt()
+		return nil
+	case activity.FieldEndsAt:
+		m.ClearEndsAt()
+		return nil
+	case activity.FieldVisibilityRules:
+		m.ClearVisibilityRules()
+		return nil
+	case activity.FieldParticipationConfig:
+		m.ClearParticipationConfig()
+		return nil
+	case activity.FieldActivityConfig:
+		m.ClearActivityConfig()
+		return nil
+	}
+	return fmt.Errorf("unknown Activity nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ActivityMutation) ResetField(name string) error {
+	switch name {
+	case activity.FieldName:
+		m.ResetName()
+		return nil
+	case activity.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case activity.FieldIcon:
+		m.ResetIcon()
+		return nil
+	case activity.FieldType:
+		m.ResetType()
+		return nil
+	case activity.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case activity.FieldSortOrder:
+		m.ResetSortOrder()
+		return nil
+	case activity.FieldStartsAt:
+		m.ResetStartsAt()
+		return nil
+	case activity.FieldEndsAt:
+		m.ResetEndsAt()
+		return nil
+	case activity.FieldVisibilityRules:
+		m.ResetVisibilityRules()
+		return nil
+	case activity.FieldParticipationConfig:
+		m.ResetParticipationConfig()
+		return nil
+	case activity.FieldActivityConfig:
+		m.ResetActivityConfig()
+		return nil
+	case activity.FieldTotalParticipations:
+		m.ResetTotalParticipations()
+		return nil
+	case activity.FieldTotalRewardsDistributed:
+		m.ResetTotalRewardsDistributed()
+		return nil
+	case activity.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case activity.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case activity.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown Activity field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ActivityMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.rewards != nil {
+		edges = append(edges, activity.EdgeRewards)
+	}
+	if m.participations != nil {
+		edges = append(edges, activity.EdgeParticipations)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ActivityMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case activity.EdgeRewards:
+		ids := make([]ent.Value, 0, len(m.rewards))
+		for id := range m.rewards {
+			ids = append(ids, id)
+		}
+		return ids
+	case activity.EdgeParticipations:
+		ids := make([]ent.Value, 0, len(m.participations))
+		for id := range m.participations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ActivityMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.removedrewards != nil {
+		edges = append(edges, activity.EdgeRewards)
+	}
+	if m.removedparticipations != nil {
+		edges = append(edges, activity.EdgeParticipations)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ActivityMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case activity.EdgeRewards:
+		ids := make([]ent.Value, 0, len(m.removedrewards))
+		for id := range m.removedrewards {
+			ids = append(ids, id)
+		}
+		return ids
+	case activity.EdgeParticipations:
+		ids := make([]ent.Value, 0, len(m.removedparticipations))
+		for id := range m.removedparticipations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ActivityMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedrewards {
+		edges = append(edges, activity.EdgeRewards)
+	}
+	if m.clearedparticipations {
+		edges = append(edges, activity.EdgeParticipations)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ActivityMutation) EdgeCleared(name string) bool {
+	switch name {
+	case activity.EdgeRewards:
+		return m.clearedrewards
+	case activity.EdgeParticipations:
+		return m.clearedparticipations
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ActivityMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Activity unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ActivityMutation) ResetEdge(name string) error {
+	switch name {
+	case activity.EdgeRewards:
+		m.ResetRewards()
+		return nil
+	case activity.EdgeParticipations:
+		m.ResetParticipations()
+		return nil
+	}
+	return fmt.Errorf("unknown Activity edge %s", name)
+}
+
+// ActivityParticipationMutation represents an operation that mutates the ActivityParticipation nodes in the graph.
+type ActivityParticipationMutation struct {
+	config
+	op                     Op
+	typ                    string
+	id                     *int64
+	participated_at        *time.Time
+	daily_window           *time.Time
+	weekly_window          *time.Time
+	monthly_window         *time.Time
+	result                 *activityparticipation.Result
+	rewards_received       *[]map[string]interface{}
+	appendrewards_received []map[string]interface{}
+	cost_balance           *string
+	extra_data             *map[string]interface{}
+	ip_address             *string
+	user_agent             *string
+	created_at             *time.Time
+	clearedFields          map[string]struct{}
+	activity               *int64
+	clearedactivity        bool
+	user                   *int64
+	cleareduser            bool
+	reward                 *int64
+	clearedreward          bool
+	done                   bool
+	oldValue               func(context.Context) (*ActivityParticipation, error)
+	predicates             []predicate.ActivityParticipation
+}
+
+var _ ent.Mutation = (*ActivityParticipationMutation)(nil)
+
+// activityparticipationOption allows management of the mutation configuration using functional options.
+type activityparticipationOption func(*ActivityParticipationMutation)
+
+// newActivityParticipationMutation creates new mutation for the ActivityParticipation entity.
+func newActivityParticipationMutation(c config, op Op, opts ...activityparticipationOption) *ActivityParticipationMutation {
+	m := &ActivityParticipationMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeActivityParticipation,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withActivityParticipationID sets the ID field of the mutation.
+func withActivityParticipationID(id int64) activityparticipationOption {
+	return func(m *ActivityParticipationMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ActivityParticipation
+		)
+		m.oldValue = func(ctx context.Context) (*ActivityParticipation, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ActivityParticipation.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withActivityParticipation sets the old ActivityParticipation of the mutation.
+func withActivityParticipation(node *ActivityParticipation) activityparticipationOption {
+	return func(m *ActivityParticipationMutation) {
+		m.oldValue = func(context.Context) (*ActivityParticipation, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ActivityParticipationMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ActivityParticipationMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ActivityParticipation entities.
+func (m *ActivityParticipationMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ActivityParticipationMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ActivityParticipationMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ActivityParticipation.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetActivityID sets the "activity_id" field.
+func (m *ActivityParticipationMutation) SetActivityID(i int64) {
+	m.activity = &i
+}
+
+// ActivityID returns the value of the "activity_id" field in the mutation.
+func (m *ActivityParticipationMutation) ActivityID() (r int64, exists bool) {
+	v := m.activity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActivityID returns the old "activity_id" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldActivityID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActivityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActivityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActivityID: %w", err)
+	}
+	return oldValue.ActivityID, nil
+}
+
+// ResetActivityID resets all changes to the "activity_id" field.
+func (m *ActivityParticipationMutation) ResetActivityID() {
+	m.activity = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *ActivityParticipationMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *ActivityParticipationMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *ActivityParticipationMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetParticipatedAt sets the "participated_at" field.
+func (m *ActivityParticipationMutation) SetParticipatedAt(t time.Time) {
+	m.participated_at = &t
+}
+
+// ParticipatedAt returns the value of the "participated_at" field in the mutation.
+func (m *ActivityParticipationMutation) ParticipatedAt() (r time.Time, exists bool) {
+	v := m.participated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParticipatedAt returns the old "participated_at" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldParticipatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParticipatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParticipatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParticipatedAt: %w", err)
+	}
+	return oldValue.ParticipatedAt, nil
+}
+
+// ResetParticipatedAt resets all changes to the "participated_at" field.
+func (m *ActivityParticipationMutation) ResetParticipatedAt() {
+	m.participated_at = nil
+}
+
+// SetDailyWindow sets the "daily_window" field.
+func (m *ActivityParticipationMutation) SetDailyWindow(t time.Time) {
+	m.daily_window = &t
+}
+
+// DailyWindow returns the value of the "daily_window" field in the mutation.
+func (m *ActivityParticipationMutation) DailyWindow() (r time.Time, exists bool) {
+	v := m.daily_window
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyWindow returns the old "daily_window" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldDailyWindow(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyWindow is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyWindow requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyWindow: %w", err)
+	}
+	return oldValue.DailyWindow, nil
+}
+
+// ResetDailyWindow resets all changes to the "daily_window" field.
+func (m *ActivityParticipationMutation) ResetDailyWindow() {
+	m.daily_window = nil
+}
+
+// SetWeeklyWindow sets the "weekly_window" field.
+func (m *ActivityParticipationMutation) SetWeeklyWindow(t time.Time) {
+	m.weekly_window = &t
+}
+
+// WeeklyWindow returns the value of the "weekly_window" field in the mutation.
+func (m *ActivityParticipationMutation) WeeklyWindow() (r time.Time, exists bool) {
+	v := m.weekly_window
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWeeklyWindow returns the old "weekly_window" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldWeeklyWindow(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWeeklyWindow is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWeeklyWindow requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWeeklyWindow: %w", err)
+	}
+	return oldValue.WeeklyWindow, nil
+}
+
+// ResetWeeklyWindow resets all changes to the "weekly_window" field.
+func (m *ActivityParticipationMutation) ResetWeeklyWindow() {
+	m.weekly_window = nil
+}
+
+// SetMonthlyWindow sets the "monthly_window" field.
+func (m *ActivityParticipationMutation) SetMonthlyWindow(t time.Time) {
+	m.monthly_window = &t
+}
+
+// MonthlyWindow returns the value of the "monthly_window" field in the mutation.
+func (m *ActivityParticipationMutation) MonthlyWindow() (r time.Time, exists bool) {
+	v := m.monthly_window
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMonthlyWindow returns the old "monthly_window" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldMonthlyWindow(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMonthlyWindow is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMonthlyWindow requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMonthlyWindow: %w", err)
+	}
+	return oldValue.MonthlyWindow, nil
+}
+
+// ResetMonthlyWindow resets all changes to the "monthly_window" field.
+func (m *ActivityParticipationMutation) ResetMonthlyWindow() {
+	m.monthly_window = nil
+}
+
+// SetResult sets the "result" field.
+func (m *ActivityParticipationMutation) SetResult(a activityparticipation.Result) {
+	m.result = &a
+}
+
+// Result returns the value of the "result" field in the mutation.
+func (m *ActivityParticipationMutation) Result() (r activityparticipation.Result, exists bool) {
+	v := m.result
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResult returns the old "result" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldResult(ctx context.Context) (v activityparticipation.Result, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResult is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResult requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResult: %w", err)
+	}
+	return oldValue.Result, nil
+}
+
+// ResetResult resets all changes to the "result" field.
+func (m *ActivityParticipationMutation) ResetResult() {
+	m.result = nil
+}
+
+// SetRewardsReceived sets the "rewards_received" field.
+func (m *ActivityParticipationMutation) SetRewardsReceived(value []map[string]interface{}) {
+	m.rewards_received = &value
+	m.appendrewards_received = nil
+}
+
+// RewardsReceived returns the value of the "rewards_received" field in the mutation.
+func (m *ActivityParticipationMutation) RewardsReceived() (r []map[string]interface{}, exists bool) {
+	v := m.rewards_received
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardsReceived returns the old "rewards_received" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldRewardsReceived(ctx context.Context) (v []map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardsReceived is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardsReceived requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardsReceived: %w", err)
+	}
+	return oldValue.RewardsReceived, nil
+}
+
+// AppendRewardsReceived adds value to the "rewards_received" field.
+func (m *ActivityParticipationMutation) AppendRewardsReceived(value []map[string]interface{}) {
+	m.appendrewards_received = append(m.appendrewards_received, value...)
+}
+
+// AppendedRewardsReceived returns the list of values that were appended to the "rewards_received" field in this mutation.
+func (m *ActivityParticipationMutation) AppendedRewardsReceived() ([]map[string]interface{}, bool) {
+	if len(m.appendrewards_received) == 0 {
+		return nil, false
+	}
+	return m.appendrewards_received, true
+}
+
+// ClearRewardsReceived clears the value of the "rewards_received" field.
+func (m *ActivityParticipationMutation) ClearRewardsReceived() {
+	m.rewards_received = nil
+	m.appendrewards_received = nil
+	m.clearedFields[activityparticipation.FieldRewardsReceived] = struct{}{}
+}
+
+// RewardsReceivedCleared returns if the "rewards_received" field was cleared in this mutation.
+func (m *ActivityParticipationMutation) RewardsReceivedCleared() bool {
+	_, ok := m.clearedFields[activityparticipation.FieldRewardsReceived]
+	return ok
+}
+
+// ResetRewardsReceived resets all changes to the "rewards_received" field.
+func (m *ActivityParticipationMutation) ResetRewardsReceived() {
+	m.rewards_received = nil
+	m.appendrewards_received = nil
+	delete(m.clearedFields, activityparticipation.FieldRewardsReceived)
+}
+
+// SetRewardID sets the "reward_id" field.
+func (m *ActivityParticipationMutation) SetRewardID(i int64) {
+	m.reward = &i
+}
+
+// RewardID returns the value of the "reward_id" field in the mutation.
+func (m *ActivityParticipationMutation) RewardID() (r int64, exists bool) {
+	v := m.reward
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardID returns the old "reward_id" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldRewardID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardID: %w", err)
+	}
+	return oldValue.RewardID, nil
+}
+
+// ClearRewardID clears the value of the "reward_id" field.
+func (m *ActivityParticipationMutation) ClearRewardID() {
+	m.reward = nil
+	m.clearedFields[activityparticipation.FieldRewardID] = struct{}{}
+}
+
+// RewardIDCleared returns if the "reward_id" field was cleared in this mutation.
+func (m *ActivityParticipationMutation) RewardIDCleared() bool {
+	_, ok := m.clearedFields[activityparticipation.FieldRewardID]
+	return ok
+}
+
+// ResetRewardID resets all changes to the "reward_id" field.
+func (m *ActivityParticipationMutation) ResetRewardID() {
+	m.reward = nil
+	delete(m.clearedFields, activityparticipation.FieldRewardID)
+}
+
+// SetCostBalance sets the "cost_balance" field.
+func (m *ActivityParticipationMutation) SetCostBalance(s string) {
+	m.cost_balance = &s
+}
+
+// CostBalance returns the value of the "cost_balance" field in the mutation.
+func (m *ActivityParticipationMutation) CostBalance() (r string, exists bool) {
+	v := m.cost_balance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCostBalance returns the old "cost_balance" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldCostBalance(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCostBalance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCostBalance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCostBalance: %w", err)
+	}
+	return oldValue.CostBalance, nil
+}
+
+// ResetCostBalance resets all changes to the "cost_balance" field.
+func (m *ActivityParticipationMutation) ResetCostBalance() {
+	m.cost_balance = nil
+}
+
+// SetExtraData sets the "extra_data" field.
+func (m *ActivityParticipationMutation) SetExtraData(value map[string]interface{}) {
+	m.extra_data = &value
+}
+
+// ExtraData returns the value of the "extra_data" field in the mutation.
+func (m *ActivityParticipationMutation) ExtraData() (r map[string]interface{}, exists bool) {
+	v := m.extra_data
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExtraData returns the old "extra_data" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldExtraData(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExtraData is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExtraData requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExtraData: %w", err)
+	}
+	return oldValue.ExtraData, nil
+}
+
+// ClearExtraData clears the value of the "extra_data" field.
+func (m *ActivityParticipationMutation) ClearExtraData() {
+	m.extra_data = nil
+	m.clearedFields[activityparticipation.FieldExtraData] = struct{}{}
+}
+
+// ExtraDataCleared returns if the "extra_data" field was cleared in this mutation.
+func (m *ActivityParticipationMutation) ExtraDataCleared() bool {
+	_, ok := m.clearedFields[activityparticipation.FieldExtraData]
+	return ok
+}
+
+// ResetExtraData resets all changes to the "extra_data" field.
+func (m *ActivityParticipationMutation) ResetExtraData() {
+	m.extra_data = nil
+	delete(m.clearedFields, activityparticipation.FieldExtraData)
+}
+
+// SetIPAddress sets the "ip_address" field.
+func (m *ActivityParticipationMutation) SetIPAddress(s string) {
+	m.ip_address = &s
+}
+
+// IPAddress returns the value of the "ip_address" field in the mutation.
+func (m *ActivityParticipationMutation) IPAddress() (r string, exists bool) {
+	v := m.ip_address
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIPAddress returns the old "ip_address" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldIPAddress(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIPAddress is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIPAddress requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIPAddress: %w", err)
+	}
+	return oldValue.IPAddress, nil
+}
+
+// ResetIPAddress resets all changes to the "ip_address" field.
+func (m *ActivityParticipationMutation) ResetIPAddress() {
+	m.ip_address = nil
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (m *ActivityParticipationMutation) SetUserAgent(s string) {
+	m.user_agent = &s
+}
+
+// UserAgent returns the value of the "user_agent" field in the mutation.
+func (m *ActivityParticipationMutation) UserAgent() (r string, exists bool) {
+	v := m.user_agent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserAgent returns the old "user_agent" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldUserAgent(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserAgent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserAgent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserAgent: %w", err)
+	}
+	return oldValue.UserAgent, nil
+}
+
+// ResetUserAgent resets all changes to the "user_agent" field.
+func (m *ActivityParticipationMutation) ResetUserAgent() {
+	m.user_agent = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ActivityParticipationMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ActivityParticipationMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ActivityParticipation entity.
+// If the ActivityParticipation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityParticipationMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ActivityParticipationMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// ClearActivity clears the "activity" edge to the Activity entity.
+func (m *ActivityParticipationMutation) ClearActivity() {
+	m.clearedactivity = true
+	m.clearedFields[activityparticipation.FieldActivityID] = struct{}{}
+}
+
+// ActivityCleared reports if the "activity" edge to the Activity entity was cleared.
+func (m *ActivityParticipationMutation) ActivityCleared() bool {
+	return m.clearedactivity
+}
+
+// ActivityIDs returns the "activity" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ActivityID instead. It exists only for internal usage by the builders.
+func (m *ActivityParticipationMutation) ActivityIDs() (ids []int64) {
+	if id := m.activity; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetActivity resets all changes to the "activity" edge.
+func (m *ActivityParticipationMutation) ResetActivity() {
+	m.activity = nil
+	m.clearedactivity = false
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *ActivityParticipationMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[activityparticipation.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *ActivityParticipationMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *ActivityParticipationMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *ActivityParticipationMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// ClearReward clears the "reward" edge to the ActivityReward entity.
+func (m *ActivityParticipationMutation) ClearReward() {
+	m.clearedreward = true
+	m.clearedFields[activityparticipation.FieldRewardID] = struct{}{}
+}
+
+// RewardCleared reports if the "reward" edge to the ActivityReward entity was cleared.
+func (m *ActivityParticipationMutation) RewardCleared() bool {
+	return m.RewardIDCleared() || m.clearedreward
+}
+
+// RewardIDs returns the "reward" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RewardID instead. It exists only for internal usage by the builders.
+func (m *ActivityParticipationMutation) RewardIDs() (ids []int64) {
+	if id := m.reward; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetReward resets all changes to the "reward" edge.
+func (m *ActivityParticipationMutation) ResetReward() {
+	m.reward = nil
+	m.clearedreward = false
+}
+
+// Where appends a list predicates to the ActivityParticipationMutation builder.
+func (m *ActivityParticipationMutation) Where(ps ...predicate.ActivityParticipation) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ActivityParticipationMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ActivityParticipationMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ActivityParticipation, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ActivityParticipationMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ActivityParticipationMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ActivityParticipation).
+func (m *ActivityParticipationMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ActivityParticipationMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.activity != nil {
+		fields = append(fields, activityparticipation.FieldActivityID)
+	}
+	if m.user != nil {
+		fields = append(fields, activityparticipation.FieldUserID)
+	}
+	if m.participated_at != nil {
+		fields = append(fields, activityparticipation.FieldParticipatedAt)
+	}
+	if m.daily_window != nil {
+		fields = append(fields, activityparticipation.FieldDailyWindow)
+	}
+	if m.weekly_window != nil {
+		fields = append(fields, activityparticipation.FieldWeeklyWindow)
+	}
+	if m.monthly_window != nil {
+		fields = append(fields, activityparticipation.FieldMonthlyWindow)
+	}
+	if m.result != nil {
+		fields = append(fields, activityparticipation.FieldResult)
+	}
+	if m.rewards_received != nil {
+		fields = append(fields, activityparticipation.FieldRewardsReceived)
+	}
+	if m.reward != nil {
+		fields = append(fields, activityparticipation.FieldRewardID)
+	}
+	if m.cost_balance != nil {
+		fields = append(fields, activityparticipation.FieldCostBalance)
+	}
+	if m.extra_data != nil {
+		fields = append(fields, activityparticipation.FieldExtraData)
+	}
+	if m.ip_address != nil {
+		fields = append(fields, activityparticipation.FieldIPAddress)
+	}
+	if m.user_agent != nil {
+		fields = append(fields, activityparticipation.FieldUserAgent)
+	}
+	if m.created_at != nil {
+		fields = append(fields, activityparticipation.FieldCreatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ActivityParticipationMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case activityparticipation.FieldActivityID:
+		return m.ActivityID()
+	case activityparticipation.FieldUserID:
+		return m.UserID()
+	case activityparticipation.FieldParticipatedAt:
+		return m.ParticipatedAt()
+	case activityparticipation.FieldDailyWindow:
+		return m.DailyWindow()
+	case activityparticipation.FieldWeeklyWindow:
+		return m.WeeklyWindow()
+	case activityparticipation.FieldMonthlyWindow:
+		return m.MonthlyWindow()
+	case activityparticipation.FieldResult:
+		return m.Result()
+	case activityparticipation.FieldRewardsReceived:
+		return m.RewardsReceived()
+	case activityparticipation.FieldRewardID:
+		return m.RewardID()
+	case activityparticipation.FieldCostBalance:
+		return m.CostBalance()
+	case activityparticipation.FieldExtraData:
+		return m.ExtraData()
+	case activityparticipation.FieldIPAddress:
+		return m.IPAddress()
+	case activityparticipation.FieldUserAgent:
+		return m.UserAgent()
+	case activityparticipation.FieldCreatedAt:
+		return m.CreatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ActivityParticipationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case activityparticipation.FieldActivityID:
+		return m.OldActivityID(ctx)
+	case activityparticipation.FieldUserID:
+		return m.OldUserID(ctx)
+	case activityparticipation.FieldParticipatedAt:
+		return m.OldParticipatedAt(ctx)
+	case activityparticipation.FieldDailyWindow:
+		return m.OldDailyWindow(ctx)
+	case activityparticipation.FieldWeeklyWindow:
+		return m.OldWeeklyWindow(ctx)
+	case activityparticipation.FieldMonthlyWindow:
+		return m.OldMonthlyWindow(ctx)
+	case activityparticipation.FieldResult:
+		return m.OldResult(ctx)
+	case activityparticipation.FieldRewardsReceived:
+		return m.OldRewardsReceived(ctx)
+	case activityparticipation.FieldRewardID:
+		return m.OldRewardID(ctx)
+	case activityparticipation.FieldCostBalance:
+		return m.OldCostBalance(ctx)
+	case activityparticipation.FieldExtraData:
+		return m.OldExtraData(ctx)
+	case activityparticipation.FieldIPAddress:
+		return m.OldIPAddress(ctx)
+	case activityparticipation.FieldUserAgent:
+		return m.OldUserAgent(ctx)
+	case activityparticipation.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ActivityParticipation field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActivityParticipationMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case activityparticipation.FieldActivityID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActivityID(v)
+		return nil
+	case activityparticipation.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case activityparticipation.FieldParticipatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParticipatedAt(v)
+		return nil
+	case activityparticipation.FieldDailyWindow:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyWindow(v)
+		return nil
+	case activityparticipation.FieldWeeklyWindow:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWeeklyWindow(v)
+		return nil
+	case activityparticipation.FieldMonthlyWindow:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMonthlyWindow(v)
+		return nil
+	case activityparticipation.FieldResult:
+		v, ok := value.(activityparticipation.Result)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResult(v)
+		return nil
+	case activityparticipation.FieldRewardsReceived:
+		v, ok := value.([]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardsReceived(v)
+		return nil
+	case activityparticipation.FieldRewardID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardID(v)
+		return nil
+	case activityparticipation.FieldCostBalance:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCostBalance(v)
+		return nil
+	case activityparticipation.FieldExtraData:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExtraData(v)
+		return nil
+	case activityparticipation.FieldIPAddress:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIPAddress(v)
+		return nil
+	case activityparticipation.FieldUserAgent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserAgent(v)
+		return nil
+	case activityparticipation.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityParticipation field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ActivityParticipationMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ActivityParticipationMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActivityParticipationMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ActivityParticipation numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ActivityParticipationMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(activityparticipation.FieldRewardsReceived) {
+		fields = append(fields, activityparticipation.FieldRewardsReceived)
+	}
+	if m.FieldCleared(activityparticipation.FieldRewardID) {
+		fields = append(fields, activityparticipation.FieldRewardID)
+	}
+	if m.FieldCleared(activityparticipation.FieldExtraData) {
+		fields = append(fields, activityparticipation.FieldExtraData)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ActivityParticipationMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ActivityParticipationMutation) ClearField(name string) error {
+	switch name {
+	case activityparticipation.FieldRewardsReceived:
+		m.ClearRewardsReceived()
+		return nil
+	case activityparticipation.FieldRewardID:
+		m.ClearRewardID()
+		return nil
+	case activityparticipation.FieldExtraData:
+		m.ClearExtraData()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityParticipation nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ActivityParticipationMutation) ResetField(name string) error {
+	switch name {
+	case activityparticipation.FieldActivityID:
+		m.ResetActivityID()
+		return nil
+	case activityparticipation.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case activityparticipation.FieldParticipatedAt:
+		m.ResetParticipatedAt()
+		return nil
+	case activityparticipation.FieldDailyWindow:
+		m.ResetDailyWindow()
+		return nil
+	case activityparticipation.FieldWeeklyWindow:
+		m.ResetWeeklyWindow()
+		return nil
+	case activityparticipation.FieldMonthlyWindow:
+		m.ResetMonthlyWindow()
+		return nil
+	case activityparticipation.FieldResult:
+		m.ResetResult()
+		return nil
+	case activityparticipation.FieldRewardsReceived:
+		m.ResetRewardsReceived()
+		return nil
+	case activityparticipation.FieldRewardID:
+		m.ResetRewardID()
+		return nil
+	case activityparticipation.FieldCostBalance:
+		m.ResetCostBalance()
+		return nil
+	case activityparticipation.FieldExtraData:
+		m.ResetExtraData()
+		return nil
+	case activityparticipation.FieldIPAddress:
+		m.ResetIPAddress()
+		return nil
+	case activityparticipation.FieldUserAgent:
+		m.ResetUserAgent()
+		return nil
+	case activityparticipation.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityParticipation field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ActivityParticipationMutation) AddedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.activity != nil {
+		edges = append(edges, activityparticipation.EdgeActivity)
+	}
+	if m.user != nil {
+		edges = append(edges, activityparticipation.EdgeUser)
+	}
+	if m.reward != nil {
+		edges = append(edges, activityparticipation.EdgeReward)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ActivityParticipationMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case activityparticipation.EdgeActivity:
+		if id := m.activity; id != nil {
+			return []ent.Value{*id}
+		}
+	case activityparticipation.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	case activityparticipation.EdgeReward:
+		if id := m.reward; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ActivityParticipationMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 3)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ActivityParticipationMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ActivityParticipationMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.clearedactivity {
+		edges = append(edges, activityparticipation.EdgeActivity)
+	}
+	if m.cleareduser {
+		edges = append(edges, activityparticipation.EdgeUser)
+	}
+	if m.clearedreward {
+		edges = append(edges, activityparticipation.EdgeReward)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ActivityParticipationMutation) EdgeCleared(name string) bool {
+	switch name {
+	case activityparticipation.EdgeActivity:
+		return m.clearedactivity
+	case activityparticipation.EdgeUser:
+		return m.cleareduser
+	case activityparticipation.EdgeReward:
+		return m.clearedreward
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ActivityParticipationMutation) ClearEdge(name string) error {
+	switch name {
+	case activityparticipation.EdgeActivity:
+		m.ClearActivity()
+		return nil
+	case activityparticipation.EdgeUser:
+		m.ClearUser()
+		return nil
+	case activityparticipation.EdgeReward:
+		m.ClearReward()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityParticipation unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ActivityParticipationMutation) ResetEdge(name string) error {
+	switch name {
+	case activityparticipation.EdgeActivity:
+		m.ResetActivity()
+		return nil
+	case activityparticipation.EdgeUser:
+		m.ResetUser()
+		return nil
+	case activityparticipation.EdgeReward:
+		m.ResetReward()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityParticipation edge %s", name)
+}
+
+// ActivityRewardMutation represents an operation that mutates the ActivityReward nodes in the graph.
+type ActivityRewardMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *int64
+	name                  *string
+	description           *string
+	icon                  *string
+	reward_type           *activityreward.RewardType
+	reward_value          *string
+	weight                *int
+	addweight             *int
+	probability           *float64
+	addprobability        *float64
+	total_stock           *int64
+	addtotal_stock        *int64
+	remaining_stock       *int64
+	addremaining_stock    *int64
+	tier                  *activityreward.Tier
+	status                *activityreward.Status
+	sort_order            *int
+	addsort_order         *int
+	distributed_count     *int64
+	adddistributed_count  *int64
+	created_at            *time.Time
+	updated_at            *time.Time
+	clearedFields         map[string]struct{}
+	activity              *int64
+	clearedactivity       bool
+	participations        map[int64]struct{}
+	removedparticipations map[int64]struct{}
+	clearedparticipations bool
+	done                  bool
+	oldValue              func(context.Context) (*ActivityReward, error)
+	predicates            []predicate.ActivityReward
+}
+
+var _ ent.Mutation = (*ActivityRewardMutation)(nil)
+
+// activityrewardOption allows management of the mutation configuration using functional options.
+type activityrewardOption func(*ActivityRewardMutation)
+
+// newActivityRewardMutation creates new mutation for the ActivityReward entity.
+func newActivityRewardMutation(c config, op Op, opts ...activityrewardOption) *ActivityRewardMutation {
+	m := &ActivityRewardMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeActivityReward,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withActivityRewardID sets the ID field of the mutation.
+func withActivityRewardID(id int64) activityrewardOption {
+	return func(m *ActivityRewardMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ActivityReward
+		)
+		m.oldValue = func(ctx context.Context) (*ActivityReward, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ActivityReward.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withActivityReward sets the old ActivityReward of the mutation.
+func withActivityReward(node *ActivityReward) activityrewardOption {
+	return func(m *ActivityRewardMutation) {
+		m.oldValue = func(context.Context) (*ActivityReward, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ActivityRewardMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ActivityRewardMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of ActivityReward entities.
+func (m *ActivityRewardMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ActivityRewardMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ActivityRewardMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ActivityReward.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetActivityID sets the "activity_id" field.
+func (m *ActivityRewardMutation) SetActivityID(i int64) {
+	m.activity = &i
+}
+
+// ActivityID returns the value of the "activity_id" field in the mutation.
+func (m *ActivityRewardMutation) ActivityID() (r int64, exists bool) {
+	v := m.activity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActivityID returns the old "activity_id" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldActivityID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActivityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActivityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActivityID: %w", err)
+	}
+	return oldValue.ActivityID, nil
+}
+
+// ResetActivityID resets all changes to the "activity_id" field.
+func (m *ActivityRewardMutation) ResetActivityID() {
+	m.activity = nil
+}
+
+// SetName sets the "name" field.
+func (m *ActivityRewardMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *ActivityRewardMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *ActivityRewardMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *ActivityRewardMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *ActivityRewardMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *ActivityRewardMutation) ResetDescription() {
+	m.description = nil
+}
+
+// SetIcon sets the "icon" field.
+func (m *ActivityRewardMutation) SetIcon(s string) {
+	m.icon = &s
+}
+
+// Icon returns the value of the "icon" field in the mutation.
+func (m *ActivityRewardMutation) Icon() (r string, exists bool) {
+	v := m.icon
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIcon returns the old "icon" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldIcon(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIcon is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIcon requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIcon: %w", err)
+	}
+	return oldValue.Icon, nil
+}
+
+// ResetIcon resets all changes to the "icon" field.
+func (m *ActivityRewardMutation) ResetIcon() {
+	m.icon = nil
+}
+
+// SetRewardType sets the "reward_type" field.
+func (m *ActivityRewardMutation) SetRewardType(at activityreward.RewardType) {
+	m.reward_type = &at
+}
+
+// RewardType returns the value of the "reward_type" field in the mutation.
+func (m *ActivityRewardMutation) RewardType() (r activityreward.RewardType, exists bool) {
+	v := m.reward_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardType returns the old "reward_type" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldRewardType(ctx context.Context) (v activityreward.RewardType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardType: %w", err)
+	}
+	return oldValue.RewardType, nil
+}
+
+// ResetRewardType resets all changes to the "reward_type" field.
+func (m *ActivityRewardMutation) ResetRewardType() {
+	m.reward_type = nil
+}
+
+// SetRewardValue sets the "reward_value" field.
+func (m *ActivityRewardMutation) SetRewardValue(s string) {
+	m.reward_value = &s
+}
+
+// RewardValue returns the value of the "reward_value" field in the mutation.
+func (m *ActivityRewardMutation) RewardValue() (r string, exists bool) {
+	v := m.reward_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRewardValue returns the old "reward_value" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldRewardValue(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRewardValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRewardValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRewardValue: %w", err)
+	}
+	return oldValue.RewardValue, nil
+}
+
+// ResetRewardValue resets all changes to the "reward_value" field.
+func (m *ActivityRewardMutation) ResetRewardValue() {
+	m.reward_value = nil
+}
+
+// SetWeight sets the "weight" field.
+func (m *ActivityRewardMutation) SetWeight(i int) {
+	m.weight = &i
+	m.addweight = nil
+}
+
+// Weight returns the value of the "weight" field in the mutation.
+func (m *ActivityRewardMutation) Weight() (r int, exists bool) {
+	v := m.weight
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWeight returns the old "weight" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldWeight(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWeight is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWeight requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWeight: %w", err)
+	}
+	return oldValue.Weight, nil
+}
+
+// AddWeight adds i to the "weight" field.
+func (m *ActivityRewardMutation) AddWeight(i int) {
+	if m.addweight != nil {
+		*m.addweight += i
+	} else {
+		m.addweight = &i
+	}
+}
+
+// AddedWeight returns the value that was added to the "weight" field in this mutation.
+func (m *ActivityRewardMutation) AddedWeight() (r int, exists bool) {
+	v := m.addweight
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetWeight resets all changes to the "weight" field.
+func (m *ActivityRewardMutation) ResetWeight() {
+	m.weight = nil
+	m.addweight = nil
+}
+
+// SetProbability sets the "probability" field.
+func (m *ActivityRewardMutation) SetProbability(f float64) {
+	m.probability = &f
+	m.addprobability = nil
+}
+
+// Probability returns the value of the "probability" field in the mutation.
+func (m *ActivityRewardMutation) Probability() (r float64, exists bool) {
+	v := m.probability
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProbability returns the old "probability" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldProbability(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProbability is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProbability requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProbability: %w", err)
+	}
+	return oldValue.Probability, nil
+}
+
+// AddProbability adds f to the "probability" field.
+func (m *ActivityRewardMutation) AddProbability(f float64) {
+	if m.addprobability != nil {
+		*m.addprobability += f
+	} else {
+		m.addprobability = &f
+	}
+}
+
+// AddedProbability returns the value that was added to the "probability" field in this mutation.
+func (m *ActivityRewardMutation) AddedProbability() (r float64, exists bool) {
+	v := m.addprobability
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearProbability clears the value of the "probability" field.
+func (m *ActivityRewardMutation) ClearProbability() {
+	m.probability = nil
+	m.addprobability = nil
+	m.clearedFields[activityreward.FieldProbability] = struct{}{}
+}
+
+// ProbabilityCleared returns if the "probability" field was cleared in this mutation.
+func (m *ActivityRewardMutation) ProbabilityCleared() bool {
+	_, ok := m.clearedFields[activityreward.FieldProbability]
+	return ok
+}
+
+// ResetProbability resets all changes to the "probability" field.
+func (m *ActivityRewardMutation) ResetProbability() {
+	m.probability = nil
+	m.addprobability = nil
+	delete(m.clearedFields, activityreward.FieldProbability)
+}
+
+// SetTotalStock sets the "total_stock" field.
+func (m *ActivityRewardMutation) SetTotalStock(i int64) {
+	m.total_stock = &i
+	m.addtotal_stock = nil
+}
+
+// TotalStock returns the value of the "total_stock" field in the mutation.
+func (m *ActivityRewardMutation) TotalStock() (r int64, exists bool) {
+	v := m.total_stock
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTotalStock returns the old "total_stock" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldTotalStock(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTotalStock is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTotalStock requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTotalStock: %w", err)
+	}
+	return oldValue.TotalStock, nil
+}
+
+// AddTotalStock adds i to the "total_stock" field.
+func (m *ActivityRewardMutation) AddTotalStock(i int64) {
+	if m.addtotal_stock != nil {
+		*m.addtotal_stock += i
+	} else {
+		m.addtotal_stock = &i
+	}
+}
+
+// AddedTotalStock returns the value that was added to the "total_stock" field in this mutation.
+func (m *ActivityRewardMutation) AddedTotalStock() (r int64, exists bool) {
+	v := m.addtotal_stock
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTotalStock resets all changes to the "total_stock" field.
+func (m *ActivityRewardMutation) ResetTotalStock() {
+	m.total_stock = nil
+	m.addtotal_stock = nil
+}
+
+// SetRemainingStock sets the "remaining_stock" field.
+func (m *ActivityRewardMutation) SetRemainingStock(i int64) {
+	m.remaining_stock = &i
+	m.addremaining_stock = nil
+}
+
+// RemainingStock returns the value of the "remaining_stock" field in the mutation.
+func (m *ActivityRewardMutation) RemainingStock() (r int64, exists bool) {
+	v := m.remaining_stock
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRemainingStock returns the old "remaining_stock" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldRemainingStock(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRemainingStock is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRemainingStock requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRemainingStock: %w", err)
+	}
+	return oldValue.RemainingStock, nil
+}
+
+// AddRemainingStock adds i to the "remaining_stock" field.
+func (m *ActivityRewardMutation) AddRemainingStock(i int64) {
+	if m.addremaining_stock != nil {
+		*m.addremaining_stock += i
+	} else {
+		m.addremaining_stock = &i
+	}
+}
+
+// AddedRemainingStock returns the value that was added to the "remaining_stock" field in this mutation.
+func (m *ActivityRewardMutation) AddedRemainingStock() (r int64, exists bool) {
+	v := m.addremaining_stock
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRemainingStock resets all changes to the "remaining_stock" field.
+func (m *ActivityRewardMutation) ResetRemainingStock() {
+	m.remaining_stock = nil
+	m.addremaining_stock = nil
+}
+
+// SetTier sets the "tier" field.
+func (m *ActivityRewardMutation) SetTier(a activityreward.Tier) {
+	m.tier = &a
+}
+
+// Tier returns the value of the "tier" field in the mutation.
+func (m *ActivityRewardMutation) Tier() (r activityreward.Tier, exists bool) {
+	v := m.tier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTier returns the old "tier" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldTier(ctx context.Context) (v activityreward.Tier, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTier: %w", err)
+	}
+	return oldValue.Tier, nil
+}
+
+// ResetTier resets all changes to the "tier" field.
+func (m *ActivityRewardMutation) ResetTier() {
+	m.tier = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *ActivityRewardMutation) SetStatus(a activityreward.Status) {
+	m.status = &a
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *ActivityRewardMutation) Status() (r activityreward.Status, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldStatus(ctx context.Context) (v activityreward.Status, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *ActivityRewardMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (m *ActivityRewardMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *ActivityRewardMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *ActivityRewardMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *ActivityRewardMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *ActivityRewardMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
+// SetDistributedCount sets the "distributed_count" field.
+func (m *ActivityRewardMutation) SetDistributedCount(i int64) {
+	m.distributed_count = &i
+	m.adddistributed_count = nil
+}
+
+// DistributedCount returns the value of the "distributed_count" field in the mutation.
+func (m *ActivityRewardMutation) DistributedCount() (r int64, exists bool) {
+	v := m.distributed_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDistributedCount returns the old "distributed_count" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldDistributedCount(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDistributedCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDistributedCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDistributedCount: %w", err)
+	}
+	return oldValue.DistributedCount, nil
+}
+
+// AddDistributedCount adds i to the "distributed_count" field.
+func (m *ActivityRewardMutation) AddDistributedCount(i int64) {
+	if m.adddistributed_count != nil {
+		*m.adddistributed_count += i
+	} else {
+		m.adddistributed_count = &i
+	}
+}
+
+// AddedDistributedCount returns the value that was added to the "distributed_count" field in this mutation.
+func (m *ActivityRewardMutation) AddedDistributedCount() (r int64, exists bool) {
+	v := m.adddistributed_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDistributedCount resets all changes to the "distributed_count" field.
+func (m *ActivityRewardMutation) ResetDistributedCount() {
+	m.distributed_count = nil
+	m.adddistributed_count = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ActivityRewardMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ActivityRewardMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ActivityRewardMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ActivityRewardMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ActivityRewardMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ActivityReward entity.
+// If the ActivityReward object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityRewardMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ActivityRewardMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// ClearActivity clears the "activity" edge to the Activity entity.
+func (m *ActivityRewardMutation) ClearActivity() {
+	m.clearedactivity = true
+	m.clearedFields[activityreward.FieldActivityID] = struct{}{}
+}
+
+// ActivityCleared reports if the "activity" edge to the Activity entity was cleared.
+func (m *ActivityRewardMutation) ActivityCleared() bool {
+	return m.clearedactivity
+}
+
+// ActivityIDs returns the "activity" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ActivityID instead. It exists only for internal usage by the builders.
+func (m *ActivityRewardMutation) ActivityIDs() (ids []int64) {
+	if id := m.activity; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetActivity resets all changes to the "activity" edge.
+func (m *ActivityRewardMutation) ResetActivity() {
+	m.activity = nil
+	m.clearedactivity = false
+}
+
+// AddParticipationIDs adds the "participations" edge to the ActivityParticipation entity by ids.
+func (m *ActivityRewardMutation) AddParticipationIDs(ids ...int64) {
+	if m.participations == nil {
+		m.participations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.participations[ids[i]] = struct{}{}
+	}
+}
+
+// ClearParticipations clears the "participations" edge to the ActivityParticipation entity.
+func (m *ActivityRewardMutation) ClearParticipations() {
+	m.clearedparticipations = true
+}
+
+// ParticipationsCleared reports if the "participations" edge to the ActivityParticipation entity was cleared.
+func (m *ActivityRewardMutation) ParticipationsCleared() bool {
+	return m.clearedparticipations
+}
+
+// RemoveParticipationIDs removes the "participations" edge to the ActivityParticipation entity by IDs.
+func (m *ActivityRewardMutation) RemoveParticipationIDs(ids ...int64) {
+	if m.removedparticipations == nil {
+		m.removedparticipations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.participations, ids[i])
+		m.removedparticipations[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedParticipations returns the removed IDs of the "participations" edge to the ActivityParticipation entity.
+func (m *ActivityRewardMutation) RemovedParticipationsIDs() (ids []int64) {
+	for id := range m.removedparticipations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ParticipationsIDs returns the "participations" edge IDs in the mutation.
+func (m *ActivityRewardMutation) ParticipationsIDs() (ids []int64) {
+	for id := range m.participations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetParticipations resets all changes to the "participations" edge.
+func (m *ActivityRewardMutation) ResetParticipations() {
+	m.participations = nil
+	m.clearedparticipations = false
+	m.removedparticipations = nil
+}
+
+// Where appends a list predicates to the ActivityRewardMutation builder.
+func (m *ActivityRewardMutation) Where(ps ...predicate.ActivityReward) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ActivityRewardMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ActivityRewardMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ActivityReward, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ActivityRewardMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ActivityRewardMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ActivityReward).
+func (m *ActivityRewardMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ActivityRewardMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.activity != nil {
+		fields = append(fields, activityreward.FieldActivityID)
+	}
+	if m.name != nil {
+		fields = append(fields, activityreward.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, activityreward.FieldDescription)
+	}
+	if m.icon != nil {
+		fields = append(fields, activityreward.FieldIcon)
+	}
+	if m.reward_type != nil {
+		fields = append(fields, activityreward.FieldRewardType)
+	}
+	if m.reward_value != nil {
+		fields = append(fields, activityreward.FieldRewardValue)
+	}
+	if m.weight != nil {
+		fields = append(fields, activityreward.FieldWeight)
+	}
+	if m.probability != nil {
+		fields = append(fields, activityreward.FieldProbability)
+	}
+	if m.total_stock != nil {
+		fields = append(fields, activityreward.FieldTotalStock)
+	}
+	if m.remaining_stock != nil {
+		fields = append(fields, activityreward.FieldRemainingStock)
+	}
+	if m.tier != nil {
+		fields = append(fields, activityreward.FieldTier)
+	}
+	if m.status != nil {
+		fields = append(fields, activityreward.FieldStatus)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, activityreward.FieldSortOrder)
+	}
+	if m.distributed_count != nil {
+		fields = append(fields, activityreward.FieldDistributedCount)
+	}
+	if m.created_at != nil {
+		fields = append(fields, activityreward.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, activityreward.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ActivityRewardMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case activityreward.FieldActivityID:
+		return m.ActivityID()
+	case activityreward.FieldName:
+		return m.Name()
+	case activityreward.FieldDescription:
+		return m.Description()
+	case activityreward.FieldIcon:
+		return m.Icon()
+	case activityreward.FieldRewardType:
+		return m.RewardType()
+	case activityreward.FieldRewardValue:
+		return m.RewardValue()
+	case activityreward.FieldWeight:
+		return m.Weight()
+	case activityreward.FieldProbability:
+		return m.Probability()
+	case activityreward.FieldTotalStock:
+		return m.TotalStock()
+	case activityreward.FieldRemainingStock:
+		return m.RemainingStock()
+	case activityreward.FieldTier:
+		return m.Tier()
+	case activityreward.FieldStatus:
+		return m.Status()
+	case activityreward.FieldSortOrder:
+		return m.SortOrder()
+	case activityreward.FieldDistributedCount:
+		return m.DistributedCount()
+	case activityreward.FieldCreatedAt:
+		return m.CreatedAt()
+	case activityreward.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ActivityRewardMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case activityreward.FieldActivityID:
+		return m.OldActivityID(ctx)
+	case activityreward.FieldName:
+		return m.OldName(ctx)
+	case activityreward.FieldDescription:
+		return m.OldDescription(ctx)
+	case activityreward.FieldIcon:
+		return m.OldIcon(ctx)
+	case activityreward.FieldRewardType:
+		return m.OldRewardType(ctx)
+	case activityreward.FieldRewardValue:
+		return m.OldRewardValue(ctx)
+	case activityreward.FieldWeight:
+		return m.OldWeight(ctx)
+	case activityreward.FieldProbability:
+		return m.OldProbability(ctx)
+	case activityreward.FieldTotalStock:
+		return m.OldTotalStock(ctx)
+	case activityreward.FieldRemainingStock:
+		return m.OldRemainingStock(ctx)
+	case activityreward.FieldTier:
+		return m.OldTier(ctx)
+	case activityreward.FieldStatus:
+		return m.OldStatus(ctx)
+	case activityreward.FieldSortOrder:
+		return m.OldSortOrder(ctx)
+	case activityreward.FieldDistributedCount:
+		return m.OldDistributedCount(ctx)
+	case activityreward.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case activityreward.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown ActivityReward field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActivityRewardMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case activityreward.FieldActivityID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActivityID(v)
+		return nil
+	case activityreward.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case activityreward.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case activityreward.FieldIcon:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIcon(v)
+		return nil
+	case activityreward.FieldRewardType:
+		v, ok := value.(activityreward.RewardType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardType(v)
+		return nil
+	case activityreward.FieldRewardValue:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRewardValue(v)
+		return nil
+	case activityreward.FieldWeight:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWeight(v)
+		return nil
+	case activityreward.FieldProbability:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProbability(v)
+		return nil
+	case activityreward.FieldTotalStock:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTotalStock(v)
+		return nil
+	case activityreward.FieldRemainingStock:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRemainingStock(v)
+		return nil
+	case activityreward.FieldTier:
+		v, ok := value.(activityreward.Tier)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTier(v)
+		return nil
+	case activityreward.FieldStatus:
+		v, ok := value.(activityreward.Status)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case activityreward.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
+	case activityreward.FieldDistributedCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDistributedCount(v)
+		return nil
+	case activityreward.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case activityreward.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityReward field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ActivityRewardMutation) AddedFields() []string {
+	var fields []string
+	if m.addweight != nil {
+		fields = append(fields, activityreward.FieldWeight)
+	}
+	if m.addprobability != nil {
+		fields = append(fields, activityreward.FieldProbability)
+	}
+	if m.addtotal_stock != nil {
+		fields = append(fields, activityreward.FieldTotalStock)
+	}
+	if m.addremaining_stock != nil {
+		fields = append(fields, activityreward.FieldRemainingStock)
+	}
+	if m.addsort_order != nil {
+		fields = append(fields, activityreward.FieldSortOrder)
+	}
+	if m.adddistributed_count != nil {
+		fields = append(fields, activityreward.FieldDistributedCount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ActivityRewardMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case activityreward.FieldWeight:
+		return m.AddedWeight()
+	case activityreward.FieldProbability:
+		return m.AddedProbability()
+	case activityreward.FieldTotalStock:
+		return m.AddedTotalStock()
+	case activityreward.FieldRemainingStock:
+		return m.AddedRemainingStock()
+	case activityreward.FieldSortOrder:
+		return m.AddedSortOrder()
+	case activityreward.FieldDistributedCount:
+		return m.AddedDistributedCount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ActivityRewardMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case activityreward.FieldWeight:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddWeight(v)
+		return nil
+	case activityreward.FieldProbability:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProbability(v)
+		return nil
+	case activityreward.FieldTotalStock:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTotalStock(v)
+		return nil
+	case activityreward.FieldRemainingStock:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRemainingStock(v)
+		return nil
+	case activityreward.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
+	case activityreward.FieldDistributedCount:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDistributedCount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityReward numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ActivityRewardMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(activityreward.FieldProbability) {
+		fields = append(fields, activityreward.FieldProbability)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ActivityRewardMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ActivityRewardMutation) ClearField(name string) error {
+	switch name {
+	case activityreward.FieldProbability:
+		m.ClearProbability()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityReward nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ActivityRewardMutation) ResetField(name string) error {
+	switch name {
+	case activityreward.FieldActivityID:
+		m.ResetActivityID()
+		return nil
+	case activityreward.FieldName:
+		m.ResetName()
+		return nil
+	case activityreward.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case activityreward.FieldIcon:
+		m.ResetIcon()
+		return nil
+	case activityreward.FieldRewardType:
+		m.ResetRewardType()
+		return nil
+	case activityreward.FieldRewardValue:
+		m.ResetRewardValue()
+		return nil
+	case activityreward.FieldWeight:
+		m.ResetWeight()
+		return nil
+	case activityreward.FieldProbability:
+		m.ResetProbability()
+		return nil
+	case activityreward.FieldTotalStock:
+		m.ResetTotalStock()
+		return nil
+	case activityreward.FieldRemainingStock:
+		m.ResetRemainingStock()
+		return nil
+	case activityreward.FieldTier:
+		m.ResetTier()
+		return nil
+	case activityreward.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case activityreward.FieldSortOrder:
+		m.ResetSortOrder()
+		return nil
+	case activityreward.FieldDistributedCount:
+		m.ResetDistributedCount()
+		return nil
+	case activityreward.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case activityreward.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityReward field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ActivityRewardMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.activity != nil {
+		edges = append(edges, activityreward.EdgeActivity)
+	}
+	if m.participations != nil {
+		edges = append(edges, activityreward.EdgeParticipations)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ActivityRewardMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case activityreward.EdgeActivity:
+		if id := m.activity; id != nil {
+			return []ent.Value{*id}
+		}
+	case activityreward.EdgeParticipations:
+		ids := make([]ent.Value, 0, len(m.participations))
+		for id := range m.participations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ActivityRewardMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.removedparticipations != nil {
+		edges = append(edges, activityreward.EdgeParticipations)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ActivityRewardMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case activityreward.EdgeParticipations:
+		ids := make([]ent.Value, 0, len(m.removedparticipations))
+		for id := range m.removedparticipations {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ActivityRewardMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedactivity {
+		edges = append(edges, activityreward.EdgeActivity)
+	}
+	if m.clearedparticipations {
+		edges = append(edges, activityreward.EdgeParticipations)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ActivityRewardMutation) EdgeCleared(name string) bool {
+	switch name {
+	case activityreward.EdgeActivity:
+		return m.clearedactivity
+	case activityreward.EdgeParticipations:
+		return m.clearedparticipations
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ActivityRewardMutation) ClearEdge(name string) error {
+	switch name {
+	case activityreward.EdgeActivity:
+		m.ClearActivity()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityReward unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ActivityRewardMutation) ResetEdge(name string) error {
+	switch name {
+	case activityreward.EdgeActivity:
+		m.ResetActivity()
+		return nil
+	case activityreward.EdgeParticipations:
+		m.ResetParticipations()
+		return nil
+	}
+	return fmt.Errorf("unknown ActivityReward edge %s", name)
 }
 
 // AnnouncementMutation represents an operation that mutates the Announcement nodes in the graph.
@@ -21605,60 +25894,63 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                            Op
-	typ                           string
-	id                            *int64
-	created_at                    *time.Time
-	updated_at                    *time.Time
-	deleted_at                    *time.Time
-	email                         *string
-	password_hash                 *string
-	role                          *string
-	balance                       *float64
-	addbalance                    *float64
-	concurrency                   *int
-	addconcurrency                *int
-	status                        *string
-	username                      *string
-	notes                         *string
-	totp_secret_encrypted         *string
-	totp_enabled                  *bool
-	totp_enabled_at               *time.Time
-	sora_storage_quota_bytes      *int64
-	addsora_storage_quota_bytes   *int64
-	sora_storage_used_bytes       *int64
-	addsora_storage_used_bytes    *int64
-	clearedFields                 map[string]struct{}
-	api_keys                      map[int64]struct{}
-	removedapi_keys               map[int64]struct{}
-	clearedapi_keys               bool
-	redeem_codes                  map[int64]struct{}
-	removedredeem_codes           map[int64]struct{}
-	clearedredeem_codes           bool
-	subscriptions                 map[int64]struct{}
-	removedsubscriptions          map[int64]struct{}
-	clearedsubscriptions          bool
-	assigned_subscriptions        map[int64]struct{}
-	removedassigned_subscriptions map[int64]struct{}
-	clearedassigned_subscriptions bool
-	announcement_reads            map[int64]struct{}
-	removedannouncement_reads     map[int64]struct{}
-	clearedannouncement_reads     bool
-	allowed_groups                map[int64]struct{}
-	removedallowed_groups         map[int64]struct{}
-	clearedallowed_groups         bool
-	usage_logs                    map[int64]struct{}
-	removedusage_logs             map[int64]struct{}
-	clearedusage_logs             bool
-	attribute_values              map[int64]struct{}
-	removedattribute_values       map[int64]struct{}
-	clearedattribute_values       bool
-	promo_code_usages             map[int64]struct{}
-	removedpromo_code_usages      map[int64]struct{}
-	clearedpromo_code_usages      bool
-	done                          bool
-	oldValue                      func(context.Context) (*User, error)
-	predicates                    []predicate.User
+	op                             Op
+	typ                            string
+	id                             *int64
+	created_at                     *time.Time
+	updated_at                     *time.Time
+	deleted_at                     *time.Time
+	email                          *string
+	password_hash                  *string
+	role                           *string
+	balance                        *float64
+	addbalance                     *float64
+	concurrency                    *int
+	addconcurrency                 *int
+	status                         *string
+	username                       *string
+	notes                          *string
+	totp_secret_encrypted          *string
+	totp_enabled                   *bool
+	totp_enabled_at                *time.Time
+	sora_storage_quota_bytes       *int64
+	addsora_storage_quota_bytes    *int64
+	sora_storage_used_bytes        *int64
+	addsora_storage_used_bytes     *int64
+	clearedFields                  map[string]struct{}
+	api_keys                       map[int64]struct{}
+	removedapi_keys                map[int64]struct{}
+	clearedapi_keys                bool
+	redeem_codes                   map[int64]struct{}
+	removedredeem_codes            map[int64]struct{}
+	clearedredeem_codes            bool
+	subscriptions                  map[int64]struct{}
+	removedsubscriptions           map[int64]struct{}
+	clearedsubscriptions           bool
+	assigned_subscriptions         map[int64]struct{}
+	removedassigned_subscriptions  map[int64]struct{}
+	clearedassigned_subscriptions  bool
+	announcement_reads             map[int64]struct{}
+	removedannouncement_reads      map[int64]struct{}
+	clearedannouncement_reads      bool
+	allowed_groups                 map[int64]struct{}
+	removedallowed_groups          map[int64]struct{}
+	clearedallowed_groups          bool
+	usage_logs                     map[int64]struct{}
+	removedusage_logs              map[int64]struct{}
+	clearedusage_logs              bool
+	attribute_values               map[int64]struct{}
+	removedattribute_values        map[int64]struct{}
+	clearedattribute_values        bool
+	promo_code_usages              map[int64]struct{}
+	removedpromo_code_usages       map[int64]struct{}
+	clearedpromo_code_usages       bool
+	activity_participations        map[int64]struct{}
+	removedactivity_participations map[int64]struct{}
+	clearedactivity_participations bool
+	done                           bool
+	oldValue                       func(context.Context) (*User, error)
+	predicates                     []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -22940,6 +27232,60 @@ func (m *UserMutation) ResetPromoCodeUsages() {
 	m.removedpromo_code_usages = nil
 }
 
+// AddActivityParticipationIDs adds the "activity_participations" edge to the ActivityParticipation entity by ids.
+func (m *UserMutation) AddActivityParticipationIDs(ids ...int64) {
+	if m.activity_participations == nil {
+		m.activity_participations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.activity_participations[ids[i]] = struct{}{}
+	}
+}
+
+// ClearActivityParticipations clears the "activity_participations" edge to the ActivityParticipation entity.
+func (m *UserMutation) ClearActivityParticipations() {
+	m.clearedactivity_participations = true
+}
+
+// ActivityParticipationsCleared reports if the "activity_participations" edge to the ActivityParticipation entity was cleared.
+func (m *UserMutation) ActivityParticipationsCleared() bool {
+	return m.clearedactivity_participations
+}
+
+// RemoveActivityParticipationIDs removes the "activity_participations" edge to the ActivityParticipation entity by IDs.
+func (m *UserMutation) RemoveActivityParticipationIDs(ids ...int64) {
+	if m.removedactivity_participations == nil {
+		m.removedactivity_participations = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.activity_participations, ids[i])
+		m.removedactivity_participations[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedActivityParticipations returns the removed IDs of the "activity_participations" edge to the ActivityParticipation entity.
+func (m *UserMutation) RemovedActivityParticipationsIDs() (ids []int64) {
+	for id := range m.removedactivity_participations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ActivityParticipationsIDs returns the "activity_participations" edge IDs in the mutation.
+func (m *UserMutation) ActivityParticipationsIDs() (ids []int64) {
+	for id := range m.activity_participations {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetActivityParticipations resets all changes to the "activity_participations" edge.
+func (m *UserMutation) ResetActivityParticipations() {
+	m.activity_participations = nil
+	m.clearedactivity_participations = false
+	m.removedactivity_participations = nil
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -23400,7 +27746,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 9)
+	edges := make([]string, 0, 10)
 	if m.api_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -23427,6 +27773,9 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.promo_code_usages != nil {
 		edges = append(edges, user.EdgePromoCodeUsages)
+	}
+	if m.activity_participations != nil {
+		edges = append(edges, user.EdgeActivityParticipations)
 	}
 	return edges
 }
@@ -23489,13 +27838,19 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeActivityParticipations:
+		ids := make([]ent.Value, 0, len(m.activity_participations))
+		for id := range m.activity_participations {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 9)
+	edges := make([]string, 0, 10)
 	if m.removedapi_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -23522,6 +27877,9 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedpromo_code_usages != nil {
 		edges = append(edges, user.EdgePromoCodeUsages)
+	}
+	if m.removedactivity_participations != nil {
+		edges = append(edges, user.EdgeActivityParticipations)
 	}
 	return edges
 }
@@ -23584,13 +27942,19 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeActivityParticipations:
+		ids := make([]ent.Value, 0, len(m.removedactivity_participations))
+		for id := range m.removedactivity_participations {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 9)
+	edges := make([]string, 0, 10)
 	if m.clearedapi_keys {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -23618,6 +27982,9 @@ func (m *UserMutation) ClearedEdges() []string {
 	if m.clearedpromo_code_usages {
 		edges = append(edges, user.EdgePromoCodeUsages)
 	}
+	if m.clearedactivity_participations {
+		edges = append(edges, user.EdgeActivityParticipations)
+	}
 	return edges
 }
 
@@ -23643,6 +28010,8 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedattribute_values
 	case user.EdgePromoCodeUsages:
 		return m.clearedpromo_code_usages
+	case user.EdgeActivityParticipations:
+		return m.clearedactivity_participations
 	}
 	return false
 }
@@ -23685,6 +28054,9 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgePromoCodeUsages:
 		m.ResetPromoCodeUsages()
+		return nil
+	case user.EdgeActivityParticipations:
+		m.ResetActivityParticipations()
 		return nil
 	}
 	return fmt.Errorf("unknown User edge %s", name)

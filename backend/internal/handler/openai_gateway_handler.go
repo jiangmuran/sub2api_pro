@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -36,6 +37,21 @@ type OpenAIGatewayHandler struct {
 	concurrencyHelper       *ConcurrencyHelper
 	maxAccountSwitches      int
 }
+
+type nanoBananaPendingTask struct {
+	APIKey       *service.APIKey
+	Account      *service.Account
+	Subscription *service.UserSubscription
+	UserAgent    string
+	IPAddress    string
+	Model        string
+	ImageSize    string
+	Prompt       string
+	Recorded     bool
+	CreatedAt    time.Time
+}
+
+var nanoBananaPendingTasks sync.Map
 
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
 func NewOpenAIGatewayHandler(
@@ -387,15 +403,28 @@ func (h *OpenAIGatewayHandler) ImageGenerations(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
+	isNanoBanana := service.IsNanoBananaModel(model)
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	failedAccountIDs := make(map[int64]struct{})
 	for switchCount := 0; switchCount <= h.maxAccountSwitches; switchCount++ {
-		account, selectErr := h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, "", model, failedAccountIDs)
+		var account *service.Account
+		var selectErr error
+		if isNanoBanana {
+			account, selectErr = h.gatewayService.SelectImageAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, model, failedAccountIDs)
+		} else {
+			account, selectErr = h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, "", model, failedAccountIDs)
+		}
 		if selectErr != nil {
 			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", selectErr.Error())
 			return
 		}
-		result, forwardErr := h.gatewayService.ForwardImageGeneration(c.Request.Context(), c, account, body)
+		var result *service.OpenAIForwardResult
+		var forwardErr error
+		if isNanoBanana {
+			result, forwardErr = h.gatewayService.ForwardNanoBananaImageGeneration(c.Request.Context(), c, account, body)
+		} else {
+			result, forwardErr = h.gatewayService.ForwardImageGeneration(c.Request.Context(), c, account, body)
+		}
 		if forwardErr != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(forwardErr, &failoverErr) {
@@ -424,6 +453,169 @@ func (h *OpenAIGatewayHandler) ImageGenerations(c *gin.Context) {
 		_ = subject
 		return
 	}
+}
+
+// NanoBananaDraw handles direct /v1/draw/nano-banana passthrough requests.
+func (h *OpenAIGatewayHandler) NanoBananaDraw(c *gin.Context) {
+	setOpenAIClientTransportHTTP(c)
+
+	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	if !ok {
+		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
+		return
+	}
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	}
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if model == "" {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
+		return
+	}
+	if !service.IsNanoBananaModel(model) {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model must be a nano-banana series model")
+		return
+	}
+	webHook := strings.TrimSpace(gjson.GetBytes(body, "webHook").String())
+	imageSize := strings.TrimSpace(gjson.GetBytes(body, "imageSize").String())
+	prompt := strings.TrimSpace(gjson.GetBytes(body, "prompt").String())
+	account, selectErr := h.gatewayService.SelectImageAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, model, nil)
+	if selectErr != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", selectErr.Error())
+		return
+	}
+	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	userAgent := c.GetHeader("User-Agent")
+	clientIP := ip.GetClientIP(c)
+	if webHook == "-1" {
+		resp, err := h.gatewayService.CreateNanoBananaTask(c.Request.Context(), account, body)
+		if err != nil {
+			h.errorResponse(c, http.StatusBadGateway, "api_error", err.Error())
+			return
+		}
+		service.WriteNanoBananaRawResponse(c, resp)
+		taskID := strings.TrimSpace(gjson.GetBytes(resp.Body, "data.id").String())
+		if taskID != "" {
+			nanoBananaPendingTasks.Store(taskID, &nanoBananaPendingTask{
+				APIKey:       apiKey,
+				Account:      account,
+				Subscription: subscription,
+				UserAgent:    userAgent,
+				IPAddress:    clientIP,
+				Model:        model,
+				ImageSize:    strings.ToUpper(imageSize),
+				Prompt:       prompt,
+				CreatedAt:    time.Now(),
+			})
+		}
+		return
+	}
+	if err := h.gatewayService.ForwardNanoBananaDrawPassthrough(c.Request.Context(), c, account, body); err != nil {
+		h.errorResponse(c, http.StatusBadGateway, "api_error", err.Error())
+		return
+	}
+}
+
+// NanoBananaResult handles direct /v1/draw/result passthrough requests.
+func (h *OpenAIGatewayHandler) NanoBananaResult(c *gin.Context) {
+	setOpenAIClientTransportHTTP(c)
+
+	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
+	if !ok {
+		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
+		return
+	}
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to read request body")
+		return
+	}
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+		return
+	}
+	if strings.TrimSpace(gjson.GetBytes(body, "id").String()) == "" {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "id is required")
+		return
+	}
+	taskID := strings.TrimSpace(gjson.GetBytes(body, "id").String())
+	resp, err := h.gatewayService.QueryNanoBananaResult(c.Request.Context(), apiKey.GroupID, body)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadGateway, "api_error", err.Error())
+		return
+	}
+	imageSize := ""
+	if value, ok := nanoBananaPendingTasks.Load(taskID); ok {
+		if pending, ok := value.(*nanoBananaPendingTask); ok && pending != nil {
+			imageSize = pending.ImageSize
+		}
+	}
+	resp.Body = service.RewriteNanoBananaProgress(resp.Body, imageSize, time.Now())
+	service.WriteNanoBananaRawResponse(c, resp)
+	h.maybeRecordNanoBananaTask(c.Request.Context(), taskID, resp)
+}
+
+func (h *OpenAIGatewayHandler) maybeRecordNanoBananaTask(ctx context.Context, taskID string, resp *service.NanoBananaRawResponse) {
+	if strings.TrimSpace(taskID) == "" || resp == nil || h == nil || h.gatewayService == nil {
+		return
+	}
+	value, ok := nanoBananaPendingTasks.Load(taskID)
+	if !ok {
+		return
+	}
+	pending, ok := value.(*nanoBananaPendingTask)
+	if !ok || pending == nil || pending.Recorded || pending.APIKey == nil || pending.Account == nil || pending.APIKey.User == nil {
+		return
+	}
+	status := strings.ToLower(strings.TrimSpace(gjson.GetBytes(resp.Body, "data.status").String()))
+	if status != "succeeded" {
+		if status == "failed" {
+			nanoBananaPendingTasks.Delete(taskID)
+		}
+		return
+	}
+	imageCount := len(gjson.GetBytes(resp.Body, "data.results").Array())
+	if imageCount <= 0 {
+		imageCount = 1
+	}
+	duration := time.Since(pending.CreatedAt)
+	startTime := gjson.GetBytes(resp.Body, "data.start_time").Int()
+	endTime := gjson.GetBytes(resp.Body, "data.end_time").Int()
+	if startTime > 0 && endTime >= startTime {
+		duration = time.Duration(endTime-startTime) * time.Second
+	}
+	result := &service.OpenAIForwardResult{
+		RequestID:            taskID,
+		Model:                pending.Model,
+		Duration:             duration,
+		EstimatedInputTokens: len(pending.Prompt) / 4,
+		ImageCount:           imageCount,
+		ImageSize:            strings.ToUpper(strings.TrimSpace(pending.ImageSize)),
+		MediaType:            "image",
+	}
+	if result.ImageSize == "" {
+		result.ImageSize = "1K"
+	}
+	pending.Recorded = true
+	h.submitUsageRecordTask(func(taskCtx context.Context) {
+		_ = h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
+			Result:        result,
+			APIKey:        pending.APIKey,
+			User:          pending.APIKey.User,
+			Account:       pending.Account,
+			Subscription:  pending.Subscription,
+			UserAgent:     pending.UserAgent,
+			IPAddress:     pending.IPAddress,
+			APIKeyService: h.apiKeyService,
+		})
+	})
+	nanoBananaPendingTasks.Delete(taskID)
 }
 
 func (h *OpenAIGatewayHandler) handleLegacyCompletions(c *gin.Context, protocol string) {
@@ -1219,16 +1411,29 @@ func (h *OpenAIGatewayHandler) ImageEdits(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
+	isNanoBanana := service.IsNanoBananaModel(model)
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	failedAccountIDs := make(map[int64]struct{})
 	for switchCount := 0; switchCount <= h.maxAccountSwitches; switchCount++ {
-		account, selectErr := h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, "", model, failedAccountIDs)
+		var account *service.Account
+		var selectErr error
+		if isNanoBanana {
+			account, selectErr = h.gatewayService.SelectImageAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, model, failedAccountIDs)
+		} else {
+			account, selectErr = h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, "", model, failedAccountIDs)
+		}
 		if selectErr != nil {
 			h.errorResponse(c, http.StatusServiceUnavailable, "service_unavailable", selectErr.Error())
 			return
 		}
-		result, forwardErr := h.gatewayService.ForwardImageEdits(c.Request.Context(), c, account)
+		var result *service.OpenAIForwardResult
+		var forwardErr error
+		if isNanoBanana {
+			result, forwardErr = h.gatewayService.ForwardNanoBananaImageEdits(c.Request.Context(), c, account)
+		} else {
+			result, forwardErr = h.gatewayService.ForwardImageEdits(c.Request.Context(), c, account)
+		}
 		if forwardErr != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(forwardErr, &failoverErr) {

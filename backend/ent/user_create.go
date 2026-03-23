@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/activityparticipation"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -371,6 +372,21 @@ func (_c *UserCreate) AddPromoCodeUsages(v ...*PromoCodeUsage) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddPromoCodeUsageIDs(ids...)
+}
+
+// AddActivityParticipationIDs adds the "activity_participations" edge to the ActivityParticipation entity by IDs.
+func (_c *UserCreate) AddActivityParticipationIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddActivityParticipationIDs(ids...)
+	return _c
+}
+
+// AddActivityParticipations adds the "activity_participations" edges to the ActivityParticipation entity.
+func (_c *UserCreate) AddActivityParticipations(v ...*ActivityParticipation) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddActivityParticipationIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -761,6 +777,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(promocodeusage.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ActivityParticipationsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.ActivityParticipationsTable,
+			Columns: []string{user.ActivityParticipationsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(activityparticipation.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

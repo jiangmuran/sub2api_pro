@@ -51,6 +51,9 @@ func RegisterGatewayRoutes(
 		// OpenAI Image APIs
 		gateway.POST("/images/generations", h.OpenAIGateway.ImageGenerations)
 		gateway.POST("/images/edits", h.OpenAIGateway.ImageEdits)
+		// Nano Banana passthrough APIs
+		gateway.POST("/draw/nano-banana", h.OpenAIGateway.NanoBananaDraw)
+		gateway.POST("/draw/result", h.OpenAIGateway.NanoBananaResult)
 		// OpenAI Video API
 		gateway.POST("/videos", h.OpenAIGateway.VideoGenerations)
 		// OpenAI legacy endpoints (compat)

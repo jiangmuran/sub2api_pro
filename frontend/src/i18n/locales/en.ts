@@ -277,6 +277,7 @@ export default {
     voiceChat: 'Voice Chat',
     usage: 'Usage',
     redeem: 'Redeem',
+    activities: 'Activities',
     distributor: 'Distributor',
     profile: 'Profile',
     users: 'Users',
@@ -892,6 +893,36 @@ export default {
     pleaseEnterCode: 'Please enter a redeem code'
   },
 
+  // Activities
+  activities: {
+    title: 'Activities',
+    description: 'Join activities and get rewards',
+    allActivities: 'All Activities',
+    noActivities: 'No activities available',
+    loadFailed: 'Failed to load activities',
+    participateFailed: 'Failed to participate',
+    participating: 'Participating...',
+    success: 'Success!',
+    rewardsReceived: 'Rewards received',
+    days: ' days',
+    types: {
+      checkIn: 'Check-in',
+      lottery: 'Lottery',
+      redeem: 'Redeem',
+      task: 'Task',
+      newbie: 'Newbie Pack',
+      limitedTime: 'Limited Time'
+    },
+    actions: {
+      checkIn: 'Check In',
+      draw: 'Draw',
+      redeem: 'Redeem',
+      complete: 'Complete',
+      claim: 'Claim',
+      participate: 'Participate'
+    }
+  },
+
   // Distributor (User)
   distributor: {
     title: 'Distributor',
@@ -1053,7 +1084,7 @@ export default {
       description: 'Review missing model prices, preview pricing sources, fill manual values, and save model pricing in one focused admin workflow.',
       accountSelector: 'Select Account',
       searchPlaceholder: 'Search account name or base URL',
-      noAccounts: 'No manageable OpenAI API key accounts yet',
+      noAccounts: 'No manageable OpenAI or Nano Banana API key accounts yet',
       summaryTitle: 'Summary',
       totalModels: 'Total models',
       missingModels: 'Missing prices',
@@ -1559,7 +1590,8 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        'nano-banana': 'Nano Banana'
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
@@ -1583,6 +1615,10 @@ export default {
       imagePricing: {
         title: 'Image Generation Pricing',
         description: 'Configure pricing for image generation models. Leave empty to use default prices.'
+      },
+      nanoBananaPricing: {
+        title: 'Nano Banana billing',
+        description: 'Nano Banana uses account-level per-image model pricing. Group settings still control platform, rate multiplier, and subscription rules, but not 1K/2K/4K image price tiers.'
       },
       soraPricing: {
         title: 'Sora Per-Request Pricing',
@@ -1829,7 +1865,8 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        'nano-banana': 'Nano Banana'
       },
       types: {
         oauth: 'OAuth',

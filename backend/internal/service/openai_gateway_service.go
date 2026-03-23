@@ -971,6 +971,25 @@ func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.C
 	return s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, 0)
 }
 
+func (s *OpenAIGatewayService) SelectImageAccountForModelWithExclusions(ctx context.Context, groupID *int64, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
+	platform := PlatformOpenAI
+	if IsNanoBananaModel(requestedModel) {
+		platform = PlatformNanoBanana
+	}
+	accounts, err := s.listSchedulableAccountsByPlatform(ctx, groupID, platform)
+	if err != nil {
+		return nil, err
+	}
+	selected := s.selectBestAccountForPlatform(accounts, platform, requestedModel, excludedIDs)
+	if selected == nil {
+		if requestedModel != "" {
+			return nil, fmt.Errorf("no available %s accounts supporting model: %s", platform, requestedModel)
+		}
+		return nil, fmt.Errorf("no available %s accounts", platform)
+	}
+	return selected, nil
+}
+
 func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) (*Account, error) {
 	// 1. 尝试粘性会话命中
 	// Try sticky session hit
@@ -1096,6 +1115,26 @@ func (s *OpenAIGatewayService) selectBestAccount(accounts []Account, requestedMo
 		}
 	}
 
+	return selected
+}
+
+func (s *OpenAIGatewayService) selectBestAccountForPlatform(accounts []Account, platform string, requestedModel string, excludedIDs map[int64]struct{}) *Account {
+	var selected *Account
+	for i := range accounts {
+		acc := &accounts[i]
+		if _, excluded := excludedIDs[acc.ID]; excluded {
+			continue
+		}
+		if !acc.IsSchedulable() || acc.Platform != platform {
+			continue
+		}
+		if requestedModel != "" && !acc.IsModelSupported(requestedModel) {
+			continue
+		}
+		if selected == nil || s.isBetterAccount(acc, selected) {
+			selected = acc
+		}
+	}
 	return selected
 }
 
@@ -1353,18 +1392,22 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64) ([]Account, error) {
+	return s.listSchedulableAccountsByPlatform(ctx, groupID, PlatformOpenAI)
+}
+
+func (s *OpenAIGatewayService) listSchedulableAccountsByPlatform(ctx context.Context, groupID *int64, platform string) ([]Account, error) {
 	if s.schedulerSnapshot != nil {
-		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, PlatformOpenAI, false)
+		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, false)
 		return accounts, err
 	}
 	var accounts []Account
 	var err error
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, PlatformOpenAI)
+		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
 	} else if groupID != nil {
-		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, PlatformOpenAI)
+		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
 	} else {
-		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatform(ctx, PlatformOpenAI)
+		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatform(ctx, platform)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("query accounts failed: %w", err)
@@ -4496,7 +4539,7 @@ func lookupOpenAIAccountStoredImagePricing(account *Account, model string) float
 	if account == nil || len(account.Extra) == 0 {
 		return 0
 	}
-	rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+	rawPricing, ok := account.Extra[manualPricingExtraKeyForPlatform(account.Platform)]
 	if !ok {
 		return 0
 	}
@@ -4541,7 +4584,7 @@ func lookupOpenAIAccountStoredVideoPricing(account *Account, model string, quali
 	if account == nil || len(account.Extra) == 0 {
 		return 0
 	}
-	rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+	rawPricing, ok := account.Extra[manualPricingExtraKeyForPlatform(account.Platform)]
 	if !ok {
 		return 0
 	}

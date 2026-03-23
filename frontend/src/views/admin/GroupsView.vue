@@ -476,6 +476,15 @@
           </div>
         </div>
 
+        <div v-if="createForm.platform === 'nano-banana'" class="border-t pt-4">
+          <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">
+            {{ t('admin.groups.nanoBananaPricing.title') }}
+          </label>
+          <p class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+            {{ t('admin.groups.nanoBananaPricing.description') }}
+          </p>
+        </div>
+
         <!-- Sora 按次计费配置 -->
         <div v-if="createForm.platform === 'sora'" class="border-t pt-4">
           <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">
@@ -1205,6 +1214,15 @@
           </div>
         </div>
 
+        <div v-if="editForm.platform === 'nano-banana'" class="border-t pt-4">
+          <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">
+            {{ t('admin.groups.nanoBananaPricing.title') }}
+          </label>
+          <p class="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+            {{ t('admin.groups.nanoBananaPricing.description') }}
+          </p>
+        </div>
+
         <!-- Sora 按次计费配置 -->
         <div v-if="editForm.platform === 'sora'" class="border-t pt-4">
           <label class="block mb-2 font-medium text-gray-700 dark:text-gray-300">
@@ -1821,7 +1839,8 @@ const platformOptions = computed(() => [
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
   { value: 'antigravity', label: 'Antigravity' },
-  { value: 'sora', label: 'Sora' }
+  { value: 'sora', label: 'Sora' },
+  { value: 'nano-banana', label: 'Nano Banana' }
 ])
 
 const platformFilterOptions = computed(() => [
@@ -1830,7 +1849,8 @@ const platformFilterOptions = computed(() => [
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
   { value: 'antigravity', label: 'Antigravity' },
-  { value: 'sora', label: 'Sora' }
+  { value: 'sora', label: 'Sora' },
+  { value: 'nano-banana', label: 'Nano Banana' }
 ])
 
 const editStatusOptions = computed(() => [

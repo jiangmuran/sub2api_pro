@@ -279,6 +279,7 @@ export default {
     voiceChat: '语音对话',
     usage: '使用记录',
     redeem: '兑换',
+    activities: '活动中心',
     distributor: '分销',
     profile: '个人资料',
     users: '用户管理',
@@ -925,6 +926,36 @@ export default {
     pleaseEnterCode: '请输入兑换码'
   },
 
+  // Activities
+  activities: {
+    title: '活动中心',
+    description: '参与活动，领取奖励',
+    allActivities: '全部活动',
+    noActivities: '暂无活动',
+    loadFailed: '加载活动失败',
+    participateFailed: '参与活动失败',
+    participating: '参与中...',
+    success: '参与成功！',
+    rewardsReceived: '获得以下奖励',
+    days: '天',
+    types: {
+      checkIn: '签到',
+      lottery: '抽奖',
+      redeem: '兑换',
+      task: '任务',
+      newbie: '新手礼包',
+      limitedTime: '限时活动'
+    },
+    actions: {
+      checkIn: '签到',
+      draw: '抽奖',
+      redeem: '兑换',
+      complete: '完成',
+      claim: '领取',
+      participate: '参与'
+    }
+  },
+
   // Distributor
   distributor: {
     title: '分销',
@@ -1086,7 +1117,7 @@ export default {
       description: '集中查看缺失模型、预览价格来源、手动填充并保存模型价格，适合兼容接口和第三方模型的统一运营管理。',
       accountSelector: '选择账号',
       searchPlaceholder: '搜索账号名称或 Base URL',
-      noAccounts: '暂无可管理的 OpenAI API Key 账号',
+      noAccounts: '暂无可管理的 OpenAI / Nano Banana API Key 账号',
       summaryTitle: '概览',
       totalModels: '模型总数',
       missingModels: '缺失价格',
@@ -1644,7 +1675,8 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        'nano-banana': 'Nano Banana'
       },
       saving: '保存中...',
       noGroups: '暂无分组',
@@ -1697,6 +1729,10 @@ export default {
       imagePricing: {
         title: '图片生成计费',
         description: '配置图片生成模型的图片生成价格，留空则使用默认价格'
+      },
+      nanoBananaPricing: {
+        title: 'Nano Banana 计费说明',
+        description: 'Nano Banana 使用账号级模型单张价格计费，分组侧只负责平台、费率和订阅规则，不配置 1K/2K/4K 档位价格。'
       },
       soraPricing: {
         title: 'Sora 按次计费',
@@ -2000,7 +2036,8 @@ export default {
         anthropic: 'Anthropic',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        'nano-banana': 'Nano Banana'
       },
       types: {
         oauth: 'OAuth',

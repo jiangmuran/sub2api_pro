@@ -889,6 +889,10 @@ func (a *Account) IsOpenAI() bool {
 	return a.Platform == PlatformOpenAI
 }
 
+func (a *Account) IsNanoBanana() bool {
+	return a.Platform == PlatformNanoBanana
+}
+
 func (a *Account) IsAnthropic() bool {
 	return a.Platform == PlatformAnthropic
 }
@@ -940,6 +944,23 @@ func (a *Account) GetOpenAIApiKey() string {
 		return ""
 	}
 	return a.GetCredential("api_key")
+}
+
+func (a *Account) GetNanoBananaBaseURL() string {
+	if a == nil || !a.IsNanoBanana() {
+		return ""
+	}
+	if baseURL := strings.TrimSpace(a.GetCredential("base_url")); baseURL != "" {
+		return baseURL
+	}
+	return NanoBananaDefaultBaseURL
+}
+
+func (a *Account) GetNanoBananaAPIKey() string {
+	if a == nil || !a.IsNanoBanana() || a.Type != AccountTypeAPIKey {
+		return ""
+	}
+	return strings.TrimSpace(a.GetCredential("api_key"))
 }
 
 func (a *Account) GetOpenAIFunctionKey() string {

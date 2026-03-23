@@ -1,3 +1,5 @@
+import { nanoBananaModels } from '@/utils/nanoBanana'
+
 // =====================
 // 模型列表（硬编码，与 new-api 一致）
 // =====================
@@ -234,6 +236,7 @@ const allModelsList: string[] = [
   ...claudeModels,
   ...geminiModels,
   ...soraModels,
+  ...nanoBananaModels,
   ...zhipuModels,
   ...qwenModels,
   ...deepseekModels,
@@ -366,6 +369,7 @@ export function getModelsByPlatform(platform: string): string[] {
     case 'claude': return claudeModels
     case 'gemini': return geminiModels
     case 'sora': return soraModels
+    case 'nano-banana': return nanoBananaModels
     case 'antigravity': return antigravityModels
     case 'zhipu': return zhipuModels
     case 'qwen': return qwenModels

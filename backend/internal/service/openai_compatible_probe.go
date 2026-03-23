@@ -486,6 +486,12 @@ func buildOpenAIEndpointURL(base, endpoint string) string {
 	if strings.HasSuffix(normalized, "/"+endpoint) {
 		return normalized
 	}
+	if strings.HasPrefix(endpoint, "v1/") && strings.HasSuffix(normalized, "/v1") {
+		return normalized + "/" + strings.TrimPrefix(endpoint, "v1/")
+	}
+	if strings.HasPrefix(endpoint, "v1/") {
+		return normalized + "/" + endpoint
+	}
 	if strings.HasSuffix(normalized, "/v1") {
 		return normalized + "/" + endpoint
 	}

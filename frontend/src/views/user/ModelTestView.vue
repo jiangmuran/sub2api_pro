@@ -203,7 +203,7 @@
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.standardOutputPrice, model.pricingAvailable) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.actualInputPrice, model.pricingAvailable) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.actualOutputPrice, model.pricingAvailable) }}</td>
-                    <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(model.imagePricePerImage, model.pricingAvailable && model.imagePricePerImage > 0) }}</td>
+                    <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatImageOrVideoPrice(model.id, model.imagePricePerImage, model.pricingAvailable && model.imagePricePerImage > 0) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -213,18 +213,95 @@
           <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div class="flex-1">
-                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('modelTest.image.title') }}</h2>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('modelTest.image.description') }}</p>
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">图片处理模型</h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">无参考图时生图，上传参考图后可做参考图生成或改图；Nano Banana 会直接走 `/v1/draw/nano-banana`。</p>
               </div>
-              <div class="flex w-full gap-3 lg:w-[420px]">
+              <div class="flex w-full gap-3 lg:w-[560px]">
                 <Select v-model="imageModel" class="flex-1" :options="imageModelOptions" value-key="value" label-key="label" :placeholder="t('modelTest.image.selectModel')" />
-                <Select v-model="imageSize" class="w-[140px]" :options="imageSizeOptions" value-key="value" label-key="label" />
+                <Select v-if="!isNanoBananaImageModel" v-model="imageSize" class="w-[140px]" :options="imageSizeOptions" value-key="value" label-key="label" />
+                <Select v-else v-model="nanoBananaAspectRatio" class="w-[120px]" :options="nanoBananaAspectRatioSelectOptionsForGenerate" value-key="value" label-key="label" />
+                <Select v-if="isNanoBananaImageModel" v-model="nanoBananaImageSize" class="w-[110px]" :options="nanoBananaImageSizeOptionsForGenerate" value-key="value" label-key="label" />
               </div>
             </div>
 
             <div class="mt-4 space-y-3">
               <textarea v-model="imagePrompt" rows="3" class="input" :placeholder="t('modelTest.image.placeholder')" />
-              
+              <div v-if="isNanoBananaImageModel" class="rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+                Nano Banana 使用专属绘图接口，默认优先选择 2K；如果当前模型不支持 2K，会自动切到该模型允许的分辨率。
+              </div>
+
+              <div v-if="generatingImage && isNanoBananaImageModel" class="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-3 dark:border-emerald-900/30 dark:bg-emerald-950/20">
+                <div class="flex items-center justify-between gap-3 text-xs">
+                  <span class="font-medium text-emerald-800 dark:text-emerald-300">{{ imageProcessingStatus || '处理中...' }}</span>
+                  <span class="text-emerald-700 dark:text-emerald-400">{{ imageProcessingProgress }}%</span>
+                </div>
+                <div class="h-2 overflow-hidden rounded-full bg-emerald-100 dark:bg-emerald-900/40">
+                  <div class="h-full rounded-full bg-emerald-500 transition-all duration-300" :style="{ width: `${imageProcessingProgress}%` }" />
+                </div>
+              </div>
+
+              <div>
+                <label class="input-label">参考图 / 待处理图（可选）</label>
+                <div class="space-y-3">
+                  <input
+                    ref="imageReferenceFileInput"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    class="hidden"
+                    @change="handleImageReferenceFileChange"
+                  />
+                  <div
+                    @drop.prevent="handleImageReferenceDrop"
+                    @dragover.prevent="imageReferenceDragover = true"
+                    @dragleave.prevent="imageReferenceDragover = false"
+                    :class="[
+                      'overflow-hidden rounded-xl border-2 border-dashed transition',
+                      imageReferenceDragover
+                        ? 'border-amber-400 bg-amber-50 dark:border-amber-500 dark:bg-amber-950/20'
+                        : 'border-gray-300 bg-gray-50 dark:border-dark-600 dark:bg-dark-900/30'
+                    ]"
+                  >
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-center px-4 py-7 text-sm text-gray-600 dark:text-gray-400"
+                      @click="imageReferenceFileInput?.click()"
+                    >
+                      <Icon name="upload" size="sm" class="mr-2" />
+                      {{ imageReferenceItems.length === 0 ? '点击或拖拽上传图片（Nano Banana 支持多张）' : '继续添加图片' }}
+                    </button>
+                  </div>
+
+                  <div v-if="imageReferenceItems.length > 0" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div
+                      v-for="(item, index) in imageReferenceItems"
+                      :key="item.key"
+                      class="group relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-dark-600 dark:bg-dark-900/30"
+                    >
+                      <img :src="item.preview" :alt="`reference-${index}`" class="aspect-square w-full object-cover" />
+                      <div class="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
+                        #{{ index + 1 }}
+                      </div>
+                      <button
+                        type="button"
+                        @click="removeImageReference(index)"
+                        class="absolute right-2 top-2 rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-white shadow-lg transition hover:bg-red-600"
+                      >
+                        移除
+                      </button>
+                    </div>
+                  </div>
+
+                  <div v-if="imageReferenceItems.length > 0" class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+                    <span v-if="isNanoBananaImageModel">已添加 {{ imageReferenceItems.length }} 张参考图，将一起传给 Nano Banana。</span>
+                    <span v-else>当前非 Nano 模型仅支持普通生图；如需参考图处理，请切换到 Nano Banana 系列模型。</span>
+                    <button type="button" class="font-medium underline underline-offset-2" @click="clearImageReferencePreview">
+                      清空全部
+                    </button>
+                  </div>
+                </div>
+              </div>
+               
               <!-- 风格标签 -->
               <div>
                 <label class="input-label">风格标签（点击追加到提示词）</label>
@@ -259,18 +336,19 @@
               
               <div class="flex items-center justify-between gap-3">
                 <div class="text-xs text-gray-500 dark:text-gray-400">
-                  <span v-if="estimatedImageCost > 0">预计费用：${{ estimatedImageCost.toFixed(4) }}</span>
+                  <span v-if="estimatedImageCost > 0 || estimatedImageDurationLabel">{{ [estimatedImageCostLabel, estimatedImageDurationLabel].filter(Boolean).join(' · ') }}</span>
                   <span v-else>{{ t('modelTest.image.hint') }}</span>
+                  <span v-if="imageLastDurationLabel" class="block mt-1 text-emerald-600 dark:text-emerald-400">{{ imageLastDurationLabel }}</span>
                 </div>
                 <button type="button" class="btn btn-primary" :disabled="generatingImage || !apiKeyInput.trim() || !imageModel || !imagePrompt.trim()" @click="generateImage">
-                  {{ generatingImage ? t('common.loading') + '...' : t('modelTest.image.generate') }}
+                  {{ generatingImage ? t('common.loading') + '...' : '开始处理' }}
                 </button>
               </div>
             </div>
 
             <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <div v-if="generatedImages.length === 0" class="col-span-full rounded-xl border border-dashed border-gray-300 px-4 py-10 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400">
-                {{ t('modelTest.image.empty') }}
+                暂无处理结果
               </div>
               <div v-for="(image, index) in generatedImages" :key="`${image}-${index}`" class="group relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-sm dark:border-dark-600 dark:bg-dark-900/30">
                 <img :src="image" :alt="`generated-${index}`" class="aspect-square w-full object-cover" />
@@ -289,15 +367,17 @@
             </div>
           </div>
 
-          <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800">
+          <div v-show="false" class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-dark-600 dark:bg-dark-800">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div class="flex-1">
                 <h2 class="text-sm font-semibold text-gray-900 dark:text-white">图片编辑</h2>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">上传图片并使用 AI 进行编辑</p>
               </div>
-              <div class="flex w-full gap-3 lg:w-[420px]">
+              <div class="flex w-full gap-3 lg:w-[560px]">
                 <Select v-model="imageEditModel" class="flex-1" :options="imageEditModelOptions" value-key="value" label-key="label" placeholder="选择编辑模型" />
-                <Select v-model="imageEditSize" class="w-[140px]" :options="imageSizeOptions" value-key="value" label-key="label" />
+                <Select v-if="!isNanoBananaEditModel" v-model="imageEditSize" class="w-[140px]" :options="imageSizeOptions" value-key="value" label-key="label" />
+                <Select v-else v-model="nanoBananaEditAspectRatio" class="w-[120px]" :options="nanoBananaAspectRatioSelectOptionsForEdit" value-key="value" label-key="label" />
+                <Select v-if="isNanoBananaEditModel" v-model="nanoBananaEditImageSize" class="w-[110px]" :options="nanoBananaImageSizeOptionsForEdit" value-key="value" label-key="label" />
               </div>
             </div>
 
@@ -367,10 +447,13 @@
               </div>
 
               <textarea v-model="imageEditPrompt" rows="3" class="input" placeholder="描述你想对图片做什么修改，或使用上方快捷任务..." />
+              <div v-if="isNanoBananaEditModel" class="rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-300">
+                Nano Banana 改图会自动把上传图片转换为参考图并走 `/v1/draw/nano-banana`。
+              </div>
               
               <div class="flex items-center justify-between gap-3">
                 <div class="text-xs text-gray-500 dark:text-gray-400">
-                  <span v-if="estimatedEditCost > 0">预计费用：${{ estimatedEditCost.toFixed(4) }}</span>
+                  <span v-if="estimatedEditCost > 0">{{ estimatedEditCostLabel }}</span>
                   <span v-else>等待输入...</span>
                 </div>
                 <button type="button" class="btn btn-primary" :disabled="editingImage || !apiKeyInput.trim() || !imageEditModel || !imageEditPrompt.trim() || !imageEditFile" @click="editImage">
@@ -603,10 +686,32 @@ import { useClipboard } from '@/composables/useClipboard'
 import { useImageEditAPI } from '@/composables/useImageEditAPI'
 import { useVideoAPI } from '@/composables/useVideoAPI'
 import type { ApiKey, Group, ModelPricingPreviewItem } from '@/types'
+import {
+  getNanoBananaAspectRatioOptions,
+  getNanoBananaDefaultImageSize,
+  getNanoBananaSupportedImageSizes,
+  isNanoBananaModel
+} from '@/utils/nanoBanana'
 
 type LiveModel = { id: string; display_name?: string }
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 type ImageGenerationResponse = { data?: Array<{ url?: string }> }
+type NanoBananaCreateResponse = { code?: number; msg?: string; data?: { id?: string } }
+type NanoBananaResultResponse = {
+  code?: number
+  msg?: string
+  data?: {
+    start_time?: number
+    end_time?: number
+    id?: string
+    status?: string
+    progress?: number
+    error?: string
+    failure_reason?: string
+    results?: Array<{ url?: string }>
+  }
+}
+type ImageReferenceItem = { key: string; file: File; preview: string; base64: string }
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -621,6 +726,10 @@ const sending = ref(false)
 const generatingImage = ref(false)
 const editingImage = ref(false)
 const generatingVideo = ref(false)
+const imageLastDurationMs = ref<number | null>(null)
+const imageProcessingProgress = ref(0)
+const imageProcessingStatus = ref('')
+let imageProcessingTimer: number | null = null
 
 const apiKeys = ref<ApiKey[]>([])
 const groups = ref<Group[]>([])
@@ -693,12 +802,19 @@ const cameraMovements = ref([
   '延时摄影（Time-lapse）'
 ])
 const imageSize = ref('1024x1024')
+const nanoBananaAspectRatio = ref('auto')
+const nanoBananaImageSize = ref('2K')
+const imageReferenceItems = ref<ImageReferenceItem[]>([])
+const imageReferenceFileInput = ref<HTMLInputElement | null>(null)
+const imageReferenceDragover = ref(false)
 const generatedImages = ref<string[]>([])
 
 // Image edit states
 const imageEditModel = ref('')
 const imageEditPrompt = ref('')
 const imageEditSize = ref('1024x1024')
+const nanoBananaEditAspectRatio = ref('auto')
+const nanoBananaEditImageSize = ref('2K')
 const imageEditFile = ref<File | null>(null)
 const imageEditFileInput = ref<HTMLInputElement | null>(null)
 const imageEditPreview = ref<string | null>(null)
@@ -807,7 +923,7 @@ const removeHistoryItem = (index: number) => {
 }
 
 const apiKeyOptions = computed(() => apiKeys.value.map((key) => ({ value: key.id, label: `${key.name} · ${maskKey(key.key)}` })))
-const groupOptions = computed(() => groups.value.map((group) => ({ value: group.id, label: `${group.name} · ${effectiveRateForGroup(group.id).toFixed(2)}x` })))
+const groupOptions = computed(() => groups.value.map((group) => ({ value: group.id, label: `${group.name} · ${normalizeMultiplierValue(effectiveRateForGroup(group.id)).toFixed(2)}x` })))
 const modelOptions = computed(() => models.value.map((model) => ({ value: model.id, label: model.display_name || model.id })))
 const imageModelOptions = computed(() =>
   models.value
@@ -816,7 +932,7 @@ const imageModelOptions = computed(() =>
       if ((pricing?.image_price_per_image || 0) > 0) {
         return true
       }
-      return /(imagine|image|img|flux|sdxl|dall-e|recraft|canvas|vision-image)/i.test(model.id)
+      return isNanoBananaModel(model.id) || /(imagine|image|img|flux|sdxl|dall-e|recraft|canvas|vision-image)/i.test(model.id)
     })
     .map((model) => ({ value: model.id, label: model.display_name || model.id }))
 )
@@ -828,8 +944,24 @@ const imageSizeOptions = [
 
 const imageEditModelOptions = computed(() =>
   models.value
-    .filter((model) => /(imagine.*edit|edit|grok.*edit)/i.test(model.id))
+    .filter((model) => isNanoBananaModel(model.id) || /(imagine.*edit|edit|grok.*edit)/i.test(model.id))
     .map((model) => ({ value: model.id, label: model.display_name || model.id }))
+)
+
+const nanoBananaImageSizeOptionsForGenerate = computed(() =>
+  getNanoBananaSupportedImageSizes(imageModel.value).map((value) => ({ value, label: value }))
+)
+
+const nanoBananaImageSizeOptionsForEdit = computed(() =>
+  getNanoBananaSupportedImageSizes(imageEditModel.value).map((value) => ({ value, label: value }))
+)
+
+const nanoBananaAspectRatioSelectOptionsForGenerate = computed(() =>
+  getNanoBananaAspectRatioOptions(imageModel.value).map((value) => ({ value, label: value }))
+)
+
+const nanoBananaAspectRatioSelectOptionsForEdit = computed(() =>
+  getNanoBananaAspectRatioOptions(imageEditModel.value).map((value) => ({ value, label: value }))
 )
 
 const videoModelOptions = computed(() =>
@@ -864,7 +996,158 @@ const activeApiKey = computed(() => {
   return apiKeys.value.find((item) => item.id === selectedApiKeyId.value) || null
 })
 
-const effectiveRate = computed(() => effectiveRateForGroup(activeApiKey.value?.group_id ?? selectedGroupId.value))
+const isNanoBananaImageModel = computed(() => isNanoBananaModel(imageModel.value))
+const isNanoBananaEditModel = computed(() => isNanoBananaModel(imageEditModel.value))
+
+const getBase64Payload = (dataUrl: string) => {
+  const marker = ';base64,'
+  const index = dataUrl.indexOf(marker)
+  return index >= 0 ? dataUrl.slice(index + marker.length) : dataUrl
+}
+
+const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+
+const getNanoBananaFrontendTimeout = (imageSize: string) => {
+  switch ((imageSize || '').toUpperCase()) {
+    case '4K':
+      return 10 * 60 * 1000
+    case '2K':
+      return 6 * 60 * 1000
+    default:
+      return 4 * 60 * 1000
+  }
+}
+
+const getNanoBananaEstimatedDurationMs = (imageSize: string) => {
+  return (imageSize || '').toUpperCase() === '4K' ? 2 * 60 * 1000 : 60 * 1000
+}
+
+const formatDuration = (ms: number) => {
+  const totalSeconds = Math.max(1, Math.round(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes <= 0) return `${totalSeconds}秒`
+  if (seconds === 0) return `${minutes}分`
+  return `${minutes}分${seconds}秒`
+}
+
+const stopImageProcessingTimer = () => {
+  if (imageProcessingTimer != null) {
+    window.clearInterval(imageProcessingTimer)
+    imageProcessingTimer = null
+  }
+}
+
+const resetImageProcessingProgress = () => {
+  stopImageProcessingTimer()
+  imageProcessingProgress.value = 0
+  imageProcessingStatus.value = ''
+}
+
+const setImageProcessingProgress = (progress: number, status?: string) => {
+  imageProcessingProgress.value = Math.max(imageProcessingProgress.value, Math.min(100, Math.round(progress)))
+  if (status) imageProcessingStatus.value = status
+}
+
+const startImageProcessingTimer = (estimatedMs: number) => {
+  resetImageProcessingProgress()
+  const startedAt = Date.now()
+  imageProcessingStatus.value = '准备提交任务...'
+  imageProcessingTimer = window.setInterval(() => {
+    const elapsed = Date.now() - startedAt
+    const estimatedProgress = Math.min(92, (elapsed / estimatedMs) * 100)
+    setImageProcessingProgress(estimatedProgress, imageProcessingStatus.value || '处理中...')
+  }, 250)
+}
+
+const finishImageProcessingProgress = async () => {
+  stopImageProcessingTimer()
+  const start = imageProcessingProgress.value
+  const delta = Math.max(0, 100 - start)
+  const steps = Math.max(1, Math.ceil(delta / 8))
+  for (let index = 1; index <= steps; index += 1) {
+    imageProcessingProgress.value = Math.min(100, Math.round(start + (delta * index) / steps))
+    imageProcessingStatus.value = '即将完成...'
+    await sleep(40)
+  }
+}
+
+const readImageAsDataURL = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = (event) => resolve((event.target?.result as string) || '')
+  reader.onerror = () => reject(new Error('文件读取失败'))
+  reader.readAsDataURL(file)
+})
+
+const validateImageFile = (file: File | null) => {
+  if (!file) return false
+  if (!file.type.startsWith('image/')) {
+    appStore.showError('请上传图片文件')
+    return false
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    appStore.showError('图片文件不能超过 10MB')
+    return false
+  }
+  return true
+}
+
+const appendImageReferences = async (files: File[]) => {
+  const validFiles = files.filter((file) => validateImageFile(file))
+  if (validFiles.length === 0) return
+  const previews = await Promise.all(validFiles.map((file) => readImageAsDataURL(file)))
+  const nextItems = validFiles.map((file, index) => ({
+    key: `${file.name}-${file.size}-${file.lastModified}-${Date.now()}-${index}`,
+    file,
+    preview: previews[index],
+    base64: getBase64Payload(previews[index])
+  }))
+  imageReferenceItems.value = [...imageReferenceItems.value, ...nextItems]
+}
+
+const handleImageReferenceFileChange = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const files = Array.from(target.files || [])
+  if (files.length === 0) return
+  try {
+    await appendImageReferences(files)
+  } catch (error: any) {
+    appStore.showError(error.message || '参考图读取失败')
+  } finally {
+    target.value = ''
+  }
+}
+
+const handleImageReferenceDrop = async (event: DragEvent) => {
+  imageReferenceDragover.value = false
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (files.length === 0) return
+  try {
+    await appendImageReferences(files)
+  } catch (error: any) {
+    appStore.showError(error.message || '参考图读取失败')
+  }
+}
+
+const removeImageReference = (index: number) => {
+  imageReferenceItems.value.splice(index, 1)
+}
+
+const clearImageReferencePreview = () => {
+  imageReferenceItems.value = []
+  imageReferenceDragover.value = false
+  if (imageReferenceFileInput.value) {
+    imageReferenceFileInput.value.value = ''
+  }
+}
+
+const normalizeMultiplierValue = (value?: number | null) => {
+  const normalized = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1
+  const rounded = Math.round(normalized * 10000) / 10000
+  return Math.abs(rounded - 1) < 0.0001 ? 1 : rounded
+}
+
+const effectiveRate = computed(() => normalizeMultiplierValue(effectiveRateForGroup(activeApiKey.value?.group_id ?? selectedGroupId.value)))
 const effectiveRateLabel = computed(() => t('modelTest.pricing.effectiveRate', { rate: effectiveRate.value.toFixed(2) }))
 const pricedModelsCount = computed(() => Object.values(pricingMap.value).filter((item) => item.pricing_available).length)
 
@@ -1036,19 +1319,77 @@ const sendMessage = async () => {
   }
 }
 
+const pollNanoBananaResult = async (taskID: string, imageSize: string) => {
+	const startedAt = Date.now()
+	const timeout = getNanoBananaFrontendTimeout(imageSize)
+	while (Date.now() - startedAt < timeout) {
+		const result = await fetchGatewayJSON('/v1/draw/result', { id: taskID }) as NanoBananaResultResponse
+		if ((result?.code ?? 0) !== 0) {
+			throw new Error(result?.msg || 'Nano Banana 获取结果失败')
+		}
+		const task = result?.data
+		const status = (task?.status || '').toLowerCase()
+		setImageProcessingProgress(task?.progress || 0, status === 'running' ? `处理中 ${task?.progress || 0}%` : '处理中...')
+		if (status === 'succeeded') {
+			return task || {}
+		}
+		if (status === 'failed') {
+			throw new Error(task?.error || task?.failure_reason || 'Nano Banana 处理失败')
+		}
+		await sleep(2000)
+	}
+	throw new Error('Nano Banana 处理超时，请稍后去结果接口轮询')
+}
+
+const processNanoBananaImage = async (prompt: string) => {
+	startImageProcessingTimer(getNanoBananaEstimatedDurationMs(nanoBananaImageSize.value))
+	const createResult = await fetchGatewayJSON('/v1/draw/nano-banana', {
+		model: imageModel.value,
+		prompt,
+		aspectRatio: nanoBananaAspectRatio.value,
+		imageSize: nanoBananaImageSize.value,
+		urls: imageReferenceItems.value.length > 0 ? imageReferenceItems.value.map((item) => item.base64) : undefined,
+		webHook: '-1',
+		shutProgress: true
+	}) as NanoBananaCreateResponse
+	if ((createResult?.code ?? 0) !== 0 || !createResult?.data?.id) {
+		throw new Error(createResult?.msg || 'Nano Banana 提交任务失败')
+	}
+	imageProcessingStatus.value = '任务已提交，等待生成结果...'
+	const task = await pollNanoBananaResult(createResult.data.id, nanoBananaImageSize.value)
+	await finishImageProcessingProgress()
+	const durationMs = task.start_time && task.end_time && task.end_time >= task.start_time
+		? (task.end_time - task.start_time) * 1000
+		: null
+	return {
+		urls: (task.results || []).map((item) => item.url || '').filter(Boolean),
+		durationMs
+	}
+}
+
 const generateImage = async () => {
   const prompt = imagePrompt.value.trim()
   if (!prompt || !imageModel.value || !apiKeyInput.value.trim()) return
   generatingImage.value = true
+  const startedAt = Date.now()
   try {
-    const result = await fetchGatewayJSON('/v1/images/generations', {
-      model: imageModel.value,
-      prompt,
-      n: 1,
-      size: imageSize.value,
-      response_format: 'url'
-    }) as ImageGenerationResponse
-    generatedImages.value = (result.data || []).map((item) => item.url || '').filter(Boolean)
+    if (imageReferenceItems.value.length > 0 && !isNanoBananaImageModel.value) {
+      throw new Error('参考图处理仅支持 Nano Banana 系列模型，请切换模型后再试')
+    }
+    if (isNanoBananaImageModel.value) {
+      const taskResult = await processNanoBananaImage(prompt)
+      generatedImages.value = taskResult.urls
+      imageLastDurationMs.value = taskResult.durationMs || (Date.now() - startedAt)
+    } else {
+      const result = await fetchGatewayJSON('/v1/images/generations', {
+        model: imageModel.value,
+        prompt,
+        n: 1,
+        size: imageSize.value,
+        response_format: 'url'
+      }) as ImageGenerationResponse
+      generatedImages.value = (result.data || []).map((item) => item.url || '').filter(Boolean)
+    }
     if (generatedImages.value.length === 0) {
       throw new Error(t('modelTest.image.failed'))
     }
@@ -1057,12 +1398,19 @@ const generateImage = async () => {
       type: 'image',
       prompt,
       model: imageModel.value,
-      size: imageSize.value,
+      size: isNanoBananaImageModel.value ? nanoBananaImageSize.value : imageSize.value,
       timestamp: Date.now()
     })
+    if (!isNanoBananaImageModel.value) {
+      imageLastDurationMs.value = Date.now() - startedAt
+    }
   } catch (error: any) {
+    resetImageProcessingProgress()
     appStore.showError(error.message || t('modelTest.image.failed'))
   } finally {
+    if (!isNanoBananaImageModel.value) {
+      resetImageProcessingProgress()
+    }
     generatingImage.value = false
   }
 }
@@ -1091,7 +1439,14 @@ const editImage = async () => {
       prompt,
       image: imageEditFile.value,
       n: 1,
-      size: imageEditSize.value,
+      ...(isNanoBananaEditModel.value
+        ? {
+            aspect_ratio: nanoBananaEditAspectRatio.value,
+            image_size: nanoBananaEditImageSize.value
+          }
+        : {
+            size: imageEditSize.value
+          }),
       response_format: 'url'
     })
     editedImages.value = (result.data || []).map((item) => item.url || '').filter(Boolean)
@@ -1188,21 +1543,53 @@ const generateVideo = async () => {
   }
 }
 
+const formatMultiplier = (value: number) => Number(value.toFixed(4)).toString()
+
 const formatPrice = (value: number, available: boolean) => (available ? `$${value.toFixed(2)}` : '--')
+
+const formatImageOrVideoPrice = (modelId: string, value: number, available: boolean) => {
+  if (!available) return '--'
+  if (isNanoBananaModel(modelId)) return `倍率 ${formatMultiplier(value)}`
+  return formatPrice(value, true)
+}
 
 // Computed costs
 const estimatedImageCost = computed(() => {
   if (!imageModel.value) return 0
   const pricing = pricingMap.value[imageModel.value]
   if (!pricing?.image_price_per_image) return 0
+  if (isNanoBananaImageModel.value) return pricing.image_price_per_image
   return pricing.image_price_per_image * effectiveRate.value
+})
+
+const estimatedImageCostLabel = computed(() => {
+  if (estimatedImageCost.value <= 0) return ''
+  if (isNanoBananaImageModel.value) return `倍率：${formatMultiplier(estimatedImageCost.value)}`
+  return `预计费用：$${estimatedImageCost.value.toFixed(4)}`
+})
+
+const estimatedImageDurationLabel = computed(() => {
+  if (!isNanoBananaImageModel.value) return ''
+  return `预计用时：约${formatDuration(getNanoBananaEstimatedDurationMs(nanoBananaImageSize.value))}`
+})
+
+const imageLastDurationLabel = computed(() => {
+  if (!imageLastDurationMs.value) return ''
+  return `上次用时：${formatDuration(imageLastDurationMs.value)}`
 })
 
 const estimatedEditCost = computed(() => {
   if (!imageEditModel.value) return 0
   const pricing = pricingMap.value[imageEditModel.value]
   if (!pricing?.image_price_per_image) return 0
+  if (isNanoBananaEditModel.value) return pricing.image_price_per_image
   return pricing.image_price_per_image * effectiveRate.value
+})
+
+const estimatedEditCostLabel = computed(() => {
+  if (estimatedEditCost.value <= 0) return ''
+  if (isNanoBananaEditModel.value) return `倍率：${formatMultiplier(estimatedEditCost.value)}`
+  return `预计费用：$${estimatedEditCost.value.toFixed(4)}`
 })
 
 const estimatedVideoCost = computed(() => {
@@ -1331,9 +1718,39 @@ watch(imageModelOptions, (options) => {
   }
 })
 
+watch(imageModel, (model) => {
+  if (!isNanoBananaModel(model)) return
+  const supportedSizes = getNanoBananaSupportedImageSizes(model)
+  if (!supportedSizes.includes(nanoBananaImageSize.value)) {
+    nanoBananaImageSize.value = getNanoBananaDefaultImageSize(model)
+  }
+  const supportedRatios = getNanoBananaAspectRatioOptions(model)
+  if (!supportedRatios.includes(nanoBananaAspectRatio.value)) {
+    nanoBananaAspectRatio.value = 'auto'
+  }
+})
+
+watch(isNanoBananaImageModel, (enabled) => {
+  if (!enabled) {
+    clearImageReferencePreview()
+  }
+})
+
 watch(imageEditModelOptions, (options) => {
   if (!imageEditModel.value && options.length > 0) {
     imageEditModel.value = options[0].value
+  }
+})
+
+watch(imageEditModel, (model) => {
+  if (!isNanoBananaModel(model)) return
+  const supportedSizes = getNanoBananaSupportedImageSizes(model)
+  if (!supportedSizes.includes(nanoBananaEditImageSize.value)) {
+    nanoBananaEditImageSize.value = getNanoBananaDefaultImageSize(model)
+  }
+  const supportedRatios = getNanoBananaAspectRatioOptions(model)
+  if (!supportedRatios.includes(nanoBananaEditAspectRatio.value)) {
+    nanoBananaEditAspectRatio.value = 'auto'
   }
 })
 

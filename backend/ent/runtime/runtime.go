@@ -7,6 +7,9 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/activity"
+	"github.com/Wei-Shaw/sub2api/ent/activityparticipation"
+	"github.com/Wei-Shaw/sub2api/ent/activityreward"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
@@ -261,6 +264,116 @@ func init() {
 	accountgroupDescCreatedAt := accountgroupFields[3].Descriptor()
 	// accountgroup.DefaultCreatedAt holds the default value on creation for the created_at field.
 	accountgroup.DefaultCreatedAt = accountgroupDescCreatedAt.Default.(func() time.Time)
+	activityFields := schema.Activity{}.Fields()
+	_ = activityFields
+	// activityDescName is the schema descriptor for name field.
+	activityDescName := activityFields[1].Descriptor()
+	// activity.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	activity.NameValidator = activityDescName.Validators[0].(func(string) error)
+	// activityDescDescription is the schema descriptor for description field.
+	activityDescDescription := activityFields[2].Descriptor()
+	// activity.DefaultDescription holds the default value on creation for the description field.
+	activity.DefaultDescription = activityDescDescription.Default.(string)
+	// activityDescIcon is the schema descriptor for icon field.
+	activityDescIcon := activityFields[3].Descriptor()
+	// activity.DefaultIcon holds the default value on creation for the icon field.
+	activity.DefaultIcon = activityDescIcon.Default.(string)
+	// activityDescSortOrder is the schema descriptor for sort_order field.
+	activityDescSortOrder := activityFields[6].Descriptor()
+	// activity.DefaultSortOrder holds the default value on creation for the sort_order field.
+	activity.DefaultSortOrder = activityDescSortOrder.Default.(int)
+	// activityDescTotalParticipations is the schema descriptor for total_participations field.
+	activityDescTotalParticipations := activityFields[12].Descriptor()
+	// activity.DefaultTotalParticipations holds the default value on creation for the total_participations field.
+	activity.DefaultTotalParticipations = activityDescTotalParticipations.Default.(int64)
+	// activityDescTotalRewardsDistributed is the schema descriptor for total_rewards_distributed field.
+	activityDescTotalRewardsDistributed := activityFields[13].Descriptor()
+	// activity.DefaultTotalRewardsDistributed holds the default value on creation for the total_rewards_distributed field.
+	activity.DefaultTotalRewardsDistributed = activityDescTotalRewardsDistributed.Default.(int64)
+	// activityDescCreatedBy is the schema descriptor for created_by field.
+	activityDescCreatedBy := activityFields[14].Descriptor()
+	// activity.DefaultCreatedBy holds the default value on creation for the created_by field.
+	activity.DefaultCreatedBy = activityDescCreatedBy.Default.(string)
+	// activityDescCreatedAt is the schema descriptor for created_at field.
+	activityDescCreatedAt := activityFields[15].Descriptor()
+	// activity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	activity.DefaultCreatedAt = activityDescCreatedAt.Default.(func() time.Time)
+	// activityDescUpdatedAt is the schema descriptor for updated_at field.
+	activityDescUpdatedAt := activityFields[16].Descriptor()
+	// activity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	activity.DefaultUpdatedAt = activityDescUpdatedAt.Default.(func() time.Time)
+	// activity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	activity.UpdateDefaultUpdatedAt = activityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	activityparticipationFields := schema.ActivityParticipation{}.Fields()
+	_ = activityparticipationFields
+	// activityparticipationDescParticipatedAt is the schema descriptor for participated_at field.
+	activityparticipationDescParticipatedAt := activityparticipationFields[3].Descriptor()
+	// activityparticipation.DefaultParticipatedAt holds the default value on creation for the participated_at field.
+	activityparticipation.DefaultParticipatedAt = activityparticipationDescParticipatedAt.Default.(func() time.Time)
+	// activityparticipationDescCostBalance is the schema descriptor for cost_balance field.
+	activityparticipationDescCostBalance := activityparticipationFields[10].Descriptor()
+	// activityparticipation.DefaultCostBalance holds the default value on creation for the cost_balance field.
+	activityparticipation.DefaultCostBalance = activityparticipationDescCostBalance.Default.(string)
+	// activityparticipationDescIPAddress is the schema descriptor for ip_address field.
+	activityparticipationDescIPAddress := activityparticipationFields[12].Descriptor()
+	// activityparticipation.DefaultIPAddress holds the default value on creation for the ip_address field.
+	activityparticipation.DefaultIPAddress = activityparticipationDescIPAddress.Default.(string)
+	// activityparticipationDescUserAgent is the schema descriptor for user_agent field.
+	activityparticipationDescUserAgent := activityparticipationFields[13].Descriptor()
+	// activityparticipation.DefaultUserAgent holds the default value on creation for the user_agent field.
+	activityparticipation.DefaultUserAgent = activityparticipationDescUserAgent.Default.(string)
+	// activityparticipationDescCreatedAt is the schema descriptor for created_at field.
+	activityparticipationDescCreatedAt := activityparticipationFields[14].Descriptor()
+	// activityparticipation.DefaultCreatedAt holds the default value on creation for the created_at field.
+	activityparticipation.DefaultCreatedAt = activityparticipationDescCreatedAt.Default.(func() time.Time)
+	activityrewardFields := schema.ActivityReward{}.Fields()
+	_ = activityrewardFields
+	// activityrewardDescName is the schema descriptor for name field.
+	activityrewardDescName := activityrewardFields[2].Descriptor()
+	// activityreward.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	activityreward.NameValidator = activityrewardDescName.Validators[0].(func(string) error)
+	// activityrewardDescDescription is the schema descriptor for description field.
+	activityrewardDescDescription := activityrewardFields[3].Descriptor()
+	// activityreward.DefaultDescription holds the default value on creation for the description field.
+	activityreward.DefaultDescription = activityrewardDescDescription.Default.(string)
+	// activityrewardDescIcon is the schema descriptor for icon field.
+	activityrewardDescIcon := activityrewardFields[4].Descriptor()
+	// activityreward.DefaultIcon holds the default value on creation for the icon field.
+	activityreward.DefaultIcon = activityrewardDescIcon.Default.(string)
+	// activityrewardDescRewardValue is the schema descriptor for reward_value field.
+	activityrewardDescRewardValue := activityrewardFields[6].Descriptor()
+	// activityreward.DefaultRewardValue holds the default value on creation for the reward_value field.
+	activityreward.DefaultRewardValue = activityrewardDescRewardValue.Default.(string)
+	// activityrewardDescWeight is the schema descriptor for weight field.
+	activityrewardDescWeight := activityrewardFields[7].Descriptor()
+	// activityreward.DefaultWeight holds the default value on creation for the weight field.
+	activityreward.DefaultWeight = activityrewardDescWeight.Default.(int)
+	// activityrewardDescTotalStock is the schema descriptor for total_stock field.
+	activityrewardDescTotalStock := activityrewardFields[9].Descriptor()
+	// activityreward.DefaultTotalStock holds the default value on creation for the total_stock field.
+	activityreward.DefaultTotalStock = activityrewardDescTotalStock.Default.(int64)
+	// activityrewardDescRemainingStock is the schema descriptor for remaining_stock field.
+	activityrewardDescRemainingStock := activityrewardFields[10].Descriptor()
+	// activityreward.DefaultRemainingStock holds the default value on creation for the remaining_stock field.
+	activityreward.DefaultRemainingStock = activityrewardDescRemainingStock.Default.(int64)
+	// activityrewardDescSortOrder is the schema descriptor for sort_order field.
+	activityrewardDescSortOrder := activityrewardFields[13].Descriptor()
+	// activityreward.DefaultSortOrder holds the default value on creation for the sort_order field.
+	activityreward.DefaultSortOrder = activityrewardDescSortOrder.Default.(int)
+	// activityrewardDescDistributedCount is the schema descriptor for distributed_count field.
+	activityrewardDescDistributedCount := activityrewardFields[14].Descriptor()
+	// activityreward.DefaultDistributedCount holds the default value on creation for the distributed_count field.
+	activityreward.DefaultDistributedCount = activityrewardDescDistributedCount.Default.(int64)
+	// activityrewardDescCreatedAt is the schema descriptor for created_at field.
+	activityrewardDescCreatedAt := activityrewardFields[15].Descriptor()
+	// activityreward.DefaultCreatedAt holds the default value on creation for the created_at field.
+	activityreward.DefaultCreatedAt = activityrewardDescCreatedAt.Default.(func() time.Time)
+	// activityrewardDescUpdatedAt is the schema descriptor for updated_at field.
+	activityrewardDescUpdatedAt := activityrewardFields[16].Descriptor()
+	// activityreward.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	activityreward.DefaultUpdatedAt = activityrewardDescUpdatedAt.Default.(func() time.Time)
+	// activityreward.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	activityreward.UpdateDefaultUpdatedAt = activityrewardDescUpdatedAt.UpdateDefault.(func() time.Time)
 	announcementFields := schema.Announcement{}.Fields()
 	_ = announcementFields
 	// announcementDescTitle is the schema descriptor for title field.

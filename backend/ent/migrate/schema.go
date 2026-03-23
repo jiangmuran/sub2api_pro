@@ -260,6 +260,171 @@ var (
 			},
 		},
 	}
+	// ActivitiesColumns holds the columns for the "activities" table.
+	ActivitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "icon", Type: field.TypeString, Default: ""},
+		{Name: "type", Type: field.TypeEnum, Enums: []string{"check_in", "lottery", "redeem", "task", "newbie", "limited_time"}},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"draft", "active", "paused", "ended", "archived"}, Default: "draft"},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "starts_at", Type: field.TypeTime, Nullable: true},
+		{Name: "ends_at", Type: field.TypeTime, Nullable: true},
+		{Name: "visibility_rules", Type: field.TypeJSON, Nullable: true},
+		{Name: "participation_config", Type: field.TypeJSON, Nullable: true},
+		{Name: "activity_config", Type: field.TypeJSON, Nullable: true},
+		{Name: "total_participations", Type: field.TypeInt64, Default: 0},
+		{Name: "total_rewards_distributed", Type: field.TypeInt64, Default: 0},
+		{Name: "created_by", Type: field.TypeString, Default: "system"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// ActivitiesTable holds the schema information for the "activities" table.
+	ActivitiesTable = &schema.Table{
+		Name:       "activities",
+		Columns:    ActivitiesColumns,
+		PrimaryKey: []*schema.Column{ActivitiesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "activity_type_status",
+				Unique:  false,
+				Columns: []*schema.Column{ActivitiesColumns[4], ActivitiesColumns[5]},
+			},
+			{
+				Name:    "activity_status_sort_order",
+				Unique:  false,
+				Columns: []*schema.Column{ActivitiesColumns[5], ActivitiesColumns[6]},
+			},
+			{
+				Name:    "activity_starts_at_ends_at",
+				Unique:  false,
+				Columns: []*schema.Column{ActivitiesColumns[7], ActivitiesColumns[8]},
+			},
+		},
+	}
+	// ActivityParticipationsColumns holds the columns for the "activity_participations" table.
+	ActivityParticipationsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "participated_at", Type: field.TypeTime},
+		{Name: "daily_window", Type: field.TypeTime},
+		{Name: "weekly_window", Type: field.TypeTime},
+		{Name: "monthly_window", Type: field.TypeTime},
+		{Name: "result", Type: field.TypeEnum, Enums: []string{"success", "failed", "pending"}, Default: "success"},
+		{Name: "rewards_received", Type: field.TypeJSON, Nullable: true},
+		{Name: "cost_balance", Type: field.TypeString, Default: "0"},
+		{Name: "extra_data", Type: field.TypeJSON, Nullable: true},
+		{Name: "ip_address", Type: field.TypeString, Default: ""},
+		{Name: "user_agent", Type: field.TypeString, Default: ""},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "activity_id", Type: field.TypeInt64},
+		{Name: "reward_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// ActivityParticipationsTable holds the schema information for the "activity_participations" table.
+	ActivityParticipationsTable = &schema.Table{
+		Name:       "activity_participations",
+		Columns:    ActivityParticipationsColumns,
+		PrimaryKey: []*schema.Column{ActivityParticipationsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "activity_participations_activities_participations",
+				Columns:    []*schema.Column{ActivityParticipationsColumns[12]},
+				RefColumns: []*schema.Column{ActivitiesColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "activity_participations_activity_rewards_participations",
+				Columns:    []*schema.Column{ActivityParticipationsColumns[13]},
+				RefColumns: []*schema.Column{ActivityRewardsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "activity_participations_users_activity_participations",
+				Columns:    []*schema.Column{ActivityParticipationsColumns[14]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "activityparticipation_user_id_activity_id_participated_at",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityParticipationsColumns[14], ActivityParticipationsColumns[12], ActivityParticipationsColumns[1]},
+			},
+			{
+				Name:    "activityparticipation_activity_id_participated_at",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityParticipationsColumns[12], ActivityParticipationsColumns[1]},
+			},
+			{
+				Name:    "activityparticipation_user_id_activity_id_daily_window",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityParticipationsColumns[14], ActivityParticipationsColumns[12], ActivityParticipationsColumns[2]},
+			},
+			{
+				Name:    "activityparticipation_user_id_activity_id_weekly_window",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityParticipationsColumns[14], ActivityParticipationsColumns[12], ActivityParticipationsColumns[3]},
+			},
+			{
+				Name:    "activityparticipation_user_id_activity_id_monthly_window",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityParticipationsColumns[14], ActivityParticipationsColumns[12], ActivityParticipationsColumns[4]},
+			},
+			{
+				Name:    "activityparticipation_ip_address_participated_at",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityParticipationsColumns[9], ActivityParticipationsColumns[1]},
+			},
+		},
+	}
+	// ActivityRewardsColumns holds the columns for the "activity_rewards" table.
+	ActivityRewardsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "description", Type: field.TypeString, Default: ""},
+		{Name: "icon", Type: field.TypeString, Default: ""},
+		{Name: "reward_type", Type: field.TypeEnum, Enums: []string{"balance", "subscription", "coupon", "points", "custom"}},
+		{Name: "reward_value", Type: field.TypeString, Default: ""},
+		{Name: "weight", Type: field.TypeInt, Default: 100},
+		{Name: "probability", Type: field.TypeFloat64, Nullable: true},
+		{Name: "total_stock", Type: field.TypeInt64, Default: 0},
+		{Name: "remaining_stock", Type: field.TypeInt64, Default: 0},
+		{Name: "tier", Type: field.TypeEnum, Enums: []string{"grand", "first", "second", "third", "common", "consolation"}, Default: "common"},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"active", "inactive", "out_of_stock"}, Default: "active"},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "distributed_count", Type: field.TypeInt64, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "activity_id", Type: field.TypeInt64},
+	}
+	// ActivityRewardsTable holds the schema information for the "activity_rewards" table.
+	ActivityRewardsTable = &schema.Table{
+		Name:       "activity_rewards",
+		Columns:    ActivityRewardsColumns,
+		PrimaryKey: []*schema.Column{ActivityRewardsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "activity_rewards_activities_rewards",
+				Columns:    []*schema.Column{ActivityRewardsColumns[16]},
+				RefColumns: []*schema.Column{ActivitiesColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "activityreward_activity_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityRewardsColumns[16], ActivityRewardsColumns[11]},
+			},
+			{
+				Name:    "activityreward_activity_id_sort_order",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityRewardsColumns[16], ActivityRewardsColumns[12]},
+			},
+		},
+	}
 	// AnnouncementsColumns holds the columns for the "announcements" table.
 	AnnouncementsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1107,6 +1272,9 @@ var (
 		APIKeysTable,
 		AccountsTable,
 		AccountGroupsTable,
+		ActivitiesTable,
+		ActivityParticipationsTable,
+		ActivityRewardsTable,
 		AnnouncementsTable,
 		AnnouncementReadsTable,
 		ErrorPassthroughRulesTable,
@@ -1143,6 +1311,10 @@ func init() {
 	AccountGroupsTable.Annotation = &entsql.Annotation{
 		Table: "account_groups",
 	}
+	ActivityParticipationsTable.ForeignKeys[0].RefTable = ActivitiesTable
+	ActivityParticipationsTable.ForeignKeys[1].RefTable = ActivityRewardsTable
+	ActivityParticipationsTable.ForeignKeys[2].RefTable = UsersTable
+	ActivityRewardsTable.ForeignKeys[0].RefTable = ActivitiesTable
 	AnnouncementsTable.Annotation = &entsql.Annotation{
 		Table: "announcements",
 	}

@@ -104,19 +104,19 @@
                     <td class="px-3 py-2 text-gray-900 dark:text-white">{{ item.id }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
                       <template v-if="item.pricing_available && !hasManualPricing(item.id)">{{ formatPrice(resolveInputPrice(item), true) }}</template>
-                      <input v-else v-model="manualPricing[item.id].input" type="number" min="0" step="0.01" class="input h-8 w-24 text-right text-xs" />
+                      <input v-else v-model="manualPricing[item.id].input" type="number" min="0" step="0.0001" class="input h-8 w-24 text-right text-xs" />
                     </td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
                       <template v-if="item.pricing_available && !hasManualPricing(item.id)">{{ formatPrice(resolveOutputPrice(item), true) }}</template>
-                      <input v-else v-model="manualPricing[item.id].output" type="number" min="0" step="0.01" class="input h-8 w-24 text-right text-xs" />
+                      <input v-else v-model="manualPricing[item.id].output" type="number" min="0" step="0.0001" class="input h-8 w-24 text-right text-xs" />
                     </td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveInputPrice(item) * rateMultiplierValue, item.pricing_available || hasManualPricing(item.id)) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveOutputPrice(item) * rateMultiplierValue, item.pricing_available || hasManualPricing(item.id)) }}</td>
                     <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">
-                      <template v-if="item.image_price_per_image > 0 && !hasManualPricing(item.id)">{{ formatPrice(resolveImagePrice(item), true) }}</template>
-                      <input v-else v-model="manualPricing[item.id].image" type="number" min="0" step="0.01" class="input h-8 w-24 text-right text-xs" />
+                      <template v-if="!isNanoBananaAccount && item.image_price_per_image > 0 && !hasManualPricing(item.id)">{{ formatImagePrice(resolveImagePrice(item), true) }}</template>
+                      <input v-else v-model="manualPricing[item.id].image" type="number" min="0" step="0.0001" class="input h-8 w-24 text-right text-xs" />
                     </td>
-                    <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatPrice(resolveImagePrice(item) * rateMultiplierValue, item.image_price_per_image > 0 || hasManualPricing(item.id)) }}</td>
+                    <td class="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{{ formatAccountImagePrice(resolveImagePrice(item), item.image_price_per_image > 0 || hasManualPricing(item.id)) }}</td>
                   </tr>
                   <tr class="bg-gray-50/70 dark:bg-dark-900/20">
                     <td colspan="7" class="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">{{ pricingSourceLabel(item) }}</td>
@@ -157,7 +157,7 @@ const manualPricing = ref<Record<string, { input: string; output: string; image:
 const filteredAccounts = computed(() => {
   const keyword = search.value.trim().toLowerCase()
   return accounts.value.filter((account) => {
-    if (account.platform !== 'openai' || account.type !== 'apikey') return false
+    if (!['openai', 'nano-banana'].includes(account.platform) || account.type !== 'apikey') return false
     if (!keyword) return true
     return account.name.toLowerCase().includes(keyword) || String(account.credentials?.base_url || '').toLowerCase().includes(keyword)
   })
@@ -171,13 +171,29 @@ const visibleModels = computed(() =>
 const missingCount = computed(() => previewModels.value.filter((item) => !item.pricing_available).length)
 const manualCount = computed(() => Object.keys(buildManualPricingPayload()).length)
 const hasManualChanges = computed(() => manualCount.value > 0)
-const rateMultiplierValue = computed(() => (selectedAccount.value?.rate_multiplier && selectedAccount.value.rate_multiplier > 0 ? selectedAccount.value.rate_multiplier : 1))
+const normalizeMultiplierValue = (value?: number | null) => {
+  const normalized = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 1
+  const rounded = Math.round(normalized * 10000) / 10000
+  return Math.abs(rounded - 1) < 0.0001 ? 1 : rounded
+}
+const roundPrice = (value: number) => Math.round(value * 10000) / 10000
+const isNanoBananaAccount = computed(() => selectedAccount.value?.platform === 'nano-banana')
+const rateMultiplierValue = computed(() => normalizeMultiplierValue(selectedAccount.value?.rate_multiplier))
 
 const formatPrice = (value: number, available: boolean) => (available ? `$${value.toFixed(2)}` : '--')
+const formatNanoPrice = (value: number, available: boolean) => (available ? `倍率 ${String(roundPrice(value))}` : '--')
+const formatImagePrice = (value: number, available: boolean) => isNanoBananaAccount.value ? formatNanoPrice(value, available) : formatPrice(value, available)
+const formatAccountImagePrice = (value: number, available: boolean) => {
+  if (!available) return '--'
+  if (isNanoBananaAccount.value) {
+    return formatNanoPrice(value, true)
+  }
+  return formatPrice(value * rateMultiplierValue.value, true)
+}
 const normalizeManualValue = (value: unknown) => String(value ?? '')
 const parseManualPrice = (value: unknown) => {
   const parsed = Number.parseFloat(normalizeManualValue(value))
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  return Number.isFinite(parsed) && parsed >= 0 ? roundPrice(parsed) : 0
 }
 const hasManualPricing = (modelId: string) => {
   const entry = manualPricing.value[modelId]
@@ -218,10 +234,14 @@ const extractAccountModels = (account: Account): string[] => {
   return raw ? Object.keys(raw) : []
 }
 
+const manualPricingExtraKey = (account: Account) => (
+  account.platform === 'nano-banana' ? 'nano_banana_manual_model_pricing' : 'openai_manual_model_pricing'
+)
+
 const loadAccounts = async () => {
   loadingAccounts.value = true
   try {
-    const result = await adminAPI.accounts.list(1, 1000, { platform: 'openai', type: 'apikey' })
+    const result = await adminAPI.accounts.list(1, 1000, { type: 'apikey' })
     accounts.value = result.items || []
     if (!selectedAccountId.value && accounts.value.length > 0) {
       await selectAccount(accounts.value[0].id)
@@ -237,17 +257,33 @@ const selectAccount = async (accountID: number) => {
   try {
     const account = await adminAPI.accounts.getById(accountID)
     selectedAccount.value = account
-    const result = await adminAPI.accounts.previewOpenAICompatibleModels({
-      base_url: String(account.credentials?.base_url || ''),
-      api_key: String(account.credentials?.api_key || ''),
-      proxy_id: account.proxy_id ?? null,
-      rate_multiplier: account.rate_multiplier ?? 1,
-      models: extractAccountModels(account)
-    })
-    previewModels.value = result.models || []
-    const saved = ((account.extra as Record<string, any> | undefined)?.openai_manual_model_pricing || {}) as Record<string, { input_price_per_1m: number; output_price_per_1m: number; image_price_per_image?: number }>
+    const saved = ((account.extra as Record<string, any> | undefined)?.[manualPricingExtraKey(account)] || {}) as Record<string, { input_price_per_1m: number; output_price_per_1m: number; image_price_per_image?: number }>
+    if (account.platform === 'nano-banana') {
+      const modelSet = new Set<string>([...extractAccountModels(account), ...Object.keys(saved)])
+      previewModels.value = [...modelSet].sort().map((id) => ({
+        id,
+        display_name: id,
+        input_price_per_1m: 0,
+        output_price_per_1m: 0,
+        image_price_per_image: saved[id]?.image_price_per_image || 0,
+        account_input_price_per_1m: 0,
+        account_output_price_per_1m: 0,
+        account_image_price_per_image: saved[id]?.image_price_per_image || 0,
+        pricing_available: (saved[id]?.image_price_per_image || 0) > 0,
+        pricing_source: saved[id]?.image_price_per_image ? 'account' : undefined
+      }))
+    } else {
+      const result = await adminAPI.accounts.previewOpenAICompatibleModels({
+        base_url: String(account.credentials?.base_url || ''),
+        api_key: String(account.credentials?.api_key || ''),
+        proxy_id: account.proxy_id ?? null,
+        rate_multiplier: account.rate_multiplier ?? 1,
+        models: extractAccountModels(account)
+      })
+      previewModels.value = result.models || []
+    }
     manualPricing.value = Object.fromEntries(
-        previewModels.value.map((item) => [item.id, { input: saved[item.id]?.input_price_per_1m?.toString?.() || '', output: saved[item.id]?.output_price_per_1m?.toString?.() || '', image: saved[item.id]?.image_price_per_image?.toString?.() || '' }])
+        previewModels.value.map((item) => [item.id, { input: saved[item.id]?.input_price_per_1m?.toString?.() || '', output: saved[item.id]?.output_price_per_1m?.toString?.() || '', image: saved[item.id]?.image_price_per_image != null ? String(roundPrice(saved[item.id]?.image_price_per_image ?? 0)) : '' }])
       )
   } catch (error: any) {
     appStore.showError(error.response?.data?.message || t('admin.pricingManagement.loadFailed'))
@@ -269,12 +305,12 @@ const savePricing = async () => {
   saving.value = true
   try {
     const currentExtra = (selectedAccount.value.extra as Record<string, unknown>) || {}
-    await adminAPI.accounts.update(selectedAccount.value.id, {
-      extra: {
-        ...currentExtra,
-        openai_manual_model_pricing: buildManualPricingPayload()
-      }
-    })
+      await adminAPI.accounts.update(selectedAccount.value.id, {
+        extra: {
+          ...currentExtra,
+          [manualPricingExtraKey(selectedAccount.value)]: buildManualPricingPayload()
+        }
+      })
     appStore.showSuccess(t('admin.pricingManagement.saveSuccess'))
     await selectAccount(selectedAccount.value.id)
   } catch (error: any) {

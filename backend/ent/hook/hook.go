@@ -45,6 +45,42 @@ func (f AccountGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AccountGroupMutation", m)
 }
 
+// The ActivityFunc type is an adapter to allow the use of ordinary
+// function as Activity mutator.
+type ActivityFunc func(context.Context, *ent.ActivityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActivityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityMutation", m)
+}
+
+// The ActivityParticipationFunc type is an adapter to allow the use of ordinary
+// function as ActivityParticipation mutator.
+type ActivityParticipationFunc func(context.Context, *ent.ActivityParticipationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActivityParticipationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityParticipationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityParticipationMutation", m)
+}
+
+// The ActivityRewardFunc type is an adapter to allow the use of ordinary
+// function as ActivityReward mutator.
+type ActivityRewardFunc func(context.Context, *ent.ActivityRewardMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ActivityRewardFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ActivityRewardMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ActivityRewardMutation", m)
+}
+
 // The AnnouncementFunc type is an adapter to allow the use of ordinary
 // function as Announcement mutator.
 type AnnouncementFunc func(context.Context, *ent.AnnouncementMutation) (ent.Value, error)

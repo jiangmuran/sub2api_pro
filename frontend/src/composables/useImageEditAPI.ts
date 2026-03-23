@@ -7,6 +7,8 @@ export interface ImageEditParams {
   image: File
   n?: number
   size?: string
+  aspect_ratio?: string
+  image_size?: string
   response_format?: 'url' | 'b64_json'
 }
 
@@ -36,6 +38,8 @@ export function useImageEditAPI() {
       formData.append('image', params.image)
       if (params.n) formData.append('n', params.n.toString())
       if (params.size) formData.append('size', params.size)
+      if (params.aspect_ratio) formData.append('aspect_ratio', params.aspect_ratio)
+      if (params.image_size) formData.append('image_size', params.image_size)
       if (params.response_format) formData.append('response_format', params.response_format)
 
       // 图片编辑可能需要30-60秒，设置较长的超时时间（90秒）

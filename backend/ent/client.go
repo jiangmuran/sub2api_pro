@@ -17,6 +17,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/activity"
+	"github.com/Wei-Shaw/sub2api/ent/activityparticipation"
+	"github.com/Wei-Shaw/sub2api/ent/activityreward"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
@@ -51,6 +54,12 @@ type Client struct {
 	Account *AccountClient
 	// AccountGroup is the client for interacting with the AccountGroup builders.
 	AccountGroup *AccountGroupClient
+	// Activity is the client for interacting with the Activity builders.
+	Activity *ActivityClient
+	// ActivityParticipation is the client for interacting with the ActivityParticipation builders.
+	ActivityParticipation *ActivityParticipationClient
+	// ActivityReward is the client for interacting with the ActivityReward builders.
+	ActivityReward *ActivityRewardClient
 	// Announcement is the client for interacting with the Announcement builders.
 	Announcement *AnnouncementClient
 	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
@@ -101,6 +110,9 @@ func (c *Client) init() {
 	c.APIKey = NewAPIKeyClient(c.config)
 	c.Account = NewAccountClient(c.config)
 	c.AccountGroup = NewAccountGroupClient(c.config)
+	c.Activity = NewActivityClient(c.config)
+	c.ActivityParticipation = NewActivityParticipationClient(c.config)
+	c.ActivityReward = NewActivityRewardClient(c.config)
 	c.Announcement = NewAnnouncementClient(c.config)
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
@@ -214,6 +226,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		APIKey:                  NewAPIKeyClient(cfg),
 		Account:                 NewAccountClient(cfg),
 		AccountGroup:            NewAccountGroupClient(cfg),
+		Activity:                NewActivityClient(cfg),
+		ActivityParticipation:   NewActivityParticipationClient(cfg),
+		ActivityReward:          NewActivityRewardClient(cfg),
 		Announcement:            NewAnnouncementClient(cfg),
 		AnnouncementRead:        NewAnnouncementReadClient(cfg),
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
@@ -254,6 +269,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		APIKey:                  NewAPIKeyClient(cfg),
 		Account:                 NewAccountClient(cfg),
 		AccountGroup:            NewAccountGroupClient(cfg),
+		Activity:                NewActivityClient(cfg),
+		ActivityParticipation:   NewActivityParticipationClient(cfg),
+		ActivityReward:          NewActivityRewardClient(cfg),
 		Announcement:            NewAnnouncementClient(cfg),
 		AnnouncementRead:        NewAnnouncementReadClient(cfg),
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
@@ -301,11 +319,12 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.Activity, c.ActivityParticipation,
+		c.ActivityReward, c.Announcement, c.AnnouncementRead, c.ErrorPassthroughRule,
+		c.Group, c.IdempotencyRecord, c.PromoCode, c.PromoCodeUsage, c.Proxy,
+		c.RedeemCode, c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -315,11 +334,12 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.Activity, c.ActivityParticipation,
+		c.ActivityReward, c.Announcement, c.AnnouncementRead, c.ErrorPassthroughRule,
+		c.Group, c.IdempotencyRecord, c.PromoCode, c.PromoCodeUsage, c.Proxy,
+		c.RedeemCode, c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog,
+		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -334,6 +354,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Account.mutate(ctx, m)
 	case *AccountGroupMutation:
 		return c.AccountGroup.mutate(ctx, m)
+	case *ActivityMutation:
+		return c.Activity.mutate(ctx, m)
+	case *ActivityParticipationMutation:
+		return c.ActivityParticipation.mutate(ctx, m)
+	case *ActivityRewardMutation:
+		return c.ActivityReward.mutate(ctx, m)
 	case *AnnouncementMutation:
 		return c.Announcement.mutate(ctx, m)
 	case *AnnouncementReadMutation:
@@ -870,6 +896,517 @@ func (c *AccountGroupClient) mutate(ctx context.Context, m *AccountGroupMutation
 		return (&AccountGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AccountGroup mutation op: %q", m.Op())
+	}
+}
+
+// ActivityClient is a client for the Activity schema.
+type ActivityClient struct {
+	config
+}
+
+// NewActivityClient returns a client for the Activity from the given config.
+func NewActivityClient(c config) *ActivityClient {
+	return &ActivityClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `activity.Hooks(f(g(h())))`.
+func (c *ActivityClient) Use(hooks ...Hook) {
+	c.hooks.Activity = append(c.hooks.Activity, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `activity.Intercept(f(g(h())))`.
+func (c *ActivityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Activity = append(c.inters.Activity, interceptors...)
+}
+
+// Create returns a builder for creating a Activity entity.
+func (c *ActivityClient) Create() *ActivityCreate {
+	mutation := newActivityMutation(c.config, OpCreate)
+	return &ActivityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Activity entities.
+func (c *ActivityClient) CreateBulk(builders ...*ActivityCreate) *ActivityCreateBulk {
+	return &ActivityCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ActivityClient) MapCreateBulk(slice any, setFunc func(*ActivityCreate, int)) *ActivityCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ActivityCreateBulk{err: fmt.Errorf("calling to ActivityClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ActivityCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ActivityCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Activity.
+func (c *ActivityClient) Update() *ActivityUpdate {
+	mutation := newActivityMutation(c.config, OpUpdate)
+	return &ActivityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ActivityClient) UpdateOne(_m *Activity) *ActivityUpdateOne {
+	mutation := newActivityMutation(c.config, OpUpdateOne, withActivity(_m))
+	return &ActivityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ActivityClient) UpdateOneID(id int64) *ActivityUpdateOne {
+	mutation := newActivityMutation(c.config, OpUpdateOne, withActivityID(id))
+	return &ActivityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Activity.
+func (c *ActivityClient) Delete() *ActivityDelete {
+	mutation := newActivityMutation(c.config, OpDelete)
+	return &ActivityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ActivityClient) DeleteOne(_m *Activity) *ActivityDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ActivityClient) DeleteOneID(id int64) *ActivityDeleteOne {
+	builder := c.Delete().Where(activity.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ActivityDeleteOne{builder}
+}
+
+// Query returns a query builder for Activity.
+func (c *ActivityClient) Query() *ActivityQuery {
+	return &ActivityQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeActivity},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Activity entity by its id.
+func (c *ActivityClient) Get(ctx context.Context, id int64) (*Activity, error) {
+	return c.Query().Where(activity.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ActivityClient) GetX(ctx context.Context, id int64) *Activity {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRewards queries the rewards edge of a Activity.
+func (c *ActivityClient) QueryRewards(_m *Activity) *ActivityRewardQuery {
+	query := (&ActivityRewardClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activity.Table, activity.FieldID, id),
+			sqlgraph.To(activityreward.Table, activityreward.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, activity.RewardsTable, activity.RewardsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryParticipations queries the participations edge of a Activity.
+func (c *ActivityClient) QueryParticipations(_m *Activity) *ActivityParticipationQuery {
+	query := (&ActivityParticipationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activity.Table, activity.FieldID, id),
+			sqlgraph.To(activityparticipation.Table, activityparticipation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, activity.ParticipationsTable, activity.ParticipationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ActivityClient) Hooks() []Hook {
+	return c.hooks.Activity
+}
+
+// Interceptors returns the client interceptors.
+func (c *ActivityClient) Interceptors() []Interceptor {
+	return c.inters.Activity
+}
+
+func (c *ActivityClient) mutate(ctx context.Context, m *ActivityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ActivityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ActivityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ActivityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ActivityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Activity mutation op: %q", m.Op())
+	}
+}
+
+// ActivityParticipationClient is a client for the ActivityParticipation schema.
+type ActivityParticipationClient struct {
+	config
+}
+
+// NewActivityParticipationClient returns a client for the ActivityParticipation from the given config.
+func NewActivityParticipationClient(c config) *ActivityParticipationClient {
+	return &ActivityParticipationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `activityparticipation.Hooks(f(g(h())))`.
+func (c *ActivityParticipationClient) Use(hooks ...Hook) {
+	c.hooks.ActivityParticipation = append(c.hooks.ActivityParticipation, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `activityparticipation.Intercept(f(g(h())))`.
+func (c *ActivityParticipationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ActivityParticipation = append(c.inters.ActivityParticipation, interceptors...)
+}
+
+// Create returns a builder for creating a ActivityParticipation entity.
+func (c *ActivityParticipationClient) Create() *ActivityParticipationCreate {
+	mutation := newActivityParticipationMutation(c.config, OpCreate)
+	return &ActivityParticipationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ActivityParticipation entities.
+func (c *ActivityParticipationClient) CreateBulk(builders ...*ActivityParticipationCreate) *ActivityParticipationCreateBulk {
+	return &ActivityParticipationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ActivityParticipationClient) MapCreateBulk(slice any, setFunc func(*ActivityParticipationCreate, int)) *ActivityParticipationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ActivityParticipationCreateBulk{err: fmt.Errorf("calling to ActivityParticipationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ActivityParticipationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ActivityParticipationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ActivityParticipation.
+func (c *ActivityParticipationClient) Update() *ActivityParticipationUpdate {
+	mutation := newActivityParticipationMutation(c.config, OpUpdate)
+	return &ActivityParticipationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ActivityParticipationClient) UpdateOne(_m *ActivityParticipation) *ActivityParticipationUpdateOne {
+	mutation := newActivityParticipationMutation(c.config, OpUpdateOne, withActivityParticipation(_m))
+	return &ActivityParticipationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ActivityParticipationClient) UpdateOneID(id int64) *ActivityParticipationUpdateOne {
+	mutation := newActivityParticipationMutation(c.config, OpUpdateOne, withActivityParticipationID(id))
+	return &ActivityParticipationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ActivityParticipation.
+func (c *ActivityParticipationClient) Delete() *ActivityParticipationDelete {
+	mutation := newActivityParticipationMutation(c.config, OpDelete)
+	return &ActivityParticipationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ActivityParticipationClient) DeleteOne(_m *ActivityParticipation) *ActivityParticipationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ActivityParticipationClient) DeleteOneID(id int64) *ActivityParticipationDeleteOne {
+	builder := c.Delete().Where(activityparticipation.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ActivityParticipationDeleteOne{builder}
+}
+
+// Query returns a query builder for ActivityParticipation.
+func (c *ActivityParticipationClient) Query() *ActivityParticipationQuery {
+	return &ActivityParticipationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeActivityParticipation},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ActivityParticipation entity by its id.
+func (c *ActivityParticipationClient) Get(ctx context.Context, id int64) (*ActivityParticipation, error) {
+	return c.Query().Where(activityparticipation.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ActivityParticipationClient) GetX(ctx context.Context, id int64) *ActivityParticipation {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryActivity queries the activity edge of a ActivityParticipation.
+func (c *ActivityParticipationClient) QueryActivity(_m *ActivityParticipation) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityparticipation.Table, activityparticipation.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, activityparticipation.ActivityTable, activityparticipation.ActivityColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUser queries the user edge of a ActivityParticipation.
+func (c *ActivityParticipationClient) QueryUser(_m *ActivityParticipation) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityparticipation.Table, activityparticipation.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, activityparticipation.UserTable, activityparticipation.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryReward queries the reward edge of a ActivityParticipation.
+func (c *ActivityParticipationClient) QueryReward(_m *ActivityParticipation) *ActivityRewardQuery {
+	query := (&ActivityRewardClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityparticipation.Table, activityparticipation.FieldID, id),
+			sqlgraph.To(activityreward.Table, activityreward.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, activityparticipation.RewardTable, activityparticipation.RewardColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ActivityParticipationClient) Hooks() []Hook {
+	return c.hooks.ActivityParticipation
+}
+
+// Interceptors returns the client interceptors.
+func (c *ActivityParticipationClient) Interceptors() []Interceptor {
+	return c.inters.ActivityParticipation
+}
+
+func (c *ActivityParticipationClient) mutate(ctx context.Context, m *ActivityParticipationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ActivityParticipationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ActivityParticipationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ActivityParticipationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ActivityParticipationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ActivityParticipation mutation op: %q", m.Op())
+	}
+}
+
+// ActivityRewardClient is a client for the ActivityReward schema.
+type ActivityRewardClient struct {
+	config
+}
+
+// NewActivityRewardClient returns a client for the ActivityReward from the given config.
+func NewActivityRewardClient(c config) *ActivityRewardClient {
+	return &ActivityRewardClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `activityreward.Hooks(f(g(h())))`.
+func (c *ActivityRewardClient) Use(hooks ...Hook) {
+	c.hooks.ActivityReward = append(c.hooks.ActivityReward, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `activityreward.Intercept(f(g(h())))`.
+func (c *ActivityRewardClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ActivityReward = append(c.inters.ActivityReward, interceptors...)
+}
+
+// Create returns a builder for creating a ActivityReward entity.
+func (c *ActivityRewardClient) Create() *ActivityRewardCreate {
+	mutation := newActivityRewardMutation(c.config, OpCreate)
+	return &ActivityRewardCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ActivityReward entities.
+func (c *ActivityRewardClient) CreateBulk(builders ...*ActivityRewardCreate) *ActivityRewardCreateBulk {
+	return &ActivityRewardCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ActivityRewardClient) MapCreateBulk(slice any, setFunc func(*ActivityRewardCreate, int)) *ActivityRewardCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ActivityRewardCreateBulk{err: fmt.Errorf("calling to ActivityRewardClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ActivityRewardCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ActivityRewardCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ActivityReward.
+func (c *ActivityRewardClient) Update() *ActivityRewardUpdate {
+	mutation := newActivityRewardMutation(c.config, OpUpdate)
+	return &ActivityRewardUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ActivityRewardClient) UpdateOne(_m *ActivityReward) *ActivityRewardUpdateOne {
+	mutation := newActivityRewardMutation(c.config, OpUpdateOne, withActivityReward(_m))
+	return &ActivityRewardUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ActivityRewardClient) UpdateOneID(id int64) *ActivityRewardUpdateOne {
+	mutation := newActivityRewardMutation(c.config, OpUpdateOne, withActivityRewardID(id))
+	return &ActivityRewardUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ActivityReward.
+func (c *ActivityRewardClient) Delete() *ActivityRewardDelete {
+	mutation := newActivityRewardMutation(c.config, OpDelete)
+	return &ActivityRewardDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ActivityRewardClient) DeleteOne(_m *ActivityReward) *ActivityRewardDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ActivityRewardClient) DeleteOneID(id int64) *ActivityRewardDeleteOne {
+	builder := c.Delete().Where(activityreward.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ActivityRewardDeleteOne{builder}
+}
+
+// Query returns a query builder for ActivityReward.
+func (c *ActivityRewardClient) Query() *ActivityRewardQuery {
+	return &ActivityRewardQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeActivityReward},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ActivityReward entity by its id.
+func (c *ActivityRewardClient) Get(ctx context.Context, id int64) (*ActivityReward, error) {
+	return c.Query().Where(activityreward.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ActivityRewardClient) GetX(ctx context.Context, id int64) *ActivityReward {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryActivity queries the activity edge of a ActivityReward.
+func (c *ActivityRewardClient) QueryActivity(_m *ActivityReward) *ActivityQuery {
+	query := (&ActivityClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityreward.Table, activityreward.FieldID, id),
+			sqlgraph.To(activity.Table, activity.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, activityreward.ActivityTable, activityreward.ActivityColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryParticipations queries the participations edge of a ActivityReward.
+func (c *ActivityRewardClient) QueryParticipations(_m *ActivityReward) *ActivityParticipationQuery {
+	query := (&ActivityParticipationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(activityreward.Table, activityreward.FieldID, id),
+			sqlgraph.To(activityparticipation.Table, activityparticipation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, activityreward.ParticipationsTable, activityreward.ParticipationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ActivityRewardClient) Hooks() []Hook {
+	return c.hooks.ActivityReward
+}
+
+// Interceptors returns the client interceptors.
+func (c *ActivityRewardClient) Interceptors() []Interceptor {
+	return c.inters.ActivityReward
+}
+
+func (c *ActivityRewardClient) mutate(ctx context.Context, m *ActivityRewardMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ActivityRewardCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ActivityRewardUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ActivityRewardUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ActivityRewardDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ActivityReward mutation op: %q", m.Op())
 	}
 }
 
@@ -3210,6 +3747,22 @@ func (c *UserClient) QueryPromoCodeUsages(_m *User) *PromoCodeUsageQuery {
 	return query
 }
 
+// QueryActivityParticipations queries the activity_participations edge of a User.
+func (c *UserClient) QueryActivityParticipations(_m *User) *ActivityParticipationQuery {
+	query := (&ActivityParticipationClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(activityparticipation.Table, activityparticipation.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.ActivityParticipationsTable, user.ActivityParticipationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -3887,18 +4440,18 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Hook
+		APIKey, Account, AccountGroup, Activity, ActivityParticipation, ActivityReward,
+		Announcement, AnnouncementRead, ErrorPassthroughRule, Group, IdempotencyRecord,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
-		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Interceptor
+		APIKey, Account, AccountGroup, Activity, ActivityParticipation, ActivityReward,
+		Announcement, AnnouncementRead, ErrorPassthroughRule, Group, IdempotencyRecord,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

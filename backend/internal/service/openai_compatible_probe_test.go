@@ -287,4 +287,10 @@ func TestBuildOpenAIEndpointURL_PreservesCustomVersionedPath(t *testing.T) {
 	if got := buildOpenAIEndpointURL("https://api.openai.com", "responses"); got != "https://api.openai.com/v1/responses" {
 		t.Fatalf("default endpoint = %s", got)
 	}
+	if got := buildOpenAIEndpointURL("https://grsaiapi.com", "v1/draw/nano-banana"); got != "https://grsaiapi.com/v1/draw/nano-banana" {
+		t.Fatalf("versioned endpoint = %s", got)
+	}
+	if got := buildOpenAIEndpointURL("https://grsaiapi.com/v1", "v1/draw/nano-banana"); got != "https://grsaiapi.com/v1/draw/nano-banana" {
+		t.Fatalf("v1 base endpoint = %s", got)
+	}
 }

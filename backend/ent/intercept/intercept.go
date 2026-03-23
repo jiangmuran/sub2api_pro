@@ -10,6 +10,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/activity"
+	"github.com/Wei-Shaw/sub2api/ent/activityparticipation"
+	"github.com/Wei-Shaw/sub2api/ent/activityreward"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
@@ -167,6 +170,87 @@ func (f TraverseAccountGroup) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.AccountGroupQuery", q)
+}
+
+// The ActivityFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ActivityFunc func(context.Context, *ent.ActivityQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ActivityFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ActivityQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ActivityQuery", q)
+}
+
+// The TraverseActivity type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseActivity func(context.Context, *ent.ActivityQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseActivity) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseActivity) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ActivityQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ActivityQuery", q)
+}
+
+// The ActivityParticipationFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ActivityParticipationFunc func(context.Context, *ent.ActivityParticipationQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ActivityParticipationFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ActivityParticipationQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ActivityParticipationQuery", q)
+}
+
+// The TraverseActivityParticipation type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseActivityParticipation func(context.Context, *ent.ActivityParticipationQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseActivityParticipation) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseActivityParticipation) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ActivityParticipationQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ActivityParticipationQuery", q)
+}
+
+// The ActivityRewardFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ActivityRewardFunc func(context.Context, *ent.ActivityRewardQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ActivityRewardFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ActivityRewardQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ActivityRewardQuery", q)
+}
+
+// The TraverseActivityReward type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseActivityReward func(context.Context, *ent.ActivityRewardQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseActivityReward) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseActivityReward) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ActivityRewardQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ActivityRewardQuery", q)
 }
 
 // The AnnouncementFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -664,6 +748,12 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AccountQuery, predicate.Account, account.OrderOption]{typ: ent.TypeAccount, tq: q}, nil
 	case *ent.AccountGroupQuery:
 		return &query[*ent.AccountGroupQuery, predicate.AccountGroup, accountgroup.OrderOption]{typ: ent.TypeAccountGroup, tq: q}, nil
+	case *ent.ActivityQuery:
+		return &query[*ent.ActivityQuery, predicate.Activity, activity.OrderOption]{typ: ent.TypeActivity, tq: q}, nil
+	case *ent.ActivityParticipationQuery:
+		return &query[*ent.ActivityParticipationQuery, predicate.ActivityParticipation, activityparticipation.OrderOption]{typ: ent.TypeActivityParticipation, tq: q}, nil
+	case *ent.ActivityRewardQuery:
+		return &query[*ent.ActivityRewardQuery, predicate.ActivityReward, activityreward.OrderOption]{typ: ent.TypeActivityReward, tq: q}, nil
 	case *ent.AnnouncementQuery:
 		return &query[*ent.AnnouncementQuery, predicate.Announcement, announcement.OrderOption]{typ: ent.TypeAnnouncement, tq: q}, nil
 	case *ent.AnnouncementReadQuery:

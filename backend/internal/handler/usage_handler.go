@@ -61,7 +61,7 @@ func lookupManualModelPricing(account *service.Account, model string) (manualMod
 	if account == nil || len(account.Extra) == 0 {
 		return manualModelPricing{}, false
 	}
-	rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+	rawPricing, ok := account.Extra[serviceManualPricingExtraKey(account)]
 	if !ok {
 		return manualModelPricing{}, false
 	}
@@ -91,6 +91,18 @@ func lookupManualModelPricing(account *service.Account, model string) (manualMod
 		return manualModelPricing{}, false
 	}
 	return pricing, true
+}
+
+func serviceManualPricingExtraKey(account *service.Account) string {
+	if account == nil {
+		return "openai_manual_model_pricing"
+	}
+	switch account.Platform {
+	case service.PlatformNanoBanana:
+		return service.NanoBananaManualPricingExtraKey
+	default:
+		return "openai_manual_model_pricing"
+	}
 }
 
 func readFloat(value any) float64 {
@@ -162,7 +174,19 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 		seen[model] = struct{}{}
 		item := ModelPricingPreviewItem{Model: model}
 		if apiKey != nil && h.gatewayService != nil {
-			if account, err := h.gatewayService.SelectAccountForModel(c.Request.Context(), apiKey.GroupID, "", model); err == nil && account != nil {
+			selectFn := h.gatewayService.SelectAccountForModel
+			if service.IsNanoBananaModel(model) {
+				if account, err := h.gatewayService.SelectImageAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, model, nil); err == nil && account != nil {
+					if pricing, ok := lookupManualModelPricing(account, model); ok {
+						item.InputPricePer1M = pricing.InputPricePer1M
+						item.OutputPricePer1M = pricing.OutputPricePer1M
+						item.ImagePricePerImage = pricing.ImagePricePerImage
+						item.VideoPricePerRequest = pricing.VideoPricePerRequest
+						item.VideoPricePerRequestHD = pricing.VideoPricePerRequestHD
+						item.PricingAvailable = pricing.InputPricePer1M > 0 || pricing.OutputPricePer1M > 0 || pricing.ImagePricePerImage > 0 || pricing.VideoPricePerRequest > 0 || pricing.VideoPricePerRequestHD > 0
+					}
+				}
+			} else if account, err := selectFn(c.Request.Context(), apiKey.GroupID, "", model); err == nil && account != nil {
 				if pricing, ok := lookupManualModelPricing(account, model); ok {
 					item.InputPricePer1M = pricing.InputPricePer1M
 					item.OutputPricePer1M = pricing.OutputPricePer1M
@@ -173,7 +197,7 @@ func (h *UsageHandler) ModelPricingPreview(c *gin.Context) {
 				}
 			}
 		}
-		if h.billingService != nil {
+		if h.billingService != nil && !service.IsNanoBananaModel(model) {
 			if !item.PricingAvailable {
 				if pricing := h.billingService.GetPreviewModelPricing(model); pricing != nil {
 					item.InputPricePer1M = pricing.InputPricePerToken * 1_000_000

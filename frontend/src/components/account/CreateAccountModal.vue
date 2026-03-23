@@ -169,6 +169,19 @@
             <Icon name="cloud" size="sm" />
             Antigravity
           </button>
+          <button
+            type="button"
+            @click="form.platform = 'nano-banana'"
+            :class="[
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              form.platform === 'nano-banana'
+                ? 'bg-white text-amber-600 shadow-sm dark:bg-dark-600 dark:text-amber-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            ]"
+          >
+            <Icon name="sparkles" size="sm" />
+            Nano Banana
+          </button>
         </div>
       </div>
 
@@ -908,6 +921,8 @@
                 ? 'https://api.openai.com'
                 : form.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
+                  : form.platform === 'nano-banana'
+                    ? 'https://grsaiapi.com'
                   : 'https://api.anthropic.com'
             "
           />
@@ -925,6 +940,8 @@
                 ? 'sk-proj-...'
                 : form.platform === 'gemini'
                   ? 'AIza...'
+                  : form.platform === 'nano-banana'
+                    ? 'nb-...'
                   : 'sk-ant-...'
             "
           />
@@ -1032,8 +1049,19 @@
           <p class="input-hint">{{ t('admin.accounts.gemini.tier.aiStudioHint') }}</p>
         </div>
 
+        <div v-if="form.platform === 'nano-banana'" class="space-y-4 border-t border-gray-200 pt-4 dark:border-dark-600">
+          <div>
+            <label class="input-label">Nano Banana 模型</label>
+            <ModelWhitelistSelector v-model="allowedModels" platform="nano-banana" />
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              这些模型会写入账号的模型映射，并出现在 `/v1/models` 与模型测试页里。
+            </p>
+          </div>
+          <NanoBananaPricingWorkbench v-model="nanoBananaManualModelPricing" :models="nanoBananaPricingModels" />
+        </div>
+
         <!-- Model Restriction Section (Antigravity 已在上层条件排除) -->
-        <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div v-if="form.platform !== 'nano-banana'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
@@ -2430,6 +2458,7 @@ import ProxySelector from '@/components/common/ProxySelector.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import OpenAICompatibleWorkbench from '@/components/account/OpenAICompatibleWorkbench.vue'
+import NanoBananaPricingWorkbench from '@/components/account/NanoBananaPricingWorkbench.vue'
 import { applyInterceptWarmup } from '@/components/account/credentialsBuilder'
 import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/format'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
@@ -2469,12 +2498,14 @@ const oauthStepTitle = computed(() => {
 const baseUrlHint = computed(() => {
   if (form.platform === 'openai' || form.platform === 'sora') return t('admin.accounts.openai.baseUrlHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
+  if (form.platform === 'nano-banana') return 'Nano Banana 节点地址，例如：https://grsaiapi.com 或 https://grsai.dakka.com.cn'
   return t('admin.accounts.baseUrlHint')
 })
 
 const apiKeyHint = computed(() => {
   if (form.platform === 'openai' || form.platform === 'sora') return t('admin.accounts.openai.apiKeyHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.apiKeyHint')
+  if (form.platform === 'nano-banana') return '用于调用 Nano Banana 绘图接口的 Bearer API Key'
   return t('admin.accounts.apiKeyHint')
 })
 
@@ -2545,6 +2576,12 @@ interface TempUnschedRuleForm {
   description: string
 }
 
+type ManualModelPricingInput = {
+  input_price_per_1m: number
+  output_price_per_1m: number
+  image_price_per_image?: number
+}
+
 // State
 const step = ref(1)
 const submitting = ref(false)
@@ -2556,7 +2593,8 @@ const apiKeyFunctionKey = ref('')
 const openAICompatChecking = ref(false)
 const openAICompatCheckResult = ref<OpenAICompatibleCheckResult | null>(null)
 const suspendOpenAICompatReset = ref(false)
-const openAIManualModelPricing = ref<Record<string, { input_price_per_1m: number; output_price_per_1m: number }>>({})
+const openAIManualModelPricing = ref<Record<string, ManualModelPricingInput>>({})
+const nanoBananaManualModelPricing = ref<Record<string, { image_price_per_image?: number }>>({})
 const modelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
@@ -2662,6 +2700,8 @@ const openaiResponsesWebSocketV2Mode = computed({
 const isOpenAIModelRestrictionDisabled = computed(() =>
   form.platform === 'openai' && openaiPassthroughEnabled.value
 )
+
+const nanoBananaPricingModels = computed(() => [...allowedModels.value].sort())
 
 const compatStatusLabel = (status: OpenAICompatibleCheckResult['status']) => {
   switch (status) {
@@ -2897,6 +2937,8 @@ watch(
         ? 'https://api.openai.com'
         : newPlatform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
+          : newPlatform === 'nano-banana'
+            ? 'https://grsaiapi.com'
           : 'https://api.anthropic.com'
     // Clear model-related settings
     allowedModels.value = []
@@ -2926,6 +2968,13 @@ watch(
       form.type = 'oauth'
       soraAccountType.value = 'oauth'
     }
+    if (newPlatform === 'nano-banana') {
+      accountCategory.value = 'apikey'
+      addMethod.value = 'oauth'
+      form.type = 'apikey'
+      modelRestrictionMode.value = 'whitelist'
+      allowedModels.value = []
+    }
     if (newPlatform !== 'openai') {
       openaiPassthroughEnabled.value = false
       openAICompatCheckResult.value = null
@@ -2935,6 +2984,9 @@ watch(
     }
     if (newPlatform !== 'anthropic') {
       anthropicPassthroughEnabled.value = false
+    }
+    if (newPlatform !== 'nano-banana') {
+      nanoBananaManualModelPricing.value = {}
     }
     // Reset OAuth states
     oauth.resetState()
@@ -3306,6 +3358,7 @@ const resetForm = () => {
   openAICompatChecking.value = false
   openAICompatCheckResult.value = null
   openAIManualModelPricing.value = {}
+  nanoBananaManualModelPricing.value = {}
   openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
@@ -3401,7 +3454,7 @@ const handleApplyOnlineModels = (models: string[]) => {
   appStore.showSuccess(t('admin.accounts.openai.onlineModelsApplied'))
 }
 
-const handleManualPricingChange = (pricing: Record<string, { input_price_per_1m: number; output_price_per_1m: number }>) => {
+const handleManualPricingChange = (pricing: Record<string, ManualModelPricingInput>) => {
   openAIManualModelPricing.value = pricing
 }
 
@@ -3453,6 +3506,22 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   }
 
   return Object.keys(extra).length > 0 ? extra : undefined
+}
+
+const buildNanoBananaExtra = (base?: Record<string, unknown>): Record<string, unknown> | undefined => {
+	if (form.platform !== 'nano-banana') {
+		return base
+	}
+	const extra: Record<string, unknown> = { ...(base || {}) }
+	const filteredPricing = Object.fromEntries(
+		Object.entries(nanoBananaManualModelPricing.value)
+			.filter(([model, item]) => nanoBananaPricingModels.value.includes(model) && (item.image_price_per_image || 0) > 0)
+			.map(([model, item]) => [model, { image_price_per_image: Math.round((item.image_price_per_image || 0) * 10000) / 10000 }])
+	)
+	if (Object.keys(filteredPricing).length > 0) {
+		extra.nano_banana_manual_model_pricing = filteredPricing
+	}
+	return Object.keys(extra).length > 0 ? extra : undefined
 }
 
 const buildAnthropicExtra = (base?: Record<string, unknown>): Record<string, unknown> | undefined => {
@@ -3604,6 +3673,8 @@ const handleSubmit = async () => {
       ? 'https://api.openai.com'
       : form.platform === 'gemini'
         ? 'https://generativelanguage.googleapis.com'
+        : form.platform === 'nano-banana'
+          ? 'https://grsaiapi.com'
         : 'https://api.anthropic.com'
 
   // Build credentials with optional model mapping
@@ -3647,7 +3718,7 @@ const handleSubmit = async () => {
   }
 
   form.credentials = credentials
-  const extra = buildAnthropicExtra(buildOpenAIExtra())
+  const extra = buildNanoBananaExtra(buildAnthropicExtra(buildOpenAIExtra()))
 
   await doCreateAccount({
     ...form,

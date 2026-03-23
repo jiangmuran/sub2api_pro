@@ -65,6 +65,8 @@ const (
 	EdgeAttributeValues = "attribute_values"
 	// EdgePromoCodeUsages holds the string denoting the promo_code_usages edge name in mutations.
 	EdgePromoCodeUsages = "promo_code_usages"
+	// EdgeActivityParticipations holds the string denoting the activity_participations edge name in mutations.
+	EdgeActivityParticipations = "activity_participations"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -130,6 +132,13 @@ const (
 	PromoCodeUsagesInverseTable = "promo_code_usages"
 	// PromoCodeUsagesColumn is the table column denoting the promo_code_usages relation/edge.
 	PromoCodeUsagesColumn = "user_id"
+	// ActivityParticipationsTable is the table that holds the activity_participations relation/edge.
+	ActivityParticipationsTable = "activity_participations"
+	// ActivityParticipationsInverseTable is the table name for the ActivityParticipation entity.
+	// It exists in this package in order to avoid circular dependency with the "activityparticipation" package.
+	ActivityParticipationsInverseTable = "activity_participations"
+	// ActivityParticipationsColumn is the table column denoting the activity_participations relation/edge.
+	ActivityParticipationsColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -434,6 +443,20 @@ func ByPromoCodeUsages(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByActivityParticipationsCount orders the results by activity_participations count.
+func ByActivityParticipationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newActivityParticipationsStep(), opts...)
+	}
+}
+
+// ByActivityParticipations orders the results by activity_participations terms.
+func ByActivityParticipations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newActivityParticipationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -508,6 +531,13 @@ func newPromoCodeUsagesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PromoCodeUsagesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PromoCodeUsagesTable, PromoCodeUsagesColumn),
+	)
+}
+func newActivityParticipationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ActivityParticipationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ActivityParticipationsTable, ActivityParticipationsColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

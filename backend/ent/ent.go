@@ -14,6 +14,9 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	"github.com/Wei-Shaw/sub2api/ent/activity"
+	"github.com/Wei-Shaw/sub2api/ent/activityparticipation"
+	"github.com/Wei-Shaw/sub2api/ent/activityreward"
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
@@ -96,6 +99,9 @@ func checkColumn(t, c string) error {
 			apikey.Table:                  apikey.ValidColumn,
 			account.Table:                 account.ValidColumn,
 			accountgroup.Table:            accountgroup.ValidColumn,
+			activity.Table:                activity.ValidColumn,
+			activityparticipation.Table:   activityparticipation.ValidColumn,
+			activityreward.Table:          activityreward.ValidColumn,
 			announcement.Table:            announcement.ValidColumn,
 			announcementread.Table:        announcementread.ValidColumn,
 			errorpassthroughrule.Table:    errorpassthroughrule.ValidColumn,

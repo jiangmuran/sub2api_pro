@@ -249,7 +249,7 @@ func (s *AccountTestService) lookupAccountStoredModelPricing(ctx context.Context
 		if len(account.Extra) == 0 {
 			continue
 		}
-		rawPricing, ok := account.Extra["openai_manual_model_pricing"]
+		rawPricing, ok := account.Extra[manualPricingExtraKeyForPlatform(account.Platform)]
 		if !ok {
 			continue
 		}
@@ -270,10 +270,11 @@ func (s *AccountTestService) lookupAccountStoredModelPricing(ctx context.Context
 		}
 		inputPrice, _ := toFloat64(entryMap["input_price_per_1m"])
 		outputPrice, _ := toFloat64(entryMap["output_price_per_1m"])
-		if inputPrice <= 0 && outputPrice <= 0 {
+		imagePrice, _ := toFloat64(entryMap["image_price_per_image"])
+		if inputPrice <= 0 && outputPrice <= 0 && imagePrice <= 0 {
 			continue
 		}
-		return accountStoredModelPricing{InputPricePer1M: inputPrice, OutputPricePer1M: outputPrice}, true
+		return accountStoredModelPricing{InputPricePer1M: inputPrice, OutputPricePer1M: outputPrice, ImagePricePerImage: imagePrice}, true
 	}
 	return accountStoredModelPricing{}, false
 }

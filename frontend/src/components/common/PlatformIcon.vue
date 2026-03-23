@@ -25,6 +25,10 @@
       d="M12 2.5l2.1 4.7 5.1.5-3.9 3.4 1.2 5-4.5-2.6-4.5 2.6 1.2-5-3.9-3.4 5.1-.5L12 2.5z"
     />
   </svg>
+  <!-- Nano Banana logo (banana-like swoosh) -->
+  <svg v-else-if="platform === 'nano-banana'" :class="sizeClass" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M18.9 4.2c-5.3.8-9.6 4.3-11.4 9.3-.7 1.9-.9 3.8-.8 5.6 0 .6.5 1 1.1 1 7 0 12.9-5.3 13.7-12.2.1-.8.1-1.6 0-2.4-.1-.8-.9-1.4-1.6-1.3zm-7.4 11.9c2.2-3.3 5.5-5.8 9.3-7.1-1.4 4.7-5.1 8.4-9.7 9.9-.1-.9 0-1.9.4-2.8z" />
+  </svg>
   <!-- Fallback: generic platform icon -->
   <svg v-else :class="sizeClass" fill="currentColor" viewBox="0 0 24 24">
     <path
