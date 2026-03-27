@@ -2048,3 +2048,243 @@ func (s *AccountTestService) sendErrorAndEnd(c *gin.Context, errorMsg string) er
 	s.sendEvent(c, TestEvent{Type: "error", Error: errorMsg})
 	return fmt.Errorf("%s", errorMsg)
 }
+
+// TestAccount 测试单个账号连接（用于批量测试，不使用 SSE）
+// 这是一个简化版本，只测试基本连接性
+func (s *AccountTestService) TestAccount(ctx context.Context, account *Account, modelID string) error {
+	// 根据平台选择测试方法
+	if account.IsOpenAI() {
+		return s.testOpenAIAccount(ctx, account, modelID)
+	}
+
+	if account.IsGemini() {
+		return s.testGeminiAccount(ctx, account, modelID)
+	}
+
+	if account.Platform == "antigravity" {
+		return s.testAntigravityAccount(ctx, account, modelID)
+	}
+
+	if account.Platform == "sora" {
+		return s.testSoraAccount(ctx, account)
+	}
+
+	// 默认作为 Claude 账号测试
+	return s.testClaudeAccount(ctx, account, modelID)
+}
+
+// testClaudeAccount 测试 Claude 账号（无 SSE）
+func (s *AccountTestService) testClaudeAccount(ctx context.Context, account *Account, modelID string) error {
+	testModelID := modelID
+	if testModelID == "" {
+		testModelID = claude.DefaultTestModel
+	}
+
+	// 应用模型映射
+	if account.Type == "apikey" {
+		mapping := account.GetModelMapping()
+		if len(mapping) > 0 {
+			if mappedModel, exists := mapping[testModelID]; exists {
+				testModelID = mappedModel
+			}
+		}
+	}
+
+	// 构建请求
+	var apiURL string
+	var headers map[string]string
+
+	if account.Type == "apikey" {
+		baseURL := account.GetExtraString("base_url")
+		if baseURL == "" {
+			baseURL = testClaudeAPIURL
+		}
+		apiURL = baseURL
+
+		apiKey := ""
+		if account.Credentials != nil {
+			if v, ok := account.Credentials["api_key"]; ok {
+				if str, ok := v.(string); ok {
+					apiKey = str
+				}
+			}
+		}
+		if apiKey == "" {
+			return fmt.Errorf("missing API key")
+		}
+
+		headers = map[string]string{
+			"Content-Type":      "application/json",
+			"anthropic-version": "2023-06-01",
+			"x-api-key":         apiKey,
+		}
+	} else {
+		// OAuth / Setup Token
+		sessionKey := ""
+		if account.Credentials != nil {
+			if v, ok := account.Credentials["session_key"]; ok {
+				if str, ok := v.(string); ok {
+					sessionKey = str
+				}
+			}
+		}
+		if sessionKey == "" {
+			return fmt.Errorf("missing session key")
+		}
+
+		apiURL = testClaudeAPIURL
+		headers = map[string]string{
+			"Content-Type":      "application/json",
+			"anthropic-version": "2023-06-01",
+			"cookie":            fmt.Sprintf("sessionKey=%s", sessionKey),
+		}
+	}
+
+	// 构建测试消息
+	payload := map[string]any{
+		"model": testModelID,
+		"messages": []map[string]string{
+			{"role": "user", "content": "Hi"},
+		},
+		"max_tokens": 10,
+		"stream":     false,
+	}
+
+	payloadBytes, _ := json.Marshal(payload)
+
+	// 发送请求（使用 httpUpstream 的完整签名）
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("create request failed: %w", err)
+	}
+
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	// httpUpstream.Do 需要 proxy, accountID, ttfbLogThresholdMs 参数
+	resp, err := s.httpUpstream.Do(req, "", account.ID, 0)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status code %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// testOpenAIAccount 测试 OpenAI 账号（无 SSE）
+func (s *AccountTestService) testOpenAIAccount(ctx context.Context, account *Account, modelID string) error {
+	testModelID := modelID
+	if testModelID == "" {
+		testModelID = "gpt-4o-mini"
+	}
+
+	apiKey := ""
+	if account.Credentials != nil {
+		if v, ok := account.Credentials["api_key"]; ok {
+			if str, ok := v.(string); ok {
+				apiKey = str
+			}
+		}
+	}
+	if apiKey == "" {
+		return fmt.Errorf("missing API key")
+	}
+
+	baseURL := account.GetExtraString("base_url")
+	if baseURL == "" {
+		baseURL = "https://api.openai.com"
+	}
+
+	apiURL := strings.TrimSuffix(baseURL, "/") + "/v1/chat/completions"
+
+	payload := map[string]any{
+		"model": testModelID,
+		"messages": []map[string]string{
+			{"role": "user", "content": "Hi"},
+		},
+		"max_tokens": 10,
+		"stream":     false,
+	}
+
+	payloadBytes, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("create request failed: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := s.httpUpstream.Do(req, "", account.ID, 0)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status code %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}
+
+// testGeminiAccount 测试 Gemini 账号（无 SSE）
+func (s *AccountTestService) testGeminiAccount(ctx context.Context, account *Account, modelID string) error {
+	testModelID := modelID
+	if testModelID == "" {
+		testModelID = "gemini-2.0-flash-exp"
+	}
+
+	// 简化实现：直接返回未完全实现的错误
+	// 完整实现需要调用 geminiTokenProvider 获取 token
+	return fmt.Errorf("gemini account testing not fully implemented for batch test, account_id=%d", account.ID)
+}
+
+// testAntigravityAccount 测试 Antigravity 账号（无 SSE）
+func (s *AccountTestService) testAntigravityAccount(ctx context.Context, account *Account, modelID string) error {
+	return fmt.Errorf("antigravity account testing not fully implemented for batch test, account_id=%d", account.ID)
+}
+
+// testSoraAccount 测试 Sora 账号（无 SSE）
+func (s *AccountTestService) testSoraAccount(ctx context.Context, account *Account) error {
+	// 测试 Sora 账号的 /backend/me 接口
+	sessionToken := ""
+	if account.Credentials != nil {
+		if v, ok := account.Credentials["access_token"]; ok {
+			if str, ok := v.(string); ok {
+				sessionToken = str
+			}
+		}
+	}
+	if sessionToken == "" {
+		return fmt.Errorf("missing access token")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", soraMeAPIURL, nil)
+	if err != nil {
+		return fmt.Errorf("create request failed: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+sessionToken)
+
+	resp, err := s.httpUpstream.Do(req, "", account.ID, 0)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status code %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return nil
+}

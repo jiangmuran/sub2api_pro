@@ -1954,3 +1954,120 @@ func sanitizeExtraBaseRPM(extra map[string]any) {
 	}
 	extra["base_rpm"] = v
 }
+
+// BatchTestAccounts 批量测试账号
+// POST /api/v1/admin/accounts/batch-test
+func (h *AccountHandler) BatchTestAccounts(c *gin.Context) {
+	var req dto.BatchTestAccountsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "invalid request: "+err.Error())
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 获取账号信息
+	accounts, err := h.adminService.GetAccountsByIDs(ctx, req.AccountIDs)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	if len(accounts) == 0 {
+		response.BadRequest(c, "no valid accounts found")
+		return
+	}
+
+	// 创建结果收集
+	results := make([]dto.BatchTestResult, 0, len(accounts))
+	resultsMu := sync.Mutex{}
+
+	// 使用 errgroup 控制并发
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(req.Concurrency)
+
+	// 创建信号量用于延时
+	delayTicker := time.NewTicker(time.Duration(req.DelayMs) * time.Millisecond)
+	defer delayTicker.Stop()
+
+	for _, account := range accounts {
+		account := account // 捕获循环变量
+
+		// 等待延时
+		if req.DelayMs > 0 {
+			<-delayTicker.C
+		}
+
+		g.Go(func() error {
+			// 创建超时上下文
+			testCtx, cancel := context.WithTimeout(gctx, time.Duration(req.TimeoutSeconds)*time.Second)
+			defer cancel()
+
+			startTime := time.Now()
+
+			// 执行测试
+			testResult := dto.BatchTestResult{
+				AccountID:   account.ID,
+				AccountName: account.Name,
+			}
+
+			err := h.accountTestService.TestAccount(testCtx, account, req.Model)
+			testResult.DurationMs = time.Since(startTime).Milliseconds()
+
+			if err != nil {
+				testResult.Status = "error"
+				testResult.Error = err.Error()
+
+				// 尝试提取状态码
+				if strings.Contains(err.Error(), "status code") {
+					// 简单的状态码提取
+					parts := strings.Split(err.Error(), "status code")
+					if len(parts) > 1 {
+						codeStr := strings.TrimSpace(parts[1])
+						if code, parseErr := strconv.Atoi(strings.Split(codeStr, " ")[0]); parseErr == nil {
+							testResult.StatusCode = code
+						}
+					}
+				}
+			} else {
+				testResult.Status = "success"
+				testResult.StatusCode = 200
+			}
+
+			// 添加到结果列表
+			resultsMu.Lock()
+			results = append(results, testResult)
+			resultsMu.Unlock()
+
+			return nil
+		})
+	}
+
+	// 等待所有测试完成
+	if err := g.Wait(); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	// 统计结果
+	summary := struct {
+		Total   int `json:"total"`
+		Success int `json:"success"`
+		Failed  int `json:"failed"`
+	}{
+		Total: len(results),
+	}
+
+	for _, r := range results {
+		if r.Status == "success" {
+			summary.Success++
+		} else {
+			summary.Failed++
+		}
+	}
+
+	response.Success(c, dto.BatchTestResponse{
+		Results: results,
+		Summary: summary,
+	})
+}
