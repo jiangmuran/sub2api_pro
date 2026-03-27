@@ -368,7 +368,7 @@ async function startTest() {
 
   try {
     const response = await api.post(
-      '/api/v1/admin/accounts/batch-test',
+      '/admin/accounts/batch-test',
       {
         account_ids: props.accountIds,
         model: config.value.model,
