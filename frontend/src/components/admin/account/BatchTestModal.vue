@@ -367,6 +367,12 @@ async function startTest() {
   abortController.value = new AbortController()
 
   try {
+    // Calculate reasonable timeout: 
+    // (number of accounts / concurrency) * (test timeout + delay) + buffer
+    const estimatedTime = Math.ceil(props.accountIds.length / config.value.concurrency) * 
+                          (config.value.timeoutSeconds * 1000 + config.value.delayMs)
+    const requestTimeout = estimatedTime + 30000 // Add 30s buffer
+    
     const response = await api.post(
       '/admin/accounts/batch-test',
       {
@@ -377,12 +383,13 @@ async function startTest() {
         timeout_seconds: config.value.timeoutSeconds
       },
       {
+        timeout: requestTimeout, // Custom timeout for this request
         signal: abortController.value.signal,
         // Enable streaming
         onDownloadProgress: (progressEvent) => {
           // Parse SSE stream
           const text = progressEvent.event.target.responseText
-          const lines = text.split('\n')
+          const lines = text.split('\\n')
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
