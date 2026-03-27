@@ -2207,6 +2207,7 @@ export default {
         configuration: '测试配置',
         selectedAccounts: '选中账号',
         selectedCount: '已选择 {count} 个账号',
+        largeCountWarning: '⚠️ 选中账号较多，测试可能需要较长时间。建议每次测试不超过 20 个账号。',
         model: '测试模型',
         modelPlaceholder: '例如：claude-3-5-sonnet-20241022',
         delay: '请求延时',

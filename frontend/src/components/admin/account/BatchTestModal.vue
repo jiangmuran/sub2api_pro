@@ -39,6 +39,11 @@
                 <div class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                   {{ t('admin.accounts.batchTest.selectedCount', { count: accountIds.length }) }}
                 </div>
+                <div v-if="accountIds.length > 20" class="mt-2 rounded-md bg-amber-50 p-2 dark:bg-amber-900/20">
+                  <p class="text-xs text-amber-700 dark:text-amber-300">
+                    {{ t('admin.accounts.batchTest.largeCountWarning') }}
+                  </p>
+                </div>
               </div>
 
               <!-- Model Selection -->

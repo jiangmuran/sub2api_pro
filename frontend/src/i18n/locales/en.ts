@@ -2035,6 +2035,7 @@ export default {
         configuration: 'Test Configuration',
         selectedAccounts: 'Selected Accounts',
         selectedCount: '{count} account(s) selected',
+        largeCountWarning: '⚠️ Large number of accounts selected. Testing may take a long time. Recommend testing no more than 20 accounts at once.',
         model: 'Test Model',
         modelPlaceholder: 'e.g., claude-3-5-sonnet-20241022',
         delay: 'Request Delay',
