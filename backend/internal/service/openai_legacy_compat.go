@@ -319,6 +319,76 @@ func normalizeOpenAITools(payload map[string]any) bool {
 	return true
 }
 
+// StripToolCallingFields removes tool-related fields for APIs that don't support them.
+// Converts tool role messages to user role and removes tool_call_id.
+// Returns true if any modifications were made.
+func StripToolCallingFields(payload map[string]any) bool {
+	if payload == nil {
+		return false
+	}
+
+	modified := false
+
+	// Remove tools array if present
+	if _, hasTools := payload["tools"]; hasTools {
+		delete(payload, "tools")
+		modified = true
+	}
+
+	// Remove tool_choice if present
+	if _, hasToolChoice := payload["tool_choice"]; hasToolChoice {
+		delete(payload, "tool_choice")
+		modified = true
+	}
+
+	// Process messages array
+	messagesRaw, ok := payload["messages"].([]any)
+	if !ok || len(messagesRaw) == 0 {
+		return modified
+	}
+
+	for _, msgItem := range messagesRaw {
+		msg, ok := msgItem.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		role, _ := msg["role"].(string)
+		role = strings.TrimSpace(strings.ToLower(role))
+
+		// Convert tool role to user role
+		if role == "tool" {
+			msg["role"] = "user"
+			modified = true
+
+			// Prepend tool_call_id to content if present
+			toolCallID, _ := msg["tool_call_id"].(string)
+			toolCallID = strings.TrimSpace(toolCallID)
+			if toolCallID != "" {
+				if content, ok := msg["content"].(string); ok {
+					msg["content"] = fmt.Sprintf("[Tool Response: %s] %s", toolCallID, content)
+				}
+			}
+
+			// Remove tool_call_id field
+			if _, hasID := msg["tool_call_id"]; hasID {
+				delete(msg, "tool_call_id")
+				modified = true
+			}
+		}
+
+		// Remove tool_calls from assistant messages
+		if role == "assistant" {
+			if _, hasToolCalls := msg["tool_calls"]; hasToolCalls {
+				delete(msg, "tool_calls")
+				modified = true
+			}
+		}
+	}
+
+	return modified
+}
+
 // ConvertResponsesToChatCompletionsTools converts Responses-format tools to ChatCompletions format
 // Responses format: {type: "function", name: "...", parameters: {...}}
 // ChatCompletions format: {type: "function", function: {name: "...", parameters: {...}}}
@@ -1113,10 +1183,33 @@ func extractResponsesMessagesValue(input any) []map[string]any {
 				role = "system"
 			}
 		}
-		messages = append(messages, map[string]any{
+
+		// Build message with role and content
+		msg := map[string]any{
 			"role":    role,
 			"content": extractInputTextContent(entry["content"]),
-		})
+		}
+
+		// Preserve tool_call_id for tool role messages (required by some APIs like Volcengine)
+		if strings.ToLower(role) == "tool" {
+			if toolCallID, ok := entry["tool_call_id"]; ok {
+				msg["tool_call_id"] = toolCallID
+			}
+		}
+
+		// Preserve tool_calls for assistant messages
+		if strings.ToLower(role) == "assistant" {
+			if toolCalls, ok := entry["tool_calls"]; ok {
+				msg["tool_calls"] = toolCalls
+			}
+		}
+
+		// Preserve name field if present (for function/tool messages)
+		if name, ok := entry["name"]; ok {
+			msg["name"] = name
+		}
+
+		messages = append(messages, msg)
 	}
 	if len(messages) == 0 {
 		return []map[string]any{{"role": "user", "content": ""}}

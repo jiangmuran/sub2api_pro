@@ -1097,6 +1097,18 @@ func (a *Account) GetOpenAICompatMode() string {
 	return strings.TrimSpace(mode)
 }
 
+// DisableToolCalling returns whether to strip tool-related fields from requests.
+// Used for APIs that don't support OpenAI tool calling format (e.g., Volcengine Ark).
+func (a *Account) DisableToolCalling() bool {
+	if a == nil || a.Extra == nil {
+		return false
+	}
+	if disabled, ok := a.Extra["disable_tool_calling"].(bool); ok {
+		return disabled
+	}
+	return false
+}
+
 func (a *Account) IsOpenAICompatChatFallback() bool {
 	return a.GetOpenAICompatMode() == OpenAICompatibleModeChatCompletionsFallback
 }

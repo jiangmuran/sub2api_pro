@@ -2911,6 +2911,18 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		}
 	}
 
+	// Strip tool calling fields for APIs that don't support them (e.g., Volcengine Ark)
+	if account.DisableToolCalling() {
+		var payload map[string]any
+		if err := json.Unmarshal(body, &payload); err == nil {
+			if StripToolCallingFields(payload) {
+				if modifiedBody, err := json.Marshal(payload); err == nil {
+					body = modifiedBody
+				}
+			}
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
